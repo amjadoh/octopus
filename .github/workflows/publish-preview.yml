@@ -9,7 +9,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
         with:
@@ -30,10 +30,32 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon :app:assembleDiagnosticDebug :app:testDiagnosticDebugUnitTest :app:lintDiagnosticDebug :app:assembleDiagnosticDebugAndroidTest
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run actual startup and settings UI tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: ./gradlew --no-daemon :app:connectedDiagnosticDebugAndroidTest
+      - name: Keep UI test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-ui-test-evidence
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+          if-no-files-found: warn
       - name: Verify APKs and prepare release files
         run: |
           python3 .github/scripts/prepare_preview.py
-          git archive --format=zip --prefix=octopus-android/ HEAD -o release/octopus-source-0.3.0.zip
+          git archive --format=zip --prefix=octopus-android/ HEAD -o release/octopus-source-0.3.1.zip
           cp docs/TEST_ON_PHONE.md release/TEST_ON_PHONE.md
           cp docs/PREVIEW_RELEASE.md release/release-notes.md
           cd release
@@ -53,7 +75,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      RELEASE_TAG: v0.3.0-alpha
+      RELEASE_TAG: v0.3.1-alpha
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -65,12 +87,12 @@ jobs:
           if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > draft-state.txt; then
             test "$(cat draft-state.txt)" = true
           else
-            gh release create "$RELEASE_TAG" --draft --prerelease --target "$GITHUB_SHA" --title 'الأخطبوط 0.3.0 — فحص سبب فشل القراءة' --notes-file release/release-notes.md
+            gh release create "$RELEASE_TAG" --draft --prerelease --target "$GITHUB_SHA" --title 'الأخطبوط 0.3.1 — إصلاح الإغلاق عند التشغيل' --notes-file release/release-notes.md
           fi
           gh release edit "$RELEASE_TAG" --draft --prerelease --target "$GITHUB_SHA" --notes-file release/release-notes.md
-          gh release upload "$RELEASE_TAG" release/octopus-0.3.0.apk release/octopus-source-0.3.0.zip release/validation-summary-ci.json release/SHA256SUMS.txt release/TEST_ON_PHONE.md
+          gh release upload "$RELEASE_TAG" release/octopus-0.3.1.apk release/octopus-source-0.3.1.zip release/validation-summary-ci.json release/SHA256SUMS.txt release/TEST_ON_PHONE.md
           gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' > asset-names.txt
-          grep -Fx 'octopus-0.3.0.apk' asset-names.txt
+          grep -Fx 'octopus-0.3.1.apk' asset-names.txt
       - name: Publish prerelease after successful upload
         run: |
           gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false
