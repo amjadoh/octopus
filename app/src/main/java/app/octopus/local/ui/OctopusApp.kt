@@ -112,7 +112,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
             topBar = {
                 Column(Modifier.statusBarsPadding()) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 15.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Image(painterResource(R.drawable.ic_octopus), "شعار الأخطبوط", Modifier.size(43.dp))
+                        Image(painterResource(R.drawable.ic_octopus_selected), "شعار الأخطبوط", Modifier.size(43.dp))
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
                             Text("الأخطبوط", fontSize = 23.sp, fontWeight = FontWeight.Bold, color = Ink)
