@@ -9,10 +9,15 @@ import android.view.Gravity
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.widget.Button
+import android.widget.LinearLayout
+import android.view.View
 import app.octopus.local.*
 import app.octopus.local.data.DiagnosticReport
+import app.octopus.local.data.ScreenInspectionReport
+import app.octopus.local.diagnostics.InspectionRequest
 import app.octopus.local.domain.*
 import app.octopus.local.providers.adapterFor
+import app.octopus.local.providers.ProviderPolicies
 import app.octopus.local.safety.*
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -23,6 +28,7 @@ object ReadOnlyServiceBridge {
     private var service = WeakReference<OctopusAccessibilityService>(null)
     fun attach(value: OctopusAccessibilityService?) { service = WeakReference(value) }
     fun start(provider: ProviderId): Boolean = service.get()?.startRead(provider) ?: false
+    fun inspect(provider: ProviderId, request: InspectionRequest): Boolean = service.get()?.startRead(provider, request) ?: false
     fun stop() { service.get()?.stopRead("USER_STOPPED", "أوقفت القراءة. لم تُعدّل أي سلة.") }
 }
 
@@ -31,13 +37,16 @@ class OctopusAccessibilityService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
     private val guard = SafetyGuard()
     private val reader = SnapshotReader()
+    private val inspectionReader = InspectionReader()
+    private var inspection: InspectionRequest? = null
     private val stability = StabilityGate()
     private var sessionId: String? = null
     private var provider: ProviderId? = null
     private var deadline = 0L
     private var sawTarget = false
     private var lastVisibleNodes = 0
-    private var overlay: Button? = null
+    private var overlay: View? = null
+    private var captureRequested = false
     private val poll = object : Runnable {
         override fun run() {
             val token = sessionId ?: return
@@ -69,19 +78,30 @@ class OctopusAccessibilityService : AccessibilityService() {
         super.onDestroy()
     }
 
-    fun startRead(selected: ProviderId): Boolean {
+    fun startRead(selected: ProviderId, requestedInspection: InspectionRequest? = null): Boolean {
         if (sessionId != null) return false
+        if (requestedInspection != null && (requestedInspection.restaurant.isBlank() || requestedInspection.item.isBlank() ||
+            requestedInspection.restaurant.length > 100 || requestedInspection.item.length > 100)) return false
+        val policy = ProviderPolicies.forProvider(selected)
+        if (!policy.permitsDiagnosticRead) {
+            graph.session.value = SessionState(SessionPhase.STOPPED, selected, policy.reason)
+            return false
+        }
         val settings = graph.settings.value
         graph.refreshInstallations()
         if (!settings.consent || selected !in settings.allowed || graph.installations.value.none { it.provider == selected && it.installed }) return false
         val launch = packageManager.getLaunchIntentForPackage(selected.packageName) ?: return false
         provider = selected
+        inspection = requestedInspection
+        captureRequested = false
         sessionId = UUID.randomUUID().toString()
         deadline = SystemClock.elapsedRealtime() + 90_000
         sawTarget = false
         lastVisibleNodes = 0
         stability.reset()
-        graph.session.value = SessionState(SessionPhase.WAITING_FOR_SCREEN, selected, "افتح شاشة مراجعة الطلب يدويًا؛ القراءة فقط نشطة.", 90)
+        graph.session.value = SessionState(SessionPhase.WAITING_FOR_SCREEN, selected,
+            requestedInspection?.let { "افتح ${it.stage.title} ثم اضغط زر «افحص هذه الشاشة» الظاهر فوق التطبيق." }
+                ?: "افتح شاشة مراجعة الطلب يدويًا؛ القراءة فقط نشطة.", 90)
         if (!showStopControl()) {
             stopRead("STOP_CONTROL_UNAVAILABLE", "لم يمكن إظهار زر الإيقاف؛ لم تبدأ القراءة.")
             return false
@@ -120,6 +140,28 @@ class OctopusAccessibilityService : AccessibilityService() {
             val snapshot = reader.read(root)
             lastVisibleNodes = snapshot.visibleNodeCount
             if (snapshot.sensitiveScreen) { stopRead("SENSITIVE_SCREEN", "شاشة دخول أو بيانات حساسة؛ أكمل يدويًا ثم ابدأ اختبارًا جديدًا."); return }
+            inspection?.let { request ->
+                if (!captureRequested) return
+                val structure = inspectionReader.read(root, request)
+                if (structure.count == 0) { stability.reset(); return }
+                graph.session.value = graph.session.value.copy(phase = SessionPhase.READING,
+                    message = "جارٍ فحص عناصر ${request.stage.title} بعد استقرارها، دون حفظ النص الخام.")
+                if (stability.observe(structure.nodes, SystemClock.elapsedRealtime()) && sessionId == token) {
+                    val installation = graph.installations.value.firstOrNull { it.provider == selected }
+                    val observedQuote = adapterFor(selected).extract(snapshot)
+                    val observation = JSONObject().put("visibleNodeCount", snapshot.visibleNodeCount)
+                        .put("knownLabelCount", snapshot.tokens.count { it.label != null })
+                        .put("numericTokenCount", snapshot.tokens.count { it.amount != null })
+                        .put("ambiguous", observedQuote.ambiguous).put("truncated", snapshot.truncated)
+                        .put("fieldsFound", org.json.JSONArray(observedQuote.fields.keys.map { it.name }))
+                    val report = ScreenInspectionReport(UUID.randomUUID().toString(), selected.name,
+                        installation?.version ?: "unknown", request.stage.name, System.currentTimeMillis(),
+                        structure.nodes, structure.truncated, structure.count, observation.toString())
+                    finish("SCREEN_STRUCTURE_CAPTURED", if (structure.truncated) "حُفظ فحص جزئي للشاشة؛ لا يثبت دعمها آليًا." else "حُفظ فحص عناصر الشاشة؛ لا يثبت تجهيز السلة أو المقارنة.", null)
+                    graph.scope.launch { graph.inspectionDao.insert(report); graph.inspectionDao.trim() }
+                }
+                return
+            }
             val candidate = adapterFor(selected).extract(snapshot)
             val candidateTotal = candidate.total
             if (candidateTotal == null || candidateTotal < 0 || snapshot.truncated) {
@@ -142,6 +184,8 @@ class OctopusAccessibilityService : AccessibilityService() {
         // Invalidate before callbacks, database writes, or UI changes.
         sessionId = null
         provider = null
+        inspection = null
+        captureRequested = false
         handler.removeCallbacks(poll)
         hideStopControl()
         stability.reset()
@@ -151,11 +195,21 @@ class OctopusAccessibilityService : AccessibilityService() {
         val report = DiagnosticReport(id, selected.name, installation?.version ?: "unknown", adapterFor(selected).adapterVersion,
             System.currentTimeMillis(), code, candidate?.total, fields.toString(), lastVisibleNodes)
         graph.scope.launch { graph.recorder.record(report) }
-        graph.session.value = SessionState(if (candidate != null) SessionPhase.COMPLETED else SessionPhase.STOPPED, selected, message)
+        graph.session.value = SessionState(if (candidate != null || code == "SCREEN_STRUCTURE_CAPTURED") SessionPhase.COMPLETED else SessionPhase.STOPPED, selected, message)
     }
 
     private fun showStopControl(): Boolean = try {
         val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        val controls = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        if (inspection != null) controls.addView(Button(this).apply {
+            text = "افحص هذه الشاشة"
+            contentDescription = "احفظ فحصًا منقحًا للشاشة الظاهرة بعد استقرارها"
+            setTextColor(android.graphics.Color.WHITE)
+            setBackgroundColor(android.graphics.Color.rgb(18, 101, 108))
+            setOnClickListener {
+                if (sessionId != null) { captureRequested = true; stability.reset(); isEnabled = false; text = "جارٍ الفحص…" }
+            }
+        })
         val button = Button(this).apply {
             text = "إيقاف القراءة ×"
             contentDescription = "إيقاف جلسة قراءة الأخطبوط فورًا"
@@ -163,12 +217,13 @@ class OctopusAccessibilityService : AccessibilityService() {
             setBackgroundColor(android.graphics.Color.rgb(147, 43, 43))
             setOnClickListener { stopRead("USER_STOPPED", "أوقفت القراءة. لم تُعدّل أي سلة.") }
         }
+        controls.addView(button)
         val params = WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL; y = (52 * resources.displayMetrics.density).toInt() }
-        windowManager.addView(button, params)
-        overlay = button
+        windowManager.addView(controls, params)
+        overlay = controls
         true
     } catch (_: Exception) { false }
 

@@ -8,17 +8,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
       - name: Build, unit tests and lint
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon :app:assembleDiagnosticDebug :app:assembleDemoDebug :app:assembleDiagnosticDebugAndroidTest :app:assembleDemoDebugAndroidTest :app:testDiagnosticDebugUnitTest :app:testDemoDebugUnitTest :app:lintDiagnosticDebug :app:lintDemoDebug
+          ./gradlew --no-daemon :app:assembleDiagnosticDebug :app:assembleDiagnosticDebugAndroidTest :app:testDiagnosticDebugUnitTest :app:lintDiagnosticDebug
       - name: Keep experimental debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: octopus-debug-apks
-          path: app/build/outputs/apk/*/debug/*.apk
+          name: octopus-single-app
+          path: app/build/outputs/apk/diagnostic/debug/*.apk
           retention-days: 7

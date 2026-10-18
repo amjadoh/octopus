@@ -1,6 +1,7 @@
 package app.octopus.local.safety
 
 import app.octopus.local.domain.ProviderId
+import app.octopus.local.providers.ProviderPolicies
 
 enum class ProposedAction { CLICK, SCROLL, INPUT_TEXT, GESTURE, GLOBAL_ACTION, CREATE_ORDER, PAYMENT }
 
@@ -8,7 +9,8 @@ class SafetyGuard {
     // Phase one is read-only. There is intentionally no Android action executor.
     fun allowsAction(@Suppress("UNUSED_PARAMETER") action: ProposedAction): Boolean = false
     fun allowsRead(provider: ProviderId, foregroundPackage: String?, active: Boolean, consent: Boolean, allowed: Boolean): Boolean =
-        active && consent && allowed && foregroundPackage == provider.packageName
+        ProviderPolicies.forProvider(provider).permitsDiagnosticRead &&
+            active && consent && allowed && foregroundPackage == provider.packageName
 }
 
 class StabilityGate(private val minimumDurationMillis: Long = 1_000) {
