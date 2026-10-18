@@ -40,10 +40,10 @@ for variant in ('diagnostic',):
         blocks = manifest.split('E: service ')
         service = next(b for b in blocks[1:] if 'app.octopus.local.automation.OctopusAccessibilityService' in b)
         assert 'android:enabled' in service and '0x0' in service.split('E: intent-filter')[0]
-    dest = out / 'octopus-0.3.1.apk'
+    dest = out / 'octopus-1.0.0.apk'
     shutil.copy2(apk, dest)
     apks.append({'file': dest.name, 'bytes': dest.stat().st_size, 'sha256': hashlib.sha256(dest.read_bytes()).hexdigest(), 'signatureVerified': True})
-summary = {'version': '0.3.1-alpha', 'commit': os.environ['GITHUB_SHA'],
+summary = {'version': '1.0.0-alpha', 'commit': os.environ['GITHUB_SHA'],
            'runUrl': f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
            'unitTestExecutions': sum(int(s.get('tests', 0)) for s in suites), 'lint': lint, 'apks': apks,
            'demoIsolatedFromDiagnosticApk': True, 'deviceUiTestsExecuted': True,
