@@ -14,12 +14,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
       - name: Install required Android SDK
-        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
       - name: Build and check both experimental apps
         run: |
           chmod +x gradlew
