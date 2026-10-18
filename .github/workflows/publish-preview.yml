@@ -41,6 +41,7 @@ jobs:
           api-level: 35
           arch: x86_64
           target: google_apis
+          disk-size: 2048M
           disable-animations: true
           script: ./gradlew --no-daemon :app:connectedDiagnosticDebugAndroidTest
       - name: Keep UI test evidence
