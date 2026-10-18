@@ -22,6 +22,10 @@ jobs:
         uses: android-actions/setup-android@v4
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+      - name: Restore stable preview signing
+        env:
+          OCTOPUS_PREVIEW_SIGNING: ${{ secrets.OCTOPUS_PREVIEW_SIGNING }}
+        run: python3 .github/scripts/restore_preview_signing.py
       - name: Build and check single experimental app
         run: |
           chmod +x gradlew

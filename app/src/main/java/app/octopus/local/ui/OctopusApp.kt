@@ -75,7 +75,7 @@ fun OctopusTheme(content: @Composable () -> Unit) {
 }
 
 @Composable
-fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit) {
+fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdatePage: () -> Unit = {}) {
     val settings by graph.settings.collectAsStateWithLifecycle()
     val installations by graph.installations.collectAsStateWithLifecycle()
     val history by graph.history.collectAsStateWithLifecycle()
@@ -86,6 +86,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit) {
     var disclosure by remember { mutableStateOf(false) }
     var exportConfirmation by remember { mutableStateOf(false) }
     var deleteConfirmation by remember { mutableStateOf(false) }
+    var updateDialog by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
@@ -156,7 +157,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit) {
                     Page.HISTORY -> HistoryScreen(history, onExport = { exportConfirmation = true })
                     Page.SETTINGS -> SettingsScreen(settings, connected, onSetup = {
                         if (!settings.consent) disclosure = true else openAccessibilitySettings()
-                    }, onExport = { exportConfirmation = true }, onDelete = { deleteConfirmation = true })
+                    }, onExport = { exportConfirmation = true }, onDelete = { deleteConfirmation = true }, onUpdate = { updateDialog = true })
                 }
             }
         }
@@ -186,6 +187,18 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit) {
                 graph.scope.launch { graph.recorder.clear(); graph.inspectionDao.clear(); graph.settingsStore.clear(); deleteConfirmation = false }
             }) { Text("حذف البيانات", color = Red) } },
             dismissButton = { TextButton(onClick = { deleteConfirmation = false }) { Text("إلغاء") } })
+        if (updateDialog) AlertDialog(onDismissRequest = { updateDialog = false },
+            title = { Text("تحديث التطبيق") },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("الإصدار الحالي: ${BuildConfig.VERSION_NAME}")
+                Text("تُعرض الإصدارات على GitHub. المستودع خاص؛ افتح الصفحة في المتصفح المسجل بحسابك ثم حمّل أحدث APK وأكمل تأكيد التثبيت من Android.")
+                Text("لم يُفحص توفر إصدار أحدث تلقائيًا. لا يطلب الأخطبوط حساب GitHub أو كلمة المرور داخله، ولا يثبت تحديثًا صامتًا.")
+            } },
+            confirmButton = { TextButton(onClick = {
+                updateDialog = false
+                runCatching { openUpdatePage() }.onFailure { errorMessage = "تعذر فتح صفحة التحديث. افتح github.com/amjadoh/octopus/releases في متصفحك." }
+            }) { Text("فتح صفحة التحديث") } },
+            dismissButton = { TextButton(onClick = { updateDialog = false }) { Text("إلغاء") } })
         errorMessage?.let { message -> AlertDialog(onDismissRequest = { errorMessage = null },
             title = { Text("الأخطبوط") }, text = { Text(message) },
             confirmButton = { TextButton(onClick = { errorMessage = null }) { Text("حسنًا") } }) }
@@ -387,9 +400,15 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit) {
     Text("السلة والعنوان والسعر النهائي: غير متحقق منها", fontSize = 11.sp, color = Amber)
 }
 
-@Composable private fun SettingsScreen(settings: UserSettings, connected: Boolean, onSetup: () -> Unit, onExport: () -> Unit, onDelete: () -> Unit) {
+@Composable private fun SettingsScreen(settings: UserSettings, connected: Boolean, onSetup: () -> Unit, onExport: () -> Unit, onDelete: () -> Unit, onUpdate: () -> Unit) {
     LazyColumn(contentPadding = PaddingValues(21.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         item { PageIntro("الإعدادات والخصوصية", "التحكم لك. بيانات الاختبار تبقى على الجهاز.") }
+        item { Panel {
+            SectionTitle("تحديث التطبيق")
+            InfoRow("الإصدار الحالي", BuildConfig.VERSION_NAME)
+            Text("افتح أحدث الإصدارات من حسابك على GitHub، ثم أكمل التثبيت بإذن Android.", fontSize = 13.sp, color = Muted)
+            PrimaryButton("تحديث التطبيق", onClick = onUpdate)
+        } }
         item { Panel {
             SectionTitle("الجهاز والخدمة")
             InfoRow("الجهاز الفعلي", "${Build.MANUFACTURER} ${Build.MODEL}")
@@ -400,7 +419,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit) {
         } }
         item { Panel {
             SectionTitle("بياناتك المحلية")
-            Text("نحفظ حالات الاختبار والمبالغ المرشحة وإصدارات التطبيقات فقط. لا صور شاشة ولا بيانات دخول ولا خادم خارجي.", fontSize = 13.sp, lineHeight = 22.sp, color = Muted)
+            Text("نحفظ حالات الاختبار والمبالغ المرشحة وإصدارات التطبيقات والفحوص المنقحة التي تطلبها. لا نصوص خام أو صور شاشة أو بيانات دخول أو خادم خارجي.", fontSize = 13.sp, lineHeight = 22.sp, color = Muted)
             OutlinedButton(onClick = onExport, Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text("تصدير السجل بعد مراجعته") }
             TextButton(onClick = onDelete) { Icon(Icons.Outlined.DeleteOutline, null, tint = Red); Spacer(Modifier.width(7.dp)); Text("حذف جميع بيانات الأخطبوط", color = Red) }
         } }

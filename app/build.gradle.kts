@@ -15,7 +15,17 @@ android {
         versionName = "0.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+    val previewStoreFile = System.getenv("OCTOPUS_SIGNING_STORE_FILE")
+    signingConfigs {
+        if (!previewStoreFile.isNullOrBlank()) create("stablePreview") {
+            storeFile = file(previewStoreFile)
+            storePassword = System.getenv("OCTOPUS_SIGNING_STORE_PASSWORD") ?: error("Missing signing store password")
+            keyAlias = System.getenv("OCTOPUS_SIGNING_KEY_ALIAS") ?: error("Missing signing key alias")
+            keyPassword = System.getenv("OCTOPUS_SIGNING_KEY_PASSWORD") ?: error("Missing signing key password")
+        }
+    }
     buildTypes {
+        debug { if (!previewStoreFile.isNullOrBlank()) signingConfig = signingConfigs.getByName("stablePreview") }
         release { isMinifyEnabled = false }
     }
     flavorDimensions += "purpose"
