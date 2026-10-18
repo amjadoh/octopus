@@ -26,4 +26,10 @@ class DiagnosticUiTest {
         compose.onNodeWithText("اسم المطعم كما يظهر في التطبيق").assertExists()
         compose.onNodeWithText("السماح بفحص هذه الشاشة؟").assertDoesNotExist()
     }
+    @Test fun updateStartsFromSettingsWithExplicitBrowserHandoff() {
+        compose.onNodeWithContentDescription("الإعدادات").performClick()
+        compose.onNode(hasText("تحديث التطبيق") and hasClickAction()).performClick()
+        compose.onNodeWithText("فتح صفحة التحديث").assertIsDisplayed()
+        compose.onNodeWithText("الإصدار الحالي: ${BuildConfig.VERSION_NAME}").assertIsDisplayed()
+    }
 }

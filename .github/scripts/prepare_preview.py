@@ -3,6 +3,7 @@ from pathlib import Path
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import xml.etree.ElementTree as ET
@@ -23,7 +24,10 @@ for variant in ('diagnosticDebug',):
 apks = []
 for variant in ('diagnostic',):
     apk = root / f'app/build/outputs/apk/{variant}/debug/app-{variant}-debug.apk'
-    subprocess.run([str(tool / 'apksigner'), 'verify', '--verbose', str(apk)], check=True)
+    signature = subprocess.check_output([str(tool / 'apksigner'), 'verify', '--verbose', '--print-certs', str(apk)], text=True)
+    expected_cert = (root / 'docs/PREVIEW_SIGNING_CERT_SHA256.txt').read_text().strip().lower()
+    certs = re.findall(r'Signer #\d+ certificate SHA-256 digest: ([0-9a-fA-F:]+)', signature)
+    assert len(certs) == 1 and certs[0].replace(':', '').lower() == expected_cert, 'Unexpected APK signing certificate'
     manifest = subprocess.check_output([str(tool / 'aapt'), 'dump', 'xmltree', str(apk), 'AndroidManifest.xml'], text=True)
     assert 'android.permission.INTERNET' not in manifest
     with zipfile.ZipFile(apk) as z:
@@ -40,6 +44,7 @@ summary = {'version': '0.3.0-alpha', 'commit': os.environ['GITHUB_SHA'],
            'runUrl': f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
            'unitTestExecutions': sum(int(s.get('tests', 0)) for s in suites), 'lint': lint, 'apks': apks,
            'demoIsolatedFromDiagnosticApk': True, 'deviceUiTestsExecuted': False,
-           'deliveryAppReadingsDeviceVerified': False, 'signing': 'fresh CI debug key; different from local debug key'}
+           'deliveryAppReadingsDeviceVerified': False, 'signing': 'stable preview certificate',
+           'signingCertificateSha256': expected_cert}
 (out / 'validation-summary-ci.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
 print(json.dumps(summary, ensure_ascii=False, indent=2))

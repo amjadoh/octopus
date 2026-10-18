@@ -20,6 +20,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             OctopusApp(graph, openAccessibilitySettings = {
                 startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }, openUpdatePage = {
+                startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/amjadoh/octopus/releases"))
+                    .addCategory(Intent.CATEGORY_BROWSABLE))
             })
         }
     }
