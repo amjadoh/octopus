@@ -1,0 +1,72 @@
+name: Publish experimental APKs
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: octopus-preview-release
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install required Android SDK
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Build and check both experimental apps
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon :app:assembleDiagnosticDebug :app:assembleDemoDebug :app:testDiagnosticDebugUnitTest :app:testDemoDebugUnitTest :app:lintDiagnosticDebug :app:lintDemoDebug :app:assembleDiagnosticDebugAndroidTest :app:assembleDemoDebugAndroidTest
+      - name: Verify APKs and prepare release files
+        run: |
+          python3 .github/scripts/prepare_preview.py
+          git archive --format=zip --prefix=octopus-android/ HEAD -o release/octopus-source-0.2.0.zip
+          cp docs/TEST_ON_PHONE.md release/TEST_ON_PHONE.md
+          cp docs/PREVIEW_RELEASE.md release/release-notes.md
+          cd release
+          sha256sum *.apk > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-preview-files
+          path: release/
+          if-no-files-found: error
+          retention-days: 7
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: v0.2.0-alpha
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-preview-files
+          path: release
+      - name: Attach verified files to draft
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > draft-state.txt; then
+            test "$(cat draft-state.txt)" = true
+          else
+            gh release create "$RELEASE_TAG" --draft --prerelease --target "$GITHUB_SHA" --title 'الأخطبوط 0.2.0 — نسخة تجريبية للتصميم والتشخيص' --notes-file release/release-notes.md
+          fi
+          gh release edit "$RELEASE_TAG" --draft --prerelease --target "$GITHUB_SHA" --notes-file release/release-notes.md
+          gh release upload "$RELEASE_TAG" release/octopus-demo-0.2.0.apk release/octopus-diagnostic-0.2.0.apk release/octopus-source-0.2.0.zip release/validation-summary-ci.json release/SHA256SUMS.txt release/TEST_ON_PHONE.md
+          gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' > asset-names.txt
+          grep -Fx 'octopus-demo-0.2.0.apk' asset-names.txt
+          grep -Fx 'octopus-diagnostic-0.2.0.apk' asset-names.txt
+      - name: Publish prerelease after successful upload
+        run: |
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false
+          gh release view "$RELEASE_TAG" --json url,isDraft,isPrerelease,assets
