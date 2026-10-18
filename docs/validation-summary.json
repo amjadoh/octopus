@@ -1,0 +1,116 @@
+{
+  "version": "0.2.0",
+  "design": "white-and-petrol",
+  "unitTestSuites": [
+    {
+      "variant": "testDemoDebugUnitTest",
+      "suite": "app.octopus.local.demo.DemoJourneyTest",
+      "tests": 22,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "variant": "testDemoDebugUnitTest",
+      "suite": "app.octopus.local.MoneyParserTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "variant": "testDemoDebugUnitTest",
+      "suite": "app.octopus.local.PriceComparisonTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "variant": "testDemoDebugUnitTest",
+      "suite": "app.octopus.local.QuoteExtractorTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "variant": "testDemoDebugUnitTest",
+      "suite": "app.octopus.local.SafetyGuardTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "variant": "testDiagnosticDebugUnitTest",
+      "suite": "app.octopus.local.MoneyParserTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "variant": "testDiagnosticDebugUnitTest",
+      "suite": "app.octopus.local.PriceComparisonTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "variant": "testDiagnosticDebugUnitTest",
+      "suite": "app.octopus.local.QuoteExtractorTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "variant": "testDiagnosticDebugUnitTest",
+      "suite": "app.octopus.local.SafetyGuardTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "unitTestExecutions": 52,
+  "distinctUnitTests": 37,
+  "lint": {
+    "diagnosticDebug": {
+      "errors": 0,
+      "warnings": 1,
+      "warningTypes": [
+        "UnusedAttribute"
+      ]
+    },
+    "demoDebug": {
+      "errors": 0,
+      "warnings": 1,
+      "warningTypes": [
+        "UnusedAttribute"
+      ]
+    }
+  },
+  "apks": [
+    {
+      "file": "octopus-diagnostic-0.2.0.apk",
+      "bytes": 60313751,
+      "sha256": "906c089ab9a0f5d90a04c05d463e9553448e03a731329690899a3ae0e1b2ee70",
+      "signatureVerified": true,
+      "containsDemoClasses": false
+    },
+    {
+      "file": "octopus-demo-0.2.0.apk",
+      "bytes": 60706850,
+      "sha256": "701ea83ae6334981417aeaef6a3bd1bb8a870e7237493c100788c357c123e3c1",
+      "signatureVerified": true,
+      "containsDemoClasses": true
+    }
+  ],
+  "deviceUiTestsExecuted": false,
+  "deliveryAppReadingsDeviceVerified": false,
+  "nativeActivities": true,
+  "demoIsolatedFromDiagnosticApk": true
+}

@@ -1,0 +1,57 @@
+package app.octopus.local.domain
+
+enum class ProviderId(val title: String, val packageName: String) {
+    KEETA("كيتا", "com.sankuai.sailor.afooddelivery"),
+    HUNGERSTATION("هنقرستيشن", "com.hungerstation.android.web")
+}
+
+data class ProviderInstallation(val provider: ProviderId, val installed: Boolean, val version: String? = null)
+enum class SessionPhase { IDLE, WAITING_FOR_SCREEN, READING, COMPLETED, STOPPED, FAILED }
+data class SessionState(
+    val phase: SessionPhase = SessionPhase.IDLE,
+    val provider: ProviderId? = null,
+    val message: String = "لم تبدأ جلسة قراءة بعد",
+    val remainingSeconds: Int = 0,
+) {
+    val active: Boolean get() = phase == SessionPhase.WAITING_FOR_SCREEN || phase == SessionPhase.READING
+}
+
+enum class PriceField { ORDER_TOTAL, SUBTOTAL, DELIVERY, SERVICE, SMALL_ORDER, TAX, DISCOUNT, WALLET, AMOUNT_DUE }
+data class MoneyToken(val halala: Long)
+data class SafeToken(
+    val label: PriceField? = null,
+    val amount: Long? = null,
+    val top: Int = 0,
+    val bottom: Int = 0,
+    val left: Int = 0,
+    val right: Int = 0,
+    val parent: String = "",
+)
+data class SafeSnapshot(
+    val tokens: List<SafeToken>,
+    val visibleNodeCount: Int,
+    val sensitiveScreen: Boolean,
+    val truncated: Boolean = false,
+)
+data class QuoteCandidate(val fields: Map<PriceField, Long>, val ambiguous: Boolean) {
+    val total: Long? get() = if (ambiguous) null else fields[PriceField.ORDER_TOTAL]
+    val fingerprint: String get() = fields.toSortedMap(compareBy { it.ordinal }).toString() + ambiguous
+}
+
+// Future comparison domain. Diagnostic candidates must never enter this engine.
+data class CartOption(val group: String, val value: String)
+data class CanonicalItem(val name: String, val size: String?, val options: List<CartOption>, val quantity: Int)
+data class CanonicalCart(val restaurant: String, val branch: String?, val items: List<CanonicalItem>)
+data class VerifiedQuote(
+    val provider: ProviderId,
+    val orderCost: Long?,
+    val walletApplied: Long?,
+    val amountDueNow: Long?,
+    val cartFingerprint: String,
+    val addressReference: String,
+    val cartVerified: Boolean,
+    val addressVerified: Boolean,
+    val branchVerified: Boolean,
+    val allMandatoryFeesIncluded: Boolean,
+    val capturedAtMillis: Long,
+)
