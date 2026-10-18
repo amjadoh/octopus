@@ -63,6 +63,7 @@ class SnapshotReader {
                     }
                 }
             }
+            if (editable) return
             for (index in 0 until node.childCount.coerceAtMost(300)) {
                 val child = node.getChild(index) ?: continue
                 try { walk(child, "$path/$index", path, depth + 1) }

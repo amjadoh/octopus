@@ -61,13 +61,13 @@ class SafetyGuardTest {
         ProposedAction.entries.forEach { assertFalse(SafetyGuard().allowsAction(it)) }
     }
     @Test fun readsRequireEveryPermissionAndExactForegroundPackage() {
-        val provider = ProviderId.KEETA
+        val provider = ProviderId.HUNGERSTATION
         val guard = SafetyGuard()
         assertTrue(guard.allowsRead(provider, provider.packageName, true, true, true))
         assertFalse(guard.allowsRead(provider, provider.packageName, false, true, true))
         assertFalse(guard.allowsRead(provider, provider.packageName, true, false, true))
         assertFalse(guard.allowsRead(provider, provider.packageName, true, true, false))
-        assertFalse(guard.allowsRead(provider, ProviderId.HUNGERSTATION.packageName, true, true, true))
+        assertFalse(guard.allowsRead(provider, ProviderId.KEETA.packageName, true, true, true))
         assertFalse(guard.allowsRead(provider, null, true, true, true))
     }
     @Test fun unstablePriceResetsObservationWindow() {

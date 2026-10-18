@@ -19,4 +19,11 @@ class DiagnosticUiTest {
         compose.onNodeWithText("هنقرستيشن").assertIsDisplayed()
         compose.onAllNodesWithText("قراءة تشخيصية فقط").assertCountEquals(2)
     }
+    @Test fun inspectionPageIsExplicitAndDoesNotStartCaptureOnOpen() {
+        compose.onNodeWithText("القراءة", useUnmergedTree = true).performClick()
+        compose.onNodeWithText("فحص شاشة مراجعة الطلب").performClick()
+        compose.onNodeWithText("فحص عناصر الشاشة").assertIsDisplayed()
+        compose.onNodeWithText("اسم المطعم كما يظهر في التطبيق").assertExists()
+        compose.onNodeWithText("السماح بفحص هذه الشاشة؟").assertDoesNotExist()
+    }
 }

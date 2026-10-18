@@ -39,6 +39,7 @@ import app.octopus.local.automation.ReadOnlyServiceBridge
 import app.octopus.local.data.*
 import app.octopus.local.diagnostics.DiagnosticExporter
 import app.octopus.local.domain.*
+import app.octopus.local.providers.ProviderPolicies
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -63,7 +64,7 @@ private val Scheme = lightColorScheme(primary = Green, onPrimary = Color.White, 
 private enum class Page(val title: String, val icon: ImageVector) {
     HOME("الرئيسية", Icons.Outlined.Home), PROVIDERS("التطبيقات", Icons.Outlined.Apps),
     READ("القراءة", Icons.Outlined.DocumentScanner), HISTORY("السجل", Icons.Outlined.History),
-    SETTINGS("الإعدادات", Icons.Outlined.Settings)
+    SETTINGS("الإعدادات", Icons.Outlined.Settings), INSPECT("فحص الشاشة", Icons.Outlined.ManageSearch)
 }
 
 @Composable
@@ -81,7 +82,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit) {
     val session by graph.session.collectAsStateWithLifecycle()
     val connected by graph.serviceConnected.collectAsStateWithLifecycle()
     var page by rememberSaveable { mutableStateOf(Page.HOME) }
-    var selected by rememberSaveable { mutableStateOf(ProviderId.KEETA) }
+    var selected by rememberSaveable { mutableStateOf(ProviderId.HUNGERSTATION) }
     var disclosure by remember { mutableStateOf(false) }
     var exportConfirmation by remember { mutableStateOf(false) }
     var deleteConfirmation by remember { mutableStateOf(false) }
@@ -96,7 +97,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit) {
     val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) graph.scope.launch {
             val result = runCatching {
-                val json = DiagnosticExporter.json(graph.recorder.snapshot())
+                val json = DiagnosticExporter.json(graph.recorder.snapshot(), graph.inspectionDao.all())
                 withContext(Dispatchers.IO) {
                     val output = context.contentResolver.openOutputStream(uri) ?: error("No output stream")
                     output.bufferedWriter(Charsets.UTF_8).use { it.write(json) }
@@ -123,7 +124,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit) {
             },
             bottomBar = {
                 NavigationBar(containerColor = Color.White, tonalElevation = 0.dp) {
-                    Page.entries.filter { it != Page.SETTINGS }.forEach { item ->
+                    Page.entries.filter { it != Page.SETTINGS && it != Page.INSPECT }.forEach { item ->
                         NavigationBarItem(selected = page == item, onClick = { page = item },
                             icon = { Icon(item.icon, null, Modifier.size(23.dp)) },
                             label = { Text(item.title, fontSize = 11.sp) },
@@ -143,12 +144,15 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit) {
                         graph.scope.launch { graph.settingsStore.setAllowed(provider, allowed) }
                     })
                     Page.READ -> ReadScreen(selected, { selected = it }, installations, settings, connected, session, history,
+                        onInspect = { page = Page.INSPECT },
                         onSetup = { if (!settings.consent) disclosure = true else openAccessibilitySettings() },
                         onStart = {
                             if (!settings.consent) disclosure = true
                             else if (!connected) openAccessibilitySettings()
                             else if (!ReadOnlyServiceBridge.start(selected)) errorMessage = "لم تبدأ القراءة. تحقق من السماح للمنصة وتثبيتها واتصال الخدمة، ثم أعد المحاولة."
                         })
+                    Page.INSPECT -> InspectionScreen(graph, onBack = { page = Page.READ },
+                        onSetup = { if (!settings.consent) disclosure = true else openAccessibilitySettings() })
                     Page.HISTORY -> HistoryScreen(history, onExport = { exportConfirmation = true })
                     Page.SETTINGS -> SettingsScreen(settings, connected, onSetup = {
                         if (!settings.consent) disclosure = true else openAccessibilitySettings()
@@ -160,7 +164,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit) {
             icon = { Icon(Icons.Outlined.VerifiedUser, null, tint = Green) },
             title = { Text("السماح بقراءة الشاشة") },
             text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("تستخدم النسخة التشخيصية خدمة الإتاحة لقراءة مؤشرات السعر الظاهرة في كيتا وهنقرستيشن أثناء اختبار تبدأه أنت فقط.")
+                Text("تستخدم النسخة التشخيصية خدمة الإتاحة لقراءة مؤشرات السعر الظاهرة في كيتا وهنقرستيشن أثناء اختبار تبدأه أنت فقط. قيد كيتا موثق في صفحة التطبيقات؛ موافقتك لا تعني موافقة المنصة.")
                 Text("لا تنقر الخدمة ولا تضيف وجبات ولا تعدل السلال ولا تنشئ طلبًا أو تنفذ دفعًا.")
                 Text("تُحفظ محليًا مبالغ مرشحة وحالات الاختبار وإصدارات التطبيقات. لا تُحفظ كلمات المرور أو رموز التحقق أو بيانات البطاقات أو صور الشاشة، ولا تُرسل البيانات إلى الإنترنت.")
                 Text("يمكنك الإيقاف فورًا من الزر الظاهر أثناء الاختبار، أو تعطيل الخدمة من إعدادات Android. تنتهي الجلسة خلال 90 ثانية كحد أقصى.")
@@ -171,7 +175,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit) {
             dismissButton = { TextButton(onClick = { disclosure = false }) { Text("ليس الآن") } })
         if (exportConfirmation) AlertDialog(onDismissRequest = { exportConfirmation = false },
             title = { Text("تصدير سجل مختصر") },
-            text = { Text("يتضمن ${history.size} اختبارًا، والمبالغ المرشحة إن قُرئت، وإصدارات التطبيقات، وطراز الجهاز وإصدار Android. لا يتضمن صورًا أو نصوص الشاشة أو العنوان أو بيانات الحساب. ستختار مكان الحفظ بنفسك.") },
+            text = { Text("يتضمن ${history.size} اختبارًا، والمبالغ المرشحة إن قُرئت، وإصدارات التطبيقات، وطراز الجهاز وإصدار Android. ويشمل فحوص العناصر التي وافقت على حفظها: معرفات العناصر وأدوارها ومواقعها وتسميات وظيفية من قائمة محددة. لا يتضمن صورًا أو نصوص الشاشة الخام أو العنوان أو بيانات الحساب. ستختار مكان الحفظ بنفسك.") },
             confirmButton = { TextButton(onClick = { exportConfirmation = false; export.launch("octopus-diagnostics.json") }) { Text("اختيار مكان الحفظ") } },
             dismissButton = { TextButton(onClick = { exportConfirmation = false }) { Text("إلغاء") } })
         if (deleteConfirmation) AlertDialog(onDismissRequest = { deleteConfirmation = false },
@@ -179,7 +183,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit) {
             text = { Text("سيُحذف سجل الاختبارات والإعدادات والموافقة المحلية. لا يمس ذلك سلال تطبيقات التوصيل. يلزم الإعداد مجددًا عند العودة.") },
             confirmButton = { TextButton(onClick = {
                 ReadOnlyServiceBridge.stop()
-                graph.scope.launch { graph.recorder.clear(); graph.settingsStore.clear(); deleteConfirmation = false }
+                graph.scope.launch { graph.recorder.clear(); graph.inspectionDao.clear(); graph.settingsStore.clear(); deleteConfirmation = false }
             }) { Text("حذف البيانات", color = Red) } },
             dismissButton = { TextButton(onClick = { deleteConfirmation = false }) { Text("إلغاء") } })
         errorMessage?.let { message -> AlertDialog(onDismissRequest = { errorMessage = null },
@@ -256,9 +260,9 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit) {
                     ProviderMark(provider)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(provider.title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                        Text(installations.firstOrNull { it.provider == provider }?.let { if (it.installed) "مثبت • القراءة لم تُختبر بعد" else "غير مثبت على هذا الجهاز" } ?: "جارٍ فحص التثبيت", fontSize = 11.sp, color = Muted)
+                        Text(if (!ProviderPolicies.forProvider(provider).permitsDiagnosticRead) "متوقفة بسبب قيد موثق" else installations.firstOrNull { it.provider == provider }?.let { if (it.installed) "مثبت • القراءة لم تُختبر بعد" else "غير مثبت على هذا الجهاز" } ?: "جارٍ فحص التثبيت", fontSize = 11.sp, color = Muted)
                     }
-                    Icon(Icons.Outlined.Circle, null, tint = if (provider in settings.allowed) Green else Muted, modifier = Modifier.size(13.dp))
+                    Icon(Icons.Outlined.Circle, null, tint = if (provider in settings.allowed && ProviderPolicies.forProvider(provider).permitsDiagnosticRead) Green else Muted, modifier = Modifier.size(13.dp))
                 }
                 if (index == 0) HorizontalDivider(color = Line)
             }
@@ -272,7 +276,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit) {
                 Text(if (connected) "مراجعة إعدادات الخدمة" else "إعداد خدمة القراءة")
             }
         } }
-        item { Note("إضافة الوجبات والمقارنة التلقائية ستأتي بعد إثبات القراءة. لا توجد أسعار أو نتائج وهمية في هذه النسخة.", Icons.Outlined.VerifiedUser) }
+        item { Note("طلب المقارنة الفعلية: المضياف العربي — دجاج مضبي. نحتاج أولًا فحص شاشات الجهاز؛ لا توجد أسعار أو نتائج وهمية في هذه النسخة.", Icons.Outlined.VerifiedUser) }
         if (history.isNotEmpty()) item { Panel { SectionTitle("آخر اختبار"); ReportContent(history.first()) } }
         if (session.active) item { ActiveSession(session) }
     }
@@ -283,15 +287,19 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit) {
         item { PageIntro("تطبيقات التوصيل", "اختر التطبيقات التي تسمح للأخطبوط بقراءتها خلال الاختبار.") }
         items(ProviderId.entries) { provider ->
             val installed = installations.firstOrNull { it.provider == provider }
+            val policy = ProviderPolicies.forProvider(provider)
             Panel {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     ProviderMark(provider)
                     Column(Modifier.weight(1f)) { Text(provider.title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold); Text(if (installed?.installed == true) "الإصدار ${installed.version ?: "غير متاح"}" else "غير مثبت على هذا الجهاز", fontSize = 12.sp, color = Muted) }
-                    Switch(checked = provider in settings.allowed, onCheckedChange = { onAllowed(provider, it) })
+                    Switch(checked = provider in settings.allowed && policy.permitsDiagnosticRead, enabled = policy.permitsDiagnosticRead,
+                        onCheckedChange = { onAllowed(provider, it) })
                 }
                 HorizontalDivider(color = Line)
-                InfoRow("الحالة", if (installed?.installed == true) "متاح للاختبار" else "غير مثبت")
-                InfoRow("القدرة الحالية", "قراءة تشخيصية فقط")
+                InfoRow("الحالة", if (!policy.permitsDiagnosticRead) "متوقفة بسبب قيد موثق" else if (installed?.installed == true) "متاح للاختبار" else "غير مثبت")
+                InfoRow("القدرة الحالية", if (policy.permitsDiagnosticRead) "قراءة تشخيصية فقط" else "القراءة والأتمتة متوقفتان")
+                Text(policy.reason, fontSize = 12.sp, color = Muted)
+                Text("مصدر المراجعة: ${policy.source} • ${policy.reviewedOn}", fontSize = 11.sp, color = Muted)
                 InfoRow("التحقق على جهازك", "لم يتم بعد")
                 InfoRow("بناء السلة تلقائيًا", "غير منفذ في هذه النسخة")
             }
@@ -302,10 +310,17 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit) {
 
 @Composable private fun ReadScreen(selected: ProviderId, onSelected: (ProviderId) -> Unit,
     installations: List<ProviderInstallation>, settings: UserSettings, connected: Boolean, session: SessionState,
-    history: List<DiagnosticReport>, onSetup: () -> Unit, onStart: () -> Unit) {
+    history: List<DiagnosticReport>, onInspect: () -> Unit, onSetup: () -> Unit, onStart: () -> Unit) {
     val installation = installations.firstOrNull { it.provider == selected }
+    val policy = ProviderPolicies.forProvider(selected)
     LazyColumn(contentPadding = PaddingValues(21.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         item { PageIntro("اختبار القراءة", "نتحقق مما يظهر للتطبيق فعليًا. سلتك تبقى كما هي.") }
+        item { Panel {
+            SectionTitle("لم يقرأ الإجمالي؟")
+            Text("استخدم فحص العناصر لنحدد ما يتيحه التطبيق فعليًا. لا نكرر محاولة القراءة نفسها دون دليل جديد.", fontSize = 13.sp)
+            OutlinedButton(onClick = onInspect, modifier = Modifier.fillMaxWidth()) { Text("فحص شاشة مراجعة الطلب") }
+        } }
+        if (!policy.permitsDiagnosticRead) item { Note(policy.reason) }
         item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             ProviderId.entries.forEach { provider ->
                 FilterChip(selected = provider == selected, onClick = { onSelected(provider) }, enabled = !session.active,
@@ -317,11 +332,12 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit) {
             SectionTitle("قبل أن تبدأ")
             CheckLine("${selected.title} مثبت على الجهاز", installation?.installed == true)
             CheckLine("السماح بقراءة ${selected.title}", selected in settings.allowed)
+            CheckLine("اختبار القراءة المحلي متاح", policy.permitsDiagnosticRead)
             CheckLine("الموافقة على الإفصاح", settings.consent)
             CheckLine("خدمة القراءة متصلة", connected)
             if (!connected || !settings.consent) OutlinedButton(onClick = onSetup, Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text("إكمال الإعداد") }
         } }
-        item { Panel {
+        if (policy.permitsDiagnosticRead) item { Panel {
             SectionTitle("كيف تختبر؟")
             Step("١", "جهّز سلة حقيقية", "اختر وجباتك وعنوانك داخل ${selected.title} يدويًا، ثم افتح مراجعة الطلب دون تنفيذه.")
             Step("٢", "عد إلى الأخطبوط وابدأ", "نفتح التطبيق مجددًا وننتظر ظهور الإجمالي. انتقل يدويًا للمراجعة إذا لزم.")
