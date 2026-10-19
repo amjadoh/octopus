@@ -18,7 +18,7 @@
   "keetaFreeDeliveryMinimumHalala": 3000,
   "hungerstationAutomaticDelivery": {"minimumHalala": 3500, "deliveryHalala": 1000},
   "quantityChangeInvalidatesComparison": true,
-  "automatedTests": 170,
+  "automatedTests": 176,
   "buildAndLintPassed": true,
   "finalCheckoutTotalVerified": false,
   "serviceFeesVerified": false,

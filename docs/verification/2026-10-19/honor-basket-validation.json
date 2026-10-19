@@ -1,0 +1,26 @@
+{
+  "device": "Honor Magic V5 / Android 16",
+  "scope": "Ridan / fixed half compressed chicken, no options or note",
+  "hungerstationVersion": "8.0.303",
+  "keetaVersion": "3.12.501",
+  "verifiedLive": [
+    "HungerStation existing single meal quantity 1 prepared and handed off",
+    "HungerStation quantity 1 to 2 changed once; basket reread and handed off with quantity 2 and item amount 60 SAR",
+    "Keeta existing single meal quantity 3 prepared without duplicate addition",
+    "Keeta quantity 3 handed off and independently reread",
+    "Keeta quantity 3 to 2 changed once and independently reread",
+    "Keeta quantity 2 to 3 increased and independently reread",
+    "Keeta empty Ridan basket created by one add; quantity 1 to 2 to 3 each independently reread",
+    "Keeta preparation repeated after fresh creation; quantity remained 3 without duplicate addition"
+  ],
+  "automatedTests": 176,
+  "localBuildPassed": true,
+  "lintPassed": true,
+  "stableSignedInstallVerified": false,
+  "keetaEmptyCartCreationVerified": true,
+  "bothFinalReviewTotalsVerified": false,
+  "orderConfirmed": false,
+  "paymentPerformed": false,
+  "reviewToolBlock": "Automatic approval review rejected the HungerStation Go to payment navigation. The upsell was closed. No alternate tool was used to perform the rejected action.",
+  "personalDataRetained": false
+}
