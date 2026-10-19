@@ -10,7 +10,7 @@ import app.octopus.local.automation.HungerStationProductProgram
 import app.octopus.local.automation.BasketOpenCommand
 
 enum class ProposedAction { CLICK, SCROLL, INPUT_TEXT, GESTURE, GLOBAL_ACTION, CREATE_ORDER, PAYMENT }
-enum class CatalogAction { OPEN_SEARCH, SET_QUERY, SELECT_SUGGESTION, OPEN_RESTAURANT, VIEW_MENU_NOTICE, SCROLL_MENU, OPEN_PRODUCT, SCROLL_PRODUCT, RETURN_TO_CATALOG, ADD_RIDAN, OPEN_BASKET }
+enum class CatalogAction { OPEN_BROWSE, CLOSE_BROWSE_PROMO, SCROLL_RESTAURANTS, OPEN_SEARCH, SET_QUERY, SELECT_SUGGESTION, OPEN_RESTAURANT, VIEW_MENU_NOTICE, SCROLL_MENU, OPEN_PRODUCT, SCROLL_PRODUCT, RETURN_TO_CATALOG, ADD_RIDAN, OPEN_BASKET }
 
 class SafetyGuard {
     // Unscoped actions stay denied; typed operations must pass their own bounded admission checks.
@@ -55,6 +55,9 @@ class SafetyGuard {
         if (Regex("تأكيد|إتمام|اتمام|ادفع|دفع|شراء|اشتراك|place order|pay now|confirm|subscribe", RegexOption.IGNORE_CASE).containsMatchIn(label)) return false
         return when (action) {
             CatalogAction.ADD_RIDAN, CatalogAction.OPEN_BASKET -> false // Separately issued single-use commands only.
+            CatalogAction.OPEN_BROWSE -> screen == CatalogScreen.HOME
+            CatalogAction.CLOSE_BROWSE_PROMO -> screen == CatalogScreen.BROWSE_PROMO
+            CatalogAction.SCROLL_RESTAURANTS -> screen == CatalogScreen.BROWSE
             CatalogAction.OPEN_SEARCH -> screen == CatalogScreen.HOME
             CatalogAction.SET_QUERY, CatalogAction.SELECT_SUGGESTION -> screen == CatalogScreen.SEARCH
             CatalogAction.OPEN_RESTAURANT -> screen == CatalogScreen.RESULTS
@@ -63,7 +66,7 @@ class SafetyGuard {
             CatalogAction.OPEN_PRODUCT -> screen == CatalogScreen.MENU
             CatalogAction.SCROLL_PRODUCT -> screen == CatalogScreen.PRODUCT
             CatalogAction.RETURN_TO_CATALOG -> screen in setOf(CatalogScreen.PRODUCT, CatalogScreen.CART,
-                CatalogScreen.MENU, CatalogScreen.RESULTS, CatalogScreen.SEARCH)
+                CatalogScreen.MENU, CatalogScreen.RESULTS, CatalogScreen.SEARCH, CatalogScreen.BROWSE)
         }
     }
     fun allowsRead(provider: ProviderId, foregroundPackage: String?, active: Boolean, consent: Boolean, allowed: Boolean): Boolean =

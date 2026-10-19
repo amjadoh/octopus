@@ -30,23 +30,35 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit)
     var changingDraft by remember { mutableStateOf(false) }
     var showProduct by remember { mutableStateOf(true) }
     var query by rememberSaveable { mutableStateOf("") }
+    var browsing by remember { mutableStateOf(false) }
     var consent by remember { mutableStateOf(false) }
     var localError by remember { mutableStateOf<String?>(null) }
     fun search() {
-        if (!LiveCatalogBridge.search(query)) localError = "لم يبدأ البحث. تحقق من اتصال الخدمة والسماح لهنقرستيشن وإصداره المدعوم."
+        if (!(if (browsing) LiveCatalogBridge.browseRestaurants() else LiveCatalogBridge.search(query))) localError = "لم يبدأ البحث. تحقق من اتصال الخدمة والسماح لهنقرستيشن وإصداره المدعوم."
     }
     LazyColumn(contentPadding = PaddingValues(21.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { Text("المطاعم", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold) }
-        item { Text("ابحث عن مطعمك واختر من قائمته المقروءة من التطبيق.") }
+        item { Text("استعرض المطاعم المتاحة واختر مطعمًا لقراءة قائمته، أو ابحث بالاسم.") }
         storageError?.let { item { Text(it, color = MaterialTheme.colorScheme.error) } }
         item { Text("مصدر القائمة: هنقرستيشن • عنوان التوصيل النشط في المنصة", style = MaterialTheme.typography.bodySmall) }
         item { OutlinedCard(Modifier.fillMaxWidth()) {
             Text("إصدار تجريبي لبحث المطاعم والقوائم. المقارنة بين كيتا وهنقرستيشن وتجهيز السلتين لم تكتمل بعد.",
                 modifier = Modifier.padding(14.dp), style = MaterialTheme.typography.bodySmall)
         } }
+        item { Button(onClick = {
+            browsing = true
+            localError = null
+            when {
+                !connected -> onSetup()
+                ProviderId.HUNGERSTATION !in settings.allowed -> onProviders()
+                !settings.catalogConsent -> consent = true
+                else -> search()
+            }
+        }, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) { Text("استعرض المطاعم من هنقرستيشن") } }
         item { OutlinedTextField(value = query, onValueChange = { if (it.length <= 100) query = it },
             enabled = !state.busy, singleLine = true, label = { Text("اسم المطعم") }, modifier = Modifier.fillMaxWidth()) }
         item { Button(onClick = {
+            browsing = false
             localError = null
             when {
                 !connected -> onSetup()
@@ -131,7 +143,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit)
         ProductConfigurationSheet(graph, details, onDismiss = { showProduct = false }, onSaved = { localError = null })
     }
     if (consent) AlertDialog(onDismissRequest = { consent = false }, title = { Text("السماح ببحث المطاعم والقوائم") },
-        text = { Text("سيفتح الأخطبوط هنقرستيشن، ويدخل اسم المطعم ويقرأ النتائج والقائمة الظاهرة ثم يعود إليك. تسمح هذه الموافقة بالتنقل والبحث والتمرير فقط؛ لا تشمل تعديل السلة أو إنشاء طلب أو دفع. يحفظ أثناء الجلسة معرّفات العناصر وتسميات وظيفية محددة لتفسير التعطل تلقائيًا، دون نصوص خام أو صور أو بيانات حساب. تبقى البيانات محلية، ويمكن الإيقاف من الزر الظاهر فوق المنصة.") },
+        text = { Text("سيفتح الأخطبوط هنقرستيشن، ويستعرض المطاعم أو يدخل اسم المطعم ويقرأ النتائج والقائمة الظاهرة ثم يعود إليك. تسمح هذه الموافقة بالتنقل والبحث والتمرير فقط؛ لا تشمل تعديل السلة أو إنشاء طلب أو دفع. يحفظ أثناء الجلسة معرّفات العناصر وتسميات وظيفية محددة لتفسير التعطل تلقائيًا، دون نصوص خام أو صور أو بيانات حساب. تبقى البيانات محلية، ويمكن الإيقاف من الزر الظاهر فوق المنصة.") },
         confirmButton = { TextButton(onClick = {
             consent = false
             graph.scope.launch {
