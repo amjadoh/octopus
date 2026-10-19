@@ -66,8 +66,19 @@ class AppGraph(private val app: Application) {
         if (!draftReady.value) return@withLock DraftChange.Rejected("جارٍ تحميل الطلب المحفوظ.")
         commitDraft(DraftEditor.quantity(draft.value, key, quantity))
     }
+    suspend fun savePreparationSelection(details: ConfiguredProduct, selection: ProductSelection): DraftChange = draftLock.withLock {
+        if (!draftReady.value) return@withLock DraftChange.Rejected("جارٍ تحميل الطلب المحفوظ.")
+        val result = MenuSelectionValidator().selectConfigured(details, selection, System.currentTimeMillis())
+        if (result !is SelectionResult.Accepted) return@withLock DraftChange.Rejected("أعد قراءة خيارات الوجبة.")
+        val current = draft.value
+        if (current != null && (current.restaurant != details.restaurant || current.items.size != 1 ||
+            CartIdentity.itemKey(current.items.single()) != CartIdentity.itemKey(result.item)))
+            return@withLock DraftChange.Rejected("طلبك المحلي مختلف؛ لم أستبدله تلقائيًا.")
+        commitDraft(DraftChange.Changed(CanonicalCart(details.restaurant, null, listOf(result.item))))
+    }
     private suspend fun commitDraft(change: DraftChange): DraftChange {
         if (change is DraftChange.Changed) {
+            if (change.cart != draft.value) catalog.value = catalog.value.copy(preparedBasket = null)
             withContext(Dispatchers.IO) { if (change.cart == null) orders.delete(activeOrderId) else orders.save(change.cart, activeOrderId) }
             draft.value = change.cart
         }

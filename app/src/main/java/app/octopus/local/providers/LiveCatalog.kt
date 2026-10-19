@@ -28,6 +28,7 @@ data class LiveCatalogState(
     val menu: LiveMenu? = null,
     val error: String? = null,
     val product: ConfiguredProduct? = null,
+    val preparedBasket: BasketEvidence? = null,
 )
 
 /** Selectors recorded on Honor / HS 8.0.302. Unknown screens never authorize an action. */

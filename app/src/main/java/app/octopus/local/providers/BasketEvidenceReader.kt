@@ -25,11 +25,12 @@ object BasketEvidenceReader {
         val parsed = cards.mapNotNull { card ->
             val parts = lines(card.label)
             val edit = parts.indexOf("تعديل")
-            if (edit < 1 || parts.size != edit + 3 || parts.last() != "§") return@mapNotNull null
-            val choices = parts.subList(1, edit).flatMap(::choices)
+            val plain = parts.size == 3 && parts.last() == "§" && MoneyParser.parse(parts[1]) != null
+            if (!plain && (edit < 1 || parts.size != edit + 3 || parts.last() != "§")) return@mapNotNull null
+            val choices = if (plain) emptyList() else parts.subList(1, edit).flatMap(::choices)
             val quantities = frame.descendants(card.index).filter { it.id == "menuItemActionDualButtonValue" }
             val quantity = quantities.singleOrNull()?.label?.let(::quantity)
-            BasketLineEvidence(parts.first(), choices, quantity, MoneyParser.parse(parts[edit+1]))
+            BasketLineEvidence(parts.first(), choices, quantity, MoneyParser.parse(parts[if (plain) 1 else edit+1]))
         }
         val summaries = frame.nodes.filter { it.id == "FlutterCart_scroll_view" }.flatMap { node ->
             val parts = lines(node.label)

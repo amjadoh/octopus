@@ -58,7 +58,10 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
         // The saved evidence covers this bounded configuration. Other PDP shapes remain readable but not selectable yet.
         val evidencedConfiguration = IdentityText.clean(restaurant.name) == "المضياف العربي" &&
             IdentityText.clean(item.name) == "دجاج مظبي" && groups.keys.toList() == listOf("اختر الحجم", "إضافات")
-        val complete = evidencedConfiguration && bottomSeen && !unsupported && groups.values.all { it.choices.isNotEmpty() }
+        val ridanFixedMeal = IdentityText.clean(restaurant.name) == "ريدان" &&
+            IdentityText.clean(item.name) == "نصف دجاج مضغوط" && groups.isEmpty()
+        val complete = (evidencedConfiguration || ridanFixedMeal) && bottomSeen && !unsupported &&
+            groups.values.all { it.choices.isNotEmpty() }
         val options = groups.values.filter { it.choices.isNotEmpty() }.map { MenuChoiceGroup(it.title, it.title, 1, 1, it.choices.values.toList()) }
         val fingerprint = MessageDigest.getInstance("SHA-256").digest(bodies.joinToString().toByteArray()).joinToString("") { "%02x".format(it) }
         return ConfiguredProduct(restaurant.name, MenuProduct(item.selector, item.name, null, enabled, item.listedPrice, options),

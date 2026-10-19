@@ -10,7 +10,7 @@ import app.octopus.local.automation.HungerStationProductProgram
 import app.octopus.local.automation.BasketOpenCommand
 
 enum class ProposedAction { CLICK, SCROLL, INPUT_TEXT, GESTURE, GLOBAL_ACTION, CREATE_ORDER, PAYMENT }
-enum class CatalogAction { OPEN_SEARCH, SET_QUERY, SELECT_SUGGESTION, OPEN_RESTAURANT, VIEW_MENU_NOTICE, SCROLL_MENU, OPEN_PRODUCT, SCROLL_PRODUCT, RETURN_TO_CATALOG }
+enum class CatalogAction { OPEN_SEARCH, SET_QUERY, SELECT_SUGGESTION, OPEN_RESTAURANT, VIEW_MENU_NOTICE, SCROLL_MENU, OPEN_PRODUCT, SCROLL_PRODUCT, RETURN_TO_CATALOG, ADD_RIDAN, OPEN_BASKET }
 
 class SafetyGuard {
     // Unscoped actions stay denied; typed operations must pass their own bounded admission checks.
@@ -54,6 +54,7 @@ class SafetyGuard {
         if (!consent || !active || !complete || foregroundPackage != ProviderId.HUNGERSTATION.packageName) return false
         if (Regex("تأكيد|إتمام|اتمام|ادفع|دفع|شراء|اشتراك|place order|pay now|confirm|subscribe", RegexOption.IGNORE_CASE).containsMatchIn(label)) return false
         return when (action) {
+            CatalogAction.ADD_RIDAN, CatalogAction.OPEN_BASKET -> false // Separately issued single-use commands only.
             CatalogAction.OPEN_SEARCH -> screen == CatalogScreen.HOME
             CatalogAction.SET_QUERY, CatalogAction.SELECT_SUGGESTION -> screen == CatalogScreen.SEARCH
             CatalogAction.OPEN_RESTAURANT -> screen == CatalogScreen.RESULTS
