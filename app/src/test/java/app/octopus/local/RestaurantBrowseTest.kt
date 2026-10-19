@@ -37,4 +37,11 @@ class RestaurantBrowseTest {
         assertFalse(SafetyGuard().allowsCatalogAction(CatalogAction.SCROLL_RESTAURANTS,CatalogScreen.CART,
             ProviderId.HUNGERSTATION.packageName,true,true,true,""))
     }
+    @Test fun initialAndCollapsedListingHeadersAreRecognizedWithoutAddressChildren() {
+        val listing = CatalogFrame(listOf(n(0,id="vendorsRecycler"), n(1,id="new_bar_top"),
+            n(2,id="vendors_title"), n(3,id="new_search_card_view")),true)
+        assertEquals(CatalogScreen.BROWSE,HungerStationCatalog.screen(listing))
+        assertEquals(CatalogScreen.BROWSE,HungerStationCatalog.screen(listing.copy(nodes=listing.nodes.take(2))))
+        assertEquals(CatalogScreen.UNKNOWN,HungerStationCatalog.screen(listing.copy(nodes=listing.nodes.take(1))))
+    }
 }

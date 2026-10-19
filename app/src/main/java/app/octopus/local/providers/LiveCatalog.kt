@@ -6,7 +6,7 @@ import app.octopus.local.pricing.MoneyParser
 import java.util.Locale
 
 data class CatalogNode(val index: Int, val parent: Int, val id: String, val label: String, val className: String,
-    val clickable: Boolean, val editable: Boolean, val scrollable: Boolean, val enabled: Boolean = true)
+    val clickable: Boolean, val editable: Boolean, val scrollable: Boolean, val enabled: Boolean = true, val omittedText: Boolean = false)
 enum class CatalogScreen { HOME, BROWSE, BROWSE_PROMO, SEARCH, RESULTS, RESTAURANT_NOTICE, MENU, PRODUCT, CART, UNKNOWN }
 data class CatalogFrame(val nodes: List<CatalogNode>, val complete: Boolean) {
     fun hasId(suffix: String) = nodes.any { it.id == suffix || it.id.endsWith(":id/$suffix") }
@@ -22,6 +22,7 @@ data class LiveMenuItem(val name: String, val listedPrice: Long?, val selector: 
 data class LiveMenu(val restaurant: LiveRestaurant, val items: List<LiveMenuItem>, val capturedAtMillis: Long,
     val reachedEnd: Boolean)
 data class LiveCatalogState(
+    val previews: List<MenuCostPreview> = emptyList(),
     val busy: Boolean = false,
     val message: String = "ابحث لقراءة المطاعم المتاحة من هنقرستيشن.",
     val restaurants: List<LiveRestaurant> = emptyList(),
@@ -41,7 +42,8 @@ object HungerStationCatalog {
         frame.hasId("menuBackButton") && frame.hasId("menuSearchButton") -> CatalogScreen.MENU
         frame.hasId("searchVendorsRecycler") -> CatalogScreen.RESULTS
         frame.hasId("vendor_list") && frame.hasId("close_button") -> CatalogScreen.BROWSE_PROMO
-        frame.hasId("vendorsRecycler") && frame.hasId("hsBackButton") -> CatalogScreen.BROWSE
+        frame.hasId("vendorsRecycler") && (frame.hasId("hsBackButton") ||
+            frame.hasId("new_bar_top")) -> CatalogScreen.BROWSE
         listOf("عرض قائمة المطعم", "اكتشف المطاعم", "رفض").all { label -> frame.nodes.any { it.label == label && it.clickable } } -> CatalogScreen.RESTAURANT_NOTICE
         frame.hasId("new_search_card_view") && frame.hasId("input_csc") -> CatalogScreen.HOME
         frame.nodes.any { it.editable } &&

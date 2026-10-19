@@ -10,8 +10,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.octopus.local.AppGraph
 import app.octopus.local.domain.*
-import app.octopus.local.automation.LiveCatalogBridge
-import app.octopus.local.automation.RidanCartProgram
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -71,26 +69,7 @@ fun ProductConfigurationSheet(graph: AppGraph, details: ConfiguredProduct, onDis
                     Text(if (saving) "جارٍ الحفظ…" else "أضف إلى طلبي في الأخطبوط")
                 }
             }
-            if (details.restaurant == RidanCartProgram.RESTAURANT && details.product.title == RidanCartProgram.TITLE) item {
-                Text("تجهيز الوجبة المحددة بكمية واحدة في هنقرستيشن. لن تُستبدل سلة مختلفة، ولن يُؤكد طلب أو دفع.", style = MaterialTheme.typography.bodySmall)
-                Button(onClick = {
-                    scope.launch {
-                        saving = true
-                        try {
-                            when (val result = graph.savePreparationSelection(details, selection)) {
-                                is DraftChange.Changed -> {
-                                    if (LiveCatalogBridge.prepareRidan(details, selection)) { onSaved(); onDismiss() }
-                                    else error = "تعذر بدء التجهيز؛ تحقق من صلاحية قراءة الوجبة والخدمة."
-                                }
-                                DraftChange.RestaurantReplacementRequired -> error = "يوجد طلب محلي لمطعم آخر؛ احفظ طلب ريدان أولًا."
-                                is DraftChange.Rejected -> error = result.reason
-                            }
-                        } finally { saving = false }
-                    }
-                }, enabled = !saving && RidanCartProgram.supports(details, selection, System.currentTimeMillis()), modifier = Modifier.fillMaxWidth()) {
-                    Text("جهّز السلة في هنقرستيشن")
-                }
-            }
+            item { Text("بعد إضافة وجباتك إلى طلب الأخطبوط، افتح المقارنة ثم اختر التطبيق لتجهيز سلته.", style = MaterialTheme.typography.bodySmall) }
         }
     }
     if (replacing) AlertDialog(onDismissRequest = { replacing = false }, title = { Text("تغيير مطعم الطلب المحلي؟") },

@@ -78,7 +78,7 @@ class AppGraph(private val app: Application) {
     }
     private suspend fun commitDraft(change: DraftChange): DraftChange {
         if (change is DraftChange.Changed) {
-            if (change.cart != draft.value) catalog.value = catalog.value.copy(preparedBasket = null)
+            if (change.cart != draft.value) catalog.value = catalog.value.copy(preparedBasket = null, previews = emptyList())
             withContext(Dispatchers.IO) { if (change.cart == null) orders.delete(activeOrderId) else orders.save(change.cart, activeOrderId) }
             draft.value = change.cart
         }
@@ -87,6 +87,7 @@ class AppGraph(private val app: Application) {
     suspend fun clearOrders() = draftLock.withLock {
         withContext(Dispatchers.IO) { orders.clear() }
         draft.value = null
+        catalog.value = catalog.value.copy(preparedBasket = null, previews = emptyList())
         draftReady.value = true
         draftStorageError.value = null
     }

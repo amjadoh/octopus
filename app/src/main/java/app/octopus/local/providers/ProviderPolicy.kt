@@ -22,7 +22,7 @@ object ProviderPolicies {
         )
         ProviderId.HUNGERSTATION -> ProviderPolicy(
             IntegrationStatus.READ_ONLY_UNVERIFIED, true,
-            "اختبار قراءة فقط؛ تجهيز السلة والمقارنة الآلية غير مفعّلين، ولم تُختبر القراءة على الجهاز.",
+            "اختُبر البحث والقوائم وتجهيز وجبة ريدان المحددة على سامسونج والأونر. المقارنة النهائية بالرسوم والعروض بين المنصتين لم تُتحقق.",
             "https://hungerstation.com/sa-ar/terms-of-use", "2026-10-18",
         )
     }

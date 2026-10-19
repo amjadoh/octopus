@@ -60,10 +60,13 @@ private val PaleAmber = OctopusPalette.SoftAmber
 private val Red = OctopusPalette.Error
 private val Scheme = lightColorScheme(primary = Green, onPrimary = Color.White, secondary = Green,
     background = Background, surface = Color.White, onSurface = Ink, onBackground = Ink,
-    surfaceVariant = PaleGreen, outline = Line)
+    surfaceVariant = PaleGreen, outline = Line, outlineVariant = Line,
+    primaryContainer = PaleGreen, onPrimaryContainer = Ink, secondaryContainer = PaleGreen, onSecondaryContainer = Green,
+    surfaceContainerLow = Color.White, surfaceContainer = Color.White, surfaceContainerHigh = PaleGreen,
+    surfaceContainerHighest = Line)
 
 private enum class Page(val title: String, val icon: ImageVector) {
-    HOME("الرئيسية", Icons.Outlined.Home), PROVIDERS("التطبيقات", Icons.Outlined.Apps),
+    HOME("المطاعم", Icons.Outlined.Home), COMPARE("المقارنة", Icons.Outlined.CompareArrows), PROVIDERS("التطبيقات", Icons.Outlined.Apps),
     READ("القراءة", Icons.Outlined.DocumentScanner), HISTORY("السجل", Icons.Outlined.History),
     SETTINGS("الإعدادات", Icons.Outlined.Settings), INSPECT("فحص الشاشة", Icons.Outlined.ManageSearch)
 }
@@ -112,11 +115,11 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
         Scaffold(containerColor = Background,
             topBar = {
                 Column(Modifier.statusBarsPadding()) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 15.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Image(painterResource(R.drawable.ic_octopus_selected), "شعار الأخطبوط", Modifier.size(43.dp))
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Image(painterResource(R.drawable.ic_octopus_selected), "شعار الأخطبوط", Modifier.size(36.dp))
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("الأخطبوط", fontSize = 23.sp, fontWeight = FontWeight.Bold, color = Ink)
+                            Text("الأخطبوط", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
                             Text("طلبك واحد. خياراتك أوضح.", fontSize = 11.sp, color = Muted)
                         }
                         IconButton(onClick = { page = Page.SETTINGS }) { Icon(Icons.Outlined.Settings, "الإعدادات", tint = Ink) }
@@ -126,7 +129,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
             },
             bottomBar = {
                 NavigationBar(containerColor = Color.White, tonalElevation = 0.dp) {
-                    Page.entries.filter { it != Page.SETTINGS && it != Page.INSPECT }.forEach { item ->
+                    listOf(Page.HOME, Page.COMPARE, Page.PROVIDERS, Page.SETTINGS).forEach { item ->
                         NavigationBarItem(selected = page == item, onClick = { page = item },
                             icon = { Icon(item.icon, null, Modifier.size(23.dp)) },
                             label = { Text(item.title, fontSize = 11.sp) },
@@ -138,7 +141,9 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
         ) { padding ->
             Box(Modifier.padding(padding)) {
                 when (page) {
-                    Page.HOME -> CatalogScreen(graph, onProviders = { page = Page.PROVIDERS },
+                    Page.HOME, Page.COMPARE -> CatalogScreen(graph, comparisonOnly = page == Page.COMPARE,
+                        onRestaurants = { page = Page.HOME }, onOpenComparison = { page = Page.COMPARE },
+                        onProviders = { page = Page.PROVIDERS },
                         onSetup = { if (!settings.consent) disclosure = true else openAccessibilitySettings() })
                     Page.PROVIDERS -> ProvidersScreen(installations, settings, onAllowed = { provider, allowed ->
                         ReadOnlyServiceBridge.stop()
@@ -158,7 +163,8 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
                     Page.HISTORY -> HistoryScreen(history, onExport = { exportConfirmation = true })
                     Page.SETTINGS -> SettingsScreen(settings, connected, onSetup = {
                         if (!settings.consent) disclosure = true else openAccessibilitySettings()
-                    }, onExport = { exportConfirmation = true }, onDelete = { deleteConfirmation = true }, onUpdate = { updateDialog = true })
+                    }, onExport = { exportConfirmation = true }, onDelete = { deleteConfirmation = true }, onUpdate = { updateDialog = true },
+                        onDiagnostics = { page = Page.READ }, onHistory = { page = Page.HISTORY })
                 }
             }
         }
@@ -167,7 +173,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
             title = { Text("السماح بقراءة الشاشة") },
             text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("تستخدم النسخة التشخيصية خدمة الإتاحة لقراءة مؤشرات السعر الظاهرة في كيتا وهنقرستيشن أثناء اختبار تبدأه أنت فقط. قيد كيتا موثق في صفحة التطبيقات؛ موافقتك لا تعني موافقة المنصة.")
-                Text("لا تنقر الخدمة ولا تضيف وجبات ولا تعدل السلال ولا تنشئ طلبًا أو تنفذ دفعًا.")
+                Text("تتنقل الخدمة لقراءة المطاعم والوجبات والعروض في اختبار تبدأه أنت. يمكن تجهيز وجبة ريدان المحددة في هنقرستيشن بعد اختيارك الصريح؛ لا تُنشئ طلبًا نهائيًا ولا تنفذ دفعًا.")
                 Text("تُحفظ محليًا مبالغ مرشحة وحالات القراءة وإصدارات التطبيقات، ومعرّفات العناصر وتسميات وظيفية محددة أثناء الجلسة لتفسير فشل القراءة تلقائيًا. لا تُحفظ كلمات المرور أو رموز التحقق أو بيانات البطاقات أو نصوص الشاشة الخام أو صورها، ولا تُرسل البيانات إلى الإنترنت.")
                 Text("يمكنك الإيقاف فورًا من الزر الظاهر أثناء الاختبار، أو تعطيل الخدمة من إعدادات Android. تنتهي الجلسة خلال 90 ثانية كحد أقصى.")
             } },
@@ -402,7 +408,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
     Text("السلة والعنوان والسعر النهائي: غير متحقق منها", fontSize = 11.sp, color = Amber)
 }
 
-@Composable private fun SettingsScreen(settings: UserSettings, connected: Boolean, onSetup: () -> Unit, onExport: () -> Unit, onDelete: () -> Unit, onUpdate: () -> Unit) {
+@Composable private fun SettingsScreen(settings: UserSettings, connected: Boolean, onSetup: () -> Unit, onExport: () -> Unit, onDelete: () -> Unit, onUpdate: () -> Unit, onDiagnostics: () -> Unit, onHistory: () -> Unit) {
     LazyColumn(contentPadding = PaddingValues(21.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         item { PageIntro("الإعدادات والخصوصية", "التحكم لك. بيانات الاختبار تبقى على الجهاز.") }
         item { Panel {
@@ -425,7 +431,12 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
             OutlinedButton(onClick = onExport, Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text("تصدير السجل بعد مراجعته") }
             TextButton(onClick = onDelete) { Icon(Icons.Outlined.DeleteOutline, null, tint = Red); Spacer(Modifier.width(7.dp)); Text("حذف جميع بيانات الأخطبوط", color = Red) }
         } }
-        item { Note("النسخة ${BuildConfig.VERSION_NAME} • قراءة فقط. لا إضافة وجبات أو مقارنة تلقائية أو دفع في هذا الإصدار.", Icons.Outlined.Science) }
+        item { Panel {
+            SectionTitle("الفحص والسجل")
+            TextButton(onClick = onDiagnostics) { Text("أدوات فحص القراءة") }
+            TextButton(onClick = onHistory) { Text("سجل الاختبارات") }
+        } }
+        item { Note("النسخة ${BuildConfig.VERSION_NAME} • المقارنة الكاملة بالرسوم والعروض وتجهيز كيتا قيد الاستكمال. لا تأكيد طلب أو دفع.", Icons.Outlined.Science) }
     }
 }
 @Composable private fun InfoRow(label: String, value: String) {
