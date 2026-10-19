@@ -199,6 +199,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         } else if (graph.catalog.value.previews.none {
                 it.provider == ProviderId.KEETA && it.itemSubtotal != null && it.fresh(desired, System.currentTimeMillis()) }) return false
         return begin(returnOnSuccess = !handoff) {
+            graph.catalog.value = graph.catalog.value.copy(preparedBasket = null)
             provider = ProviderId.KEETA; checkSession(); targetSeen = false
             check(graph.installations.value.any { it.provider == provider && it.version == KeetaMenuPreview.VERSION })
             phase = "التحقق من سلة ريدان في كيتا"
@@ -216,6 +217,17 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     if (KeetaPromotionEvidence.couponSheet(frame)) {
                         closeKeetaReadSheet(frame); frame = await { KeetaMenuPreview.menu(it) }
                     }
+                }
+                if (KeetaRidanBasket.emptyMenu(frame)) {
+                    check(!handoff) { "سلة كيتا أصبحت فارغة؛ أعد تجهيزها." }
+                    val preview = graph.catalog.value.previews.single { it.provider == ProviderId.KEETA }
+                    val expectedUnit = preview.itemSubtotal!! / desired.items.single().quantity
+                    openKeetaPreviewProduct(frame)
+                    frame = await { KeetaMenuPreview.product(it) }
+                    check(KeetaRidanBasket.addTarget(frame, expectedUnit) != null) { "تغير سعر الوجبة أو خياراتها أو ملاحظتها؛ لم أضفها." }
+                    // One add dispatch per run. A subsequent run sees the resulting basket and cannot duplicate it.
+                    keetaBasketAction { KeetaRidanBasket.addTarget(it, expectedUnit) }
+                    frame = await { KeetaMenuPreview.menu(it) && KeetaRidanBasket.footerBag(it) != null }
                 }
                 keetaBasketAction { KeetaRidanBasket.footerBag(it) }
                 frame = await { KeetaMenuPreview.basketDrawer(it) }
@@ -503,6 +515,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         if (desiredQuantity !in 1..99 || graph.draft.value?.items?.singleOrNull()?.quantity != desiredQuantity) return false
         val priorMenu = graph.catalog.value.menu
         return begin {
+            graph.catalog.value = graph.catalog.value.copy(preparedBasket = null)
             phase = "تجهيز سلة ريدان"
             val restaurant = LiveRestaurant(details.restaurant, null, details.restaurant)
             check(!navigateToRestaurant(restaurant)) { "ريدان غير متاح للطلب حاليًا." }
@@ -567,6 +580,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         if (saved.restaurant != RidanCartProgram.RESTAURANT || draft.restaurant != saved.restaurant ||
             draft.items.size != 1 || draft.items.single().let { it.name != RidanCartProgram.TITLE || it.quantity !in 1..99 || it.options.isNotEmpty() }) return false
         return begin(returnOnSuccess = false) {
+            graph.catalog.value = graph.catalog.value.copy(preparedBasket = null)
             phase = "التحقق من سلة ريدان قبل التسليم"
             check(!navigateToRestaurant(LiveRestaurant(RidanCartProgram.RESTAURANT, null, RidanCartProgram.RESTAURANT))) {
                 "المطعم غير متاح حاليًا؛ لم يتغير طلبك."
@@ -724,7 +738,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             if (Regex("تسجيل الدخول|كلمة المرور|رمز التحقق|captcha|card number|verification code|password", RegexOption.IGNORE_CASE).containsMatchIn(raw))
                 error("ظهرت شاشة دخول أو حماية؛ أكملها بنفسك داخل المنصة.")
             nodes += CatalogNode(index, parent, id, label, node.className?.toString().orEmpty(), node.isClickable, node.isEditable, node.isScrollable, node.isEnabled,
-                omittedText = provider == ProviderId.KEETA && !private && !node.isEditable && raw.any(Char::isLetter) && label.isBlank())
+                omittedText = provider == ProviderId.KEETA && !private && !node.isEditable && raw.any(Char::isLetter) && label.isBlank(),
+                enteredText = node.isEditable && !node.text.isNullOrBlank())
             val children = catalogChildren(node)
             try { for (child in children) walk(child, index, depth + 1) }
             finally { children.forEach { @Suppress("DEPRECATION") it.recycle() } }

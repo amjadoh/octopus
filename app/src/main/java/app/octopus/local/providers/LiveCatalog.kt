@@ -6,7 +6,8 @@ import app.octopus.local.pricing.MoneyParser
 import java.util.Locale
 
 data class CatalogNode(val index: Int, val parent: Int, val id: String, val label: String, val className: String,
-    val clickable: Boolean, val editable: Boolean, val scrollable: Boolean, val enabled: Boolean = true, val omittedText: Boolean = false)
+    val clickable: Boolean, val editable: Boolean, val scrollable: Boolean, val enabled: Boolean = true,
+    val omittedText: Boolean = false, val enteredText: Boolean = false)
 enum class CatalogScreen { HOME, BROWSE, BROWSE_PROMO, SEARCH, RESULTS, RESTAURANT_NOTICE, MENU, PRODUCT, CART, UNKNOWN }
 data class CatalogFrame(val nodes: List<CatalogNode>, val complete: Boolean) {
     fun hasId(suffix: String) = nodes.any { it.id == suffix || it.id.endsWith(":id/$suffix") }
