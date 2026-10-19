@@ -1,0 +1,10 @@
+{
+  "version": "1.2.0",
+  "versionCode": 7,
+  "tag": "v1.2.0-alpha",
+  "scope": "preview_current_work",
+  "userRequestedPreview": true,
+  "realComparisonComplete": false,
+  "prerelease": true,
+  "note": "User requested publication of current work before live comparison verification. This authorizes an explicitly incomplete preview only; the complete-comparison gate remains false."
+}

@@ -12,6 +12,7 @@ interface SavedOrderDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun put(order: SavedOrder)
     @Query("SELECT * FROM saved_orders WHERE id = :id LIMIT 1") suspend fun get(id: String): SavedOrder?
     @Query("DELETE FROM saved_orders") suspend fun clear()
+    @Query("DELETE FROM saved_orders WHERE id = :id") suspend fun delete(id: String)
 }
 
 @Database(entities = [SavedOrder::class], version = 1, exportSchema = false)
@@ -25,4 +26,5 @@ class OrderRepository(private val dao: SavedOrderDao) {
     }
     suspend fun load(id: String): CanonicalCart? = dao.get(id)?.let { CanonicalCartCodec.decode(it.payload) }
     suspend fun clear() = dao.clear()
+    suspend fun delete(id: String) = dao.delete(id)
 }

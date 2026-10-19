@@ -15,6 +15,7 @@ import app.octopus.local.AppGraph
 import app.octopus.local.MainActivity
 import app.octopus.local.BuildConfig
 import app.octopus.local.domain.ProviderId
+import app.octopus.local.diagnostics.*
 import app.octopus.local.providers.*
 import app.octopus.local.safety.CatalogAction
 import app.octopus.local.safety.SafetyGuard
@@ -33,10 +34,14 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private var phase = "فتح المنصة"
     private var lastStats = JSONObject()
     private var sensitiveSkipped = 0
+    private val inspectionReader = InspectionReader()
+    private var sessionEvidence: SessionEvidenceBuffer? = null
+    private val traceRequest = InspectionRequest(InspectionStage.MENU, "", "")
     val active: Boolean get() = job?.isActive == true
 
     fun stop(message: String = "أوقفت البحث. لم تتغير أي سلة.") {
         generation++
+        sessionEvidence = null
         job?.cancel(); job = null
         hideStop()
         graph.catalog.value = graph.catalog.value.copy(busy = false, message = message)
@@ -71,6 +76,71 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     }
 
     fun openMenu(restaurant: LiveRestaurant): Boolean = begin {
+        val viewOnlyNotice = navigateToRestaurant(restaurant)
+        val items = linkedMapOf<String, LiveMenuItem>()
+        var reachedEnd = false
+        var lastBody = ""
+        for (step in 0 until 30) {
+            val menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
+            if (step == 0) require(menu.nodes.any { n -> n.label.lineSequence().any { it == restaurant.name } }) { "لم يُتحقق اسم المطعم داخل القائمة." }
+            HungerStationCatalog.menuItems(menu).forEach { item -> items[item.selector] = item }
+            val body = HungerStationCatalog.menuItems(menu).joinToString { it.selector + it.name + it.listedPrice }
+            if (body == lastBody && body.isNotEmpty()) break
+            lastBody = body
+            val moved = act(menu, CatalogAction.SCROLL_MENU, { it.scrollable && it.className == "android.widget.ScrollView" }, allowNoOp = true)
+            if (!moved) { reachedEnd = true; break }
+        }
+        require(items.isNotEmpty()) { "تعذرت قراءة أصناف القائمة؛ لم تُنشأ قائمة بديلة." }
+        graph.catalog.value = graph.catalog.value.copy(menu = LiveMenu(restaurant, items.values.toList(), System.currentTimeMillis(), reachedEnd),
+            message = if (viewOnlyNotice) "عرضت المنصة تنبيه توفر؛ هذه قائمة للعرض فقط ولا تثبت إمكانية الطلب. قد تكون جزئية."
+                else if (reachedEnd) "قائمة مقروءة من هنقرستيشن. الخيارات تؤخذ من صفحة كل وجبة." else "قائمة جزئية؛ لم نثبت الوصول إلى نهايتها.")
+    }
+
+    /** Opens and reads choices only. In particular it never presses flutterAddButton. */
+    fun openProduct(restaurant: LiveRestaurant, requested: LiveMenuItem): Boolean {
+        val previousMenu = graph.catalog.value.menu
+        return begin {
+            val viewOnly = navigateToRestaurant(restaurant)
+            check(!viewOnly) { "المطعم يعرض تنبيه توفر؛ لن تُجهز وجبة منه." }
+            phase = "العثور على الوجبة المختارة"
+            var opened: LiveMenuItem? = null
+            var lastBody: String? = null
+            for (step in 0 until 30) {
+                val menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
+                val matches = menu.nodes.mapNotNull { n -> HungerStationCatalog.menuItem(n)?.let { n to it } }
+                    .filter { (_, item) -> item.selector == requested.selector && item.name == requested.name }
+                if (matches.size > 1) error("ظهرت وجبتان غير قابلتين للتمييز؛ توقفت العملية.")
+                if (matches.size == 1) {
+                    val (node, item) = matches.single()
+                    check(node.enabled) { "الوجبة غير متاحة في الشاشة الحالية." }
+                    act(menu, CatalogAction.OPEN_PRODUCT, { it.index == node.index && HungerStationCatalog.menuItem(it) == item })
+                    opened = item; break
+                }
+                val body = HungerStationCatalog.menuItems(menu).toString()
+                if (body == lastBody) break
+                lastBody = body
+                if (!act(menu, CatalogAction.SCROLL_MENU, { it.scrollable && it.className == "android.widget.ScrollView" }, allowNoOp = true)) break
+            }
+            val selected = opened ?: error("لم تعد الوجبة المختارة ظاهرة؛ لم تُستبدل بوجبة أخرى.")
+            phase = "قراءة خيارات الوجبة"
+            val reader = HungerStationProductReader(restaurant, selected)
+            var previous: CatalogFrame? = null
+            for (step in 0 until 30) {
+                val product = await { HungerStationCatalog.screen(it) == CatalogScreen.PRODUCT }
+                reader.observe(product)
+                if (reader.optionsEndObserved || product == previous) break
+                previous = product
+                if (!act(product, CatalogAction.SCROLL_PRODUCT, { it.scrollable && it.className == "android.widget.ScrollView" }, allowNoOp = true)) break
+            }
+            val details = reader.finish(System.currentTimeMillis())
+            graph.catalog.value = graph.catalog.value.copy(menu = previousMenu, product = details,
+                message = if (details.optionsComplete) "اختر خيارات الوجبة لحفظها في طلبك داخل الأخطبوط. لم تتغير سلة المنصة."
+                    else "قراءة خيارات الوجبة جزئية أو غير مدعومة؛ لن تُضاف بخيارات ناقصة.")
+        }
+    }
+
+    private suspend fun navigateToRestaurant(restaurant: LiveRestaurant): Boolean {
+        phase = "فتح المطعم"
         // Re-run the known search when reopening, rather than assuming a stale screen position.
         openHome()
         click(CatalogScreen.HOME, CatalogAction.OPEN_SEARCH) { it.id.endsWith(":id/new_search_card_view") }
@@ -91,26 +161,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             viewOnlyNotice = true
             act(landing, CatalogAction.VIEW_MENU_NOTICE, { it.clickable && it.label == "عرض قائمة المطعم" })
         }
-        val items = linkedMapOf<String, LiveMenuItem>()
-        var reachedEnd = false
-        var lastBody = ""
-        for (step in 0 until 30) {
-                val menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
-                if (step == 0) require(menu.nodes.any { n -> n.label.lineSequence().firstOrNull() == restaurant.name }) { "لم يُتحقق اسم المطعم داخل القائمة." }
-                HungerStationCatalog.menuItems(menu).forEach { item -> items[item.selector] = item }
-                val body = HungerStationCatalog.menuItems(menu).joinToString { it.selector + it.name + it.listedPrice }
-                // An unchanged viewport may mean a delayed/unsupported scroll, not the menu's end.
-                if (body == lastBody && body.isNotEmpty()) break
-                else {
-                    lastBody = body
-                    val moved = act(menu, CatalogAction.SCROLL_MENU, { it.scrollable && it.className == "android.widget.ScrollView" }, allowNoOp = true)
-                    if (!moved) { reachedEnd = true; break }
-                }
-        }
-        require(items.isNotEmpty()) { "تعذرت قراءة أصناف القائمة؛ لم تُنشأ قائمة بديلة." }
-        graph.catalog.value = graph.catalog.value.copy(menu = LiveMenu(restaurant, items.values.toList(), System.currentTimeMillis(), reachedEnd),
-            message = if (viewOnlyNotice) "عرضت المنصة تنبيه توفر؛ هذه قائمة للعرض فقط ولا تثبت إمكانية الطلب. قد تكون جزئية."
-                else if (reachedEnd) "قائمة مقروءة من هنقرستيشن. الخيارات تؤخذ من صفحة كل وجبة." else "قائمة جزئية؛ لم نثبت الوصول إلى نهايتها.")
+        val menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
+        require(menu.nodes.any { n -> n.label.lineSequence().any { it == restaurant.name } }) { "لم يُتحقق اسم المطعم داخل القائمة." }
+        return viewOnlyNotice
     }
 
     private fun begin(block: suspend () -> Unit): Boolean {
@@ -124,22 +177,35 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         targetSeen = false
         if (!showStop()) return false
         val token = ++generation
-        graph.catalog.value = graph.catalog.value.copy(busy = true, error = null, menu = null, restaurants = emptyList(), message = "جارٍ قراءة البيانات من هنقرستيشن…")
+        val evidence = SessionEvidenceBuffer().also { sessionEvidence = it }
+        val evidenceGeneration = graph.inspectionRecorder.generation()
+        graph.catalog.value = graph.catalog.value.copy(busy = true, error = null, menu = null, product = null, restaurants = emptyList(), message = "جارٍ قراءة البيانات من هنقرستيشن…")
         job = graph.scope.launch {
+            var outcome = "COMPLETED"
             try { withTimeout(150_000) { block() }; returnToApp() }
             catch (cancelled: CancellationException) {
-                if (cancelled is TimeoutCancellationException) graph.catalog.value = graph.catalog.value.copy(error = "انتهت مهلة $phase. لم تتغير السلال.")
+                outcome = if (cancelled is TimeoutCancellationException) "TIMEOUT" else "STOPPED"
+                if (cancelled is TimeoutCancellationException) {
+                    graph.catalog.value = graph.catalog.value.copy(error = "انتهت مهلة $phase. لم تتغير السلال.")
+                    returnToApp()
+                }
                 throw cancelled
             } catch (failure: Exception) {
+                outcome = "FAILED"
                 // Only our own fixed errors are surfaced; no provider exception text or screen dump is logged.
                 graph.catalog.value = graph.catalog.value.copy(error = failure.message?.takeIf { it.any { c -> c in '\u0600'..'\u06ff' } }
                     ?: "توقفت العملية عند شاشة غير مدعومة. لم تتغير السلال.")
                 returnToApp()
             } finally {
+                val frames = evidence.drain()
+                // Capture has already stopped. Persist only bounded, redacted records, with no network operation.
+                withContext(NonCancellable + Dispatchers.IO) {
+                    runCatching { graph.inspectionRecorder.recordAutomaticEvidence(provider, installed.version ?: "unknown", frames, outcome, evidenceGeneration) }
+                }
                 if (BuildConfig.DEBUG) withContext(NonCancellable + Dispatchers.IO) {
                     service.filesDir.resolve("catalog-frame-stats.json").writeText(lastStats.toString(), Charsets.UTF_8)
                 }
-                if (generation == token) { hideStop(); job = null; graph.catalog.value = graph.catalog.value.copy(busy = false) }
+                if (generation == token) { sessionEvidence = null; hideStop(); job = null; graph.catalog.value = graph.catalog.value.copy(busy = false) }
             }
         }
         return true
@@ -148,7 +214,19 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private suspend fun openHome() {
         val launch = service.packageManager.getLaunchIntentForPackage(provider.packageName) ?: error("هنقرستيشن غير مثبت.")
         service.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        await { HungerStationCatalog.screen(it) == CatalogScreen.HOME }
+        // Launch resumes the provider's last activity; it does not promise to open Home.
+        var frame = await { HungerStationCatalog.screen(it) == CatalogScreen.HOME || CatalogCommands.backTarget(it) != null }
+        repeat(6) {
+            val screen = HungerStationCatalog.screen(frame)
+            if (screen == CatalogScreen.HOME) return
+            val target = CatalogCommands.backTarget(frame) ?: error("لا يوجد رجوع معروف من هذه الشاشة.")
+            act(frame, CatalogAction.RETURN_TO_CATALOG, { it.index == target.index && it == target })
+            frame = await {
+                HungerStationCatalog.screen(it) != screen &&
+                    (HungerStationCatalog.screen(it) == CatalogScreen.HOME || CatalogCommands.backTarget(it) != null)
+            }
+        }
+        error("تعذر الرجوع إلى بداية البحث عبر الشاشات المعروفة.")
     }
 
     private suspend fun await(predicate: (CatalogFrame) -> Boolean): CatalogFrame = withTimeout(15_000) {
@@ -166,6 +244,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 }
                 targetSeen = true
                 val frame = capture(root)
+                val structure = inspectionReader.read(root, traceRequest)
+                sessionEvidence?.observe(SessionEvidence("AUTO_CATALOG_${HungerStationCatalog.screen(frame).name}",
+                    structure.nodes, structure.count, structure.truncated, System.currentTimeMillis()), SystemClock.elapsedRealtime())
                 lastStats = JSONObject().put("phase", phase).put("screen", HungerStationCatalog.screen(frame).name)
                     .put("complete", frame.complete).put("nodeCount", frame.nodes.size).put("sensitiveSkipped", sensitiveSkipped)
                     .put("editables", frame.nodes.count { it.editable }).put("ids", JSONArray(frame.nodes.map { it.id }.filter { it.isNotBlank() }.distinct()))
@@ -206,7 +287,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             val label = raw
             if (Regex("تسجيل الدخول|كلمة المرور|رمز التحقق|captcha|card number|verification code|password", RegexOption.IGNORE_CASE).containsMatchIn(label))
                 error("ظهرت شاشة دخول أو حماية؛ أكملها بنفسك داخل المنصة.")
-            nodes += CatalogNode(index, parent, id, label, node.className?.toString().orEmpty(), node.isClickable, node.isEditable, node.isScrollable)
+            nodes += CatalogNode(index, parent, id, label, node.className?.toString().orEmpty(), node.isClickable, node.isEditable, node.isScrollable, node.isEnabled)
             if (private) return
             for (i in 0 until node.childCount.coerceAtMost(300)) node.getChild(i)?.let { child ->
                 try { walk(child, index, depth + 1) } finally { @Suppress("DEPRECATION") child.recycle() }
@@ -224,11 +305,13 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         currentCoroutineContext().ensureActive(); checkSession()
         val root = service.rootInActiveWindow ?: error("اختفت الشاشة قبل الإجراء.")
         try {
+            check(root.packageName?.toString() == provider.packageName) { "غادرت المنصة؛ توقفت العملية." }
             val fresh = capture(root)
             require(fresh == previous) { "تغيرت الشاشة؛ أوقفت الإجراء بدل النقر على عنصر قديم." }
             val selected = fresh.nodes.filter(selector)
             require(selected.size == 1) { "تعذر تحديد عنصر فريد؛ توقفت العملية." }
             val node = selected.single()
+            check(node.enabled) { "العنصر غير متاح؛ توقفت العملية." }
             check(SafetyGuard().allowsCatalogAction(action, HungerStationCatalog.screen(fresh), root.packageName?.toString(),
                 graph.settings.value.catalogConsent, currentCoroutineContext().isActive, fresh.complete, node.label)) { "الإجراء خارج نطاق البحث المسموح." }
             fun locate(current: AccessibilityNodeInfo, cursor: IntArray): AccessibilityNodeInfo? {
@@ -245,10 +328,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             }
             var target = locate(root, intArrayOf(0)) ?: error("العنصر لم يعد متاحًا.")
             try {
-                val androidAction = when (action) {
-                    CatalogAction.SET_QUERY -> AccessibilityNodeInfo.ACTION_SET_TEXT
-                    CatalogAction.SCROLL_MENU -> AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
-                    else -> AccessibilityNodeInfo.ACTION_CLICK
+                val androidAction = when (action.operation()) {
+                    ElementOperation.SET_TEXT -> AccessibilityNodeInfo.ACTION_SET_TEXT
+                    ElementOperation.SCROLL_FORWARD -> AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
+                    ElementOperation.CLICK -> AccessibilityNodeInfo.ACTION_CLICK
                 }
                 if (androidAction == AccessibilityNodeInfo.ACTION_CLICK) {
                     while (!target.isClickable) {
@@ -266,7 +349,14 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         } finally { @Suppress("DEPRECATION") root.recycle() }
     }
 
-    private fun returnToApp() { service.startActivity(Intent(service, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)) }
+    private fun returnToApp() {
+        val lock = service.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+        if (lock.isKeyguardLocked) return
+        val root = service.rootInActiveWindow ?: return
+        val isTarget = try { root.packageName?.toString() == provider.packageName }
+            finally { @Suppress("DEPRECATION") root.recycle() }
+        if (isTarget) service.startActivity(Intent(service, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+    }
     private fun privateId(id: String) = id.contains(Regex("address|location|welcome|wallet|phone|email|password|otp|verification|recipient|contact", RegexOption.IGNORE_CASE))
     private fun showStop(): Boolean = try {
         val button = Button(service).apply { text = "إيقاف بحث الأخطبوط ×"; setOnClickListener { stop() } }

@@ -1,11 +1,12 @@
 package app.octopus.local.providers
 
 import app.octopus.local.domain.ProviderId
+import app.octopus.local.domain.ConfiguredProduct
 import app.octopus.local.pricing.MoneyParser
 import java.util.Locale
 
 data class CatalogNode(val index: Int, val parent: Int, val id: String, val label: String, val className: String,
-    val clickable: Boolean, val editable: Boolean, val scrollable: Boolean)
+    val clickable: Boolean, val editable: Boolean, val scrollable: Boolean, val enabled: Boolean = true)
 enum class CatalogScreen { HOME, SEARCH, RESULTS, RESTAURANT_NOTICE, MENU, PRODUCT, CART, UNKNOWN }
 data class CatalogFrame(val nodes: List<CatalogNode>, val complete: Boolean) {
     fun hasId(suffix: String) = nodes.any { it.id == suffix || it.id.endsWith(":id/$suffix") }
@@ -26,6 +27,7 @@ data class LiveCatalogState(
     val restaurants: List<LiveRestaurant> = emptyList(),
     val menu: LiveMenu? = null,
     val error: String? = null,
+    val product: ConfiguredProduct? = null,
 )
 
 /** Selectors recorded on Honor / HS 8.0.302. Unknown screens never authorize an action. */
@@ -79,20 +81,23 @@ object HungerStationCatalog {
 
     fun menuItems(frame: CatalogFrame): List<LiveMenuItem> {
         if (screen(frame) != CatalogScreen.MENU) return emptyList()
-        return frame.nodes.filter { it.clickable && (it.id.matches(Regex("gridMenuCell-\\d+-\\d+")) ||
-            (it.id.isEmpty() && it.className == "android.view.View")) }.mapNotNull { cell ->
-            val lines = cell.label.replace(Regex("[\\u200e\\u200f\\u061c\\u202a-\\u202e\\u2066-\\u2069]"), "")
-                .lineSequence().map(String::trim).filter(String::isNotBlank).toList()
-            val name = lines.firstOrNull { line -> line.any(Char::isLetter) && !line.contains("سعرة") &&
-                !line.contains("خصم") && !line.contains('%') && !line.contains('٪') &&
-                !line.matches(Regex("[0-9٠-٩.,٬+\\s]+طلب(?:ات)?")) && line.uppercase(Locale.ROOT) != "SAR" }
-                ?: return@mapNotNull null
-            val currencyIndex = lines.indexOfFirst { it == "§" || it == "﷼" || it.uppercase(Locale.ROOT) == "SAR" }
-            if (cell.id.isEmpty() && currencyIndex < 0) return@mapNotNull null
-            val currencyCount = lines.count { it == "§" || it == "﷼" || it.uppercase(Locale.ROOT) == "SAR" }
-            if (cell.id.isEmpty() && currencyCount != 1) return@mapNotNull null
-            val price = if (currencyIndex >= 0 && currencyCount == 1) lines.getOrNull(currencyIndex + 1)?.let(MoneyParser::parse) else null
-            LiveMenuItem(name, price, cell.id.ifEmpty { "label:$name" })
-        }
+        return frame.nodes.mapNotNull(::menuItem)
+    }
+
+    fun menuItem(cell: CatalogNode): LiveMenuItem? {
+        if (!(cell.clickable && (cell.id.matches(Regex("gridMenuCell-\\d+-\\d+")) ||
+            (cell.id.isEmpty() && cell.className == "android.view.View")))) return null
+        val lines = cell.label.replace(Regex("[\\u200e\\u200f\\u061c\\u202a-\\u202e\\u2066-\\u2069]"), "")
+            .lineSequence().map(String::trim).filter(String::isNotBlank).toList()
+        val name = lines.firstOrNull { line -> line.any(Char::isLetter) && !line.contains("سعرة") &&
+            !line.contains("خصم") && !line.contains('%') && !line.contains('٪') &&
+            !line.matches(Regex("[0-9٠-٩.,٬+\\s]+طلب(?:ات)?")) && line.uppercase(Locale.ROOT) != "SAR" }
+            ?: return null
+        val currencyIndex = lines.indexOfFirst { it == "§" || it == "﷼" || it.uppercase(Locale.ROOT) == "SAR" }
+        if (cell.id.isEmpty() && currencyIndex < 0) return null
+        val currencyCount = lines.count { it == "§" || it == "﷼" || it.uppercase(Locale.ROOT) == "SAR" }
+        if (cell.id.isEmpty() && currencyCount != 1) return null
+        val price = if (currencyIndex >= 0 && currencyCount == 1) lines.getOrNull(currencyIndex + 1)?.let(MoneyParser::parse) else null
+        return LiveMenuItem(name, price, cell.id.ifEmpty { "label:$name" })
     }
 }

@@ -29,12 +29,17 @@ class OrderPersistenceTest {
             override suspend fun put(order: SavedOrder) { rows[order.id] = order }
             override suspend fun get(id: String) = rows[id]
             override suspend fun clear() { rows.clear() }
+            override suspend fun delete(id: String) { rows.remove(id) }
         }
         val repo = OrderRepository(dao)
         val id = repo.save(cart())
         repo.save(cart().copy(branch = "فرع آخر"), id)
         assertEquals(1, rows.size)
         assertEquals("فرع آخر", repo.load(id)!!.branch)
+        val other = repo.save(cart())
+        repo.delete(id)
+        assertNull(repo.load(id))
+        assertNotNull(repo.load(other))
         repo.clear()
         assertNull(repo.load(id))
     }

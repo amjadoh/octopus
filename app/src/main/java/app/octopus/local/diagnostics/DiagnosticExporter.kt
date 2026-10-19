@@ -19,7 +19,10 @@ object DiagnosticExporter {
         put("screenInspections", JSONArray().apply {
             inspections.forEach { report -> put(JSONObject().apply {
                 put("provider", report.provider); put("providerVersion", report.providerVersion)
-                put("stageUserLabelled", report.stage); put("capturedAt", report.capturedAt)
+                val automatic = report.stage.startsWith("AUTO_")
+                put("captureMode", if (automatic) "automatic_session" else "manual_screen")
+                put("stage", report.stage)
+                put("stageUserLabelled", if (automatic) JSONObject.NULL else report.stage); put("capturedAt", report.capturedAt)
                 put("nodeCount", report.nodeCount); put("truncated", report.truncated)
                 put("readingObservation", JSONObject(report.observationJson))
                 put("nodes", JSONArray(report.nodesJson)); put("deviceAutomationVerified", false)
