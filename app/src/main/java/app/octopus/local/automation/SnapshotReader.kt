@@ -4,6 +4,8 @@ import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
 import app.octopus.local.domain.*
 import app.octopus.local.pricing.MoneyParser
+import app.octopus.local.safety.ProviderAccessRestriction
+import app.octopus.local.safety.ProviderAccessRestrictions
 
 /** Never returns raw screen text, identifiers, names, addresses, or editable contents. */
 class SnapshotReader {
@@ -23,7 +25,7 @@ class SnapshotReader {
         "المتبقي للدفع" to PriceField.AMOUNT_DUE, "المبلغ المستحق" to PriceField.AMOUNT_DUE,
         "amount due" to PriceField.AMOUNT_DUE, "amount to pay" to PriceField.AMOUNT_DUE,
     )
-    private val blocked = setOf("تسجيل الدخول", "رمز التحقق", "كلمة المرور", "رقم البطاقة", "login", "sign in", "password", "card number", "captcha", "verification code")
+    private val blocked = setOf("تسجيل الدخول", "رمز التحقق", "كلمة المرور", "رقم البطاقة", "login", "log in", "sign in", "sign up or log in", "enter your mobile number", "password", "card number", "captcha", "verification code")
     private val moneyPart = Regex("[-−]?[٠-٩۰-۹0-9]+(?:[.,٫٬][٠-٩۰-۹0-9]+)*")
     private fun normalize(value: String) = value.lowercase().trim().replace(Regex("[\u200e\u200f\u061c]"), "").replace(Regex("\\s+"), " ").removeSuffix(":").trim()
 
@@ -33,6 +35,7 @@ class SnapshotReader {
         var visible = 0
         var sensitive = false
         var truncated = false
+        var restriction: ProviderAccessRestriction? = null
         fun walk(node: AccessibilityNodeInfo, path: String, parent: String, depth: Int) {
             if (visited++ >= 2500 || depth > 40) { truncated = true; return }
             if (!node.isVisibleToUser) return
@@ -40,9 +43,14 @@ class SnapshotReader {
             // Skip before reading text or contentDescription.
             val editable = node.isEditable || node.className?.toString()?.contains("EditText") == true
             if (node.isPassword) { sensitive = true; return }
+            if (android.os.Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive) {
+                sensitive = true
+                return
+            }
             if (!editable) {
                 val rect = Rect().also { node.getBoundsInScreen(it) }
                 listOfNotNull(node.text, node.contentDescription).distinct().forEach { sequence ->
+                    ProviderAccessRestrictions.detect(sequence)?.let { restriction = it }
                     if (sequence.length > 120) return@forEach
                     val text = normalize(sequence.toString())
                     if (blocked.any { text == it || text.startsWith("$it ") }) sensitive = true
@@ -71,6 +79,6 @@ class SnapshotReader {
             }
         }
         walk(root, "root", "", 0)
-        return SafeSnapshot(tokens.distinct(), visible, sensitive, truncated)
+        return SafeSnapshot(if (restriction != null || sensitive) emptyList() else tokens.distinct(), visible, sensitive, truncated, restriction)
     }
 }

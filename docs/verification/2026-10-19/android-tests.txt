@@ -1,0 +1,6 @@
+app.octopus.local.RestrictedSnapshotTest:...
+app.octopus.local.DiagnosticUiTest:....
+
+Time: 44.963
+
+OK (7 tests)

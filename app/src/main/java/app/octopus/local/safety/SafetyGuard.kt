@@ -3,13 +3,52 @@ package app.octopus.local.safety
 import app.octopus.local.domain.ProviderId
 import app.octopus.local.providers.ProviderPolicies
 import app.octopus.local.providers.CatalogScreen
+import app.octopus.local.providers.CatalogFrame
+import app.octopus.local.providers.HungerStationCatalog
+import app.octopus.local.automation.ProductCommand
+import app.octopus.local.automation.HungerStationProductProgram
+import app.octopus.local.automation.BasketOpenCommand
 
 enum class ProposedAction { CLICK, SCROLL, INPUT_TEXT, GESTURE, GLOBAL_ACTION, CREATE_ORDER, PAYMENT }
 enum class CatalogAction { OPEN_SEARCH, SET_QUERY, SELECT_SUGGESTION, OPEN_RESTAURANT, VIEW_MENU_NOTICE, SCROLL_MENU, OPEN_PRODUCT, SCROLL_PRODUCT, RETURN_TO_CATALOG }
 
 class SafetyGuard {
-    // Phase one is read-only. There is intentionally no Android action executor.
+    // Unscoped actions stay denied; typed operations must pass their own bounded admission checks.
     fun allowsAction(@Suppress("UNUSED_PARAMETER") action: ProposedAction): Boolean = false
+    /** Opening the evidenced menu basket control never authorizes checkout or basket mutation. */
+    fun allowsBasketOpen(command: BasketOpenCommand, frame: CatalogFrame, foregroundPackage: String?,
+        version: String?, consent: Boolean, active: Boolean, now: Long = System.currentTimeMillis()): Boolean =
+        foregroundPackage == ProviderId.HUNGERSTATION.packageName &&
+            frame.nodes.none { ProviderAccessRestrictions.detect(it.label) != null } &&
+            command.authorizes(frame, version, consent && active, now)
+    /** Narrow product actions only. This does not authorize checkout, basket replacement or global clicks. */
+    fun allowsProductElement(command: ProductCommand, frame: CatalogFrame, foregroundPackage: String?,
+        version: String?, consent: Boolean, active: Boolean, program: HungerStationProductProgram? = null,
+        now: Long = System.currentTimeMillis()): Boolean {
+        if (!consent || !active || foregroundPackage != ProviderId.HUNGERSTATION.packageName ||
+            frame.nodes.any { ProviderAccessRestrictions.detect(it.label) != null } ||
+            version != HungerStationCatalog.TESTED_VERSION || !frame.complete ||
+            HungerStationCatalog.screen(frame) != CatalogScreen.PRODUCT || program?.authorizes(command, now) != true ||
+            frame.nodes.count { !it.clickable && it.label.trim() == "دجاج مظبي" } != 1) return false
+        val node = when (command) {
+            is ProductCommand.Choose -> command.node
+            is ProductCommand.Scroll -> command.node
+            is ProductCommand.Add -> command.node
+            else -> return false
+        }
+        if (!node.enabled || frame.nodes.singleOrNull { it.index == node.index } != node) return false
+        return when (command) {
+            is ProductCommand.Choose -> node.clickable && node.id.isEmpty() &&
+                command.group in setOf("اختر الحجم", "إضافات") &&
+                (if (command.group == "اختر الحجم") command.value == "نص"
+                    else command.value in setOf("رز بشاور", "رز شعبي", "رز مندي")) &&
+                node.label.lineSequence().first().trim() == command.value
+            is ProductCommand.Scroll -> node.scrollable && node.className == "android.widget.ScrollView"
+            is ProductCommand.Add -> node.clickable && node.className == "android.widget.Button" &&
+                node.id == "flutterAddButton" && HungerStationProductProgram.isAddLabel(node.label)
+            else -> false
+        }
+    }
     fun allowsCatalogAction(action: CatalogAction, screen: CatalogScreen, foregroundPackage: String?,
         consent: Boolean, active: Boolean, complete: Boolean, label: String): Boolean {
         if (!consent || !active || !complete || foregroundPackage != ProviderId.HUNGERSTATION.packageName) return false

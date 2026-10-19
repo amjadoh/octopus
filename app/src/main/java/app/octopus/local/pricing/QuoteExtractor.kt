@@ -5,7 +5,7 @@ import kotlin.math.abs
 
 class QuoteExtractor {
     fun extract(snapshot: SafeSnapshot): QuoteCandidate {
-        if (snapshot.sensitiveScreen || snapshot.truncated) return QuoteCandidate(emptyMap(), true)
+        if (snapshot.sensitiveScreen || snapshot.truncated || snapshot.accessRestriction != null) return QuoteCandidate(emptyMap(), true)
         val found = mutableMapOf<PriceField, MutableSet<Long>>()
         var ambiguous = false
         snapshot.tokens.filter { it.label != null }.forEach { label ->

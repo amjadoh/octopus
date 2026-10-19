@@ -1,0 +1,3 @@
+Local Android source build and checks; not a real delivery-provider comparison.
+BUILD SUCCESSFUL in 4m 41s
+83 actionable tasks: 23 executed, 60 up-to-date

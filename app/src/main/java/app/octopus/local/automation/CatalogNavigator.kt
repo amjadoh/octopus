@@ -19,6 +19,7 @@ import app.octopus.local.diagnostics.*
 import app.octopus.local.providers.*
 import app.octopus.local.safety.CatalogAction
 import app.octopus.local.safety.SafetyGuard
+import app.octopus.local.safety.ProviderAccessRestrictions
 import kotlinx.coroutines.*
 import org.json.JSONObject
 import org.json.JSONArray
@@ -285,10 +286,14 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             val raw = if (private || node.isEditable) "" else (node.text ?: node.contentDescription)?.toString().orEmpty()
             if (raw.length > 1000) { complete = false; return }
             val label = raw
+            ProviderAccessRestrictions.detect(label)?.let { error(it.userMessage) }
+            if (!private && !node.isEditable) {
+                ProviderAccessRestrictions.detect(node.contentDescription)?.let { error(it.userMessage) }
+            }
             if (Regex("تسجيل الدخول|كلمة المرور|رمز التحقق|captcha|card number|verification code|password", RegexOption.IGNORE_CASE).containsMatchIn(label))
                 error("ظهرت شاشة دخول أو حماية؛ أكملها بنفسك داخل المنصة.")
             nodes += CatalogNode(index, parent, id, label, node.className?.toString().orEmpty(), node.isClickable, node.isEditable, node.isScrollable, node.isEnabled)
-            if (private) return
+            if (private || node.isEditable) return
             for (i in 0 until node.childCount.coerceAtMost(300)) node.getChild(i)?.let { child ->
                 try { walk(child, index, depth + 1) } finally { @Suppress("DEPRECATION") child.recycle() }
             }
@@ -320,7 +325,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 if (current.isPassword || (android.os.Build.VERSION.SDK_INT >= 34 && current.isAccessibilityDataSensitive && !private)) return null
                 val here = cursor[0]++
                 if (here == node.index) return AccessibilityNodeInfo.obtain(current)
-                if (private) return null
+                if (private || current.isEditable) return null
                 for (i in 0 until current.childCount.coerceAtMost(300)) current.getChild(i)?.let { child ->
                     try { locate(child, cursor)?.let { return it } } finally { @Suppress("DEPRECATION") child.recycle() }
                 }
