@@ -25,7 +25,9 @@ object KeetaPromotionEvidence {
     fun termsTarget(frame:CatalogFrame):CatalogNode?{
         if(!couponSheet(frame)||terms(frame))return null
         val label=frame.nodes.singleOrNull{clean(it.label)=="تنتهي صلاحيتها في"}?:return null
-        return ancestors(frame,label).firstOrNull{it.clickable&&it.enabled&&frame.descendants(it.index).size<=100}
+        val row=ancestors(frame,label).firstOrNull{it.clickable&&it.enabled&&frame.descendants(it.index).size<=100}?:return null
+        val timer=frame.descendants(row.index).mapNotNull { clean(it.label).takeIf { value -> value.matches(Regex("[0-9٠-٩]{2}")) }?.let(MoneyParser::parse)?.div(100) }
+        return row.takeIf { timer.size==3 && timer.any { value -> value>0 } }
     }
     fun closeTarget(frame:CatalogFrame):CatalogNode?{
         if(terms(frame)){
