@@ -1,0 +1,28 @@
+{
+  "device": "Honor Magic V5 / Android 16",
+  "providers": {"hungerstation": "8.0.303", "keeta": "3.12.501"},
+  "restaurant": "ريدان",
+  "meal": "نصف دجاج مضغوط",
+  "unitPriceHalala": 3000,
+  "verifiedInOctopus": [
+    {"quantity": 1, "hungerstationItems": 3000, "hungerstationDelivery": 2400, "hungerstationKnownPart": 5400, "keetaDiscount": 0, "keetaDelivery": 0, "keetaKnownPart": 3000},
+    {"quantity": 2, "hungerstationItems": 6000, "hungerstationDelivery": 1000, "hungerstationKnownPart": 7000, "keetaDiscount": 600, "keetaDelivery": 0, "keetaKnownPart": 5400}
+  ],
+  "verifiedInNativeKeeta": [
+    {"quantity": 1, "items": 3000, "discount": 0, "delivery": 0, "knownPart": 3000},
+    {"quantity": 2, "items": 6000, "discount": 600, "delivery": 0, "knownPart": 5400},
+    {"quantity": 3, "items": 9000, "discount": 800, "delivery": 0, "knownPart": 8200}
+  ],
+  "keetaOwnedCoupon": {"percent": 10, "minimumHalala": 6000, "capHalala": 800, "expiry": "2026-10-19 Asia/Riyadh end of day", "deliveryOnly": true},
+  "keetaFreeDeliveryMinimumHalala": 3000,
+  "hungerstationAutomaticDelivery": {"minimumHalala": 3500, "deliveryHalala": 1000},
+  "quantityChangeInvalidatesComparison": true,
+  "automatedTests": 170,
+  "buildAndLintPassed": true,
+  "finalCheckoutTotalVerified": false,
+  "serviceFeesVerified": false,
+  "branchAndAddressEqualityVerified": false,
+  "orderConfirmed": false,
+  "paymentPerformed": false,
+  "notes": "Menu components only. No account/address data or raw accessibility screen text retained. Stable signed app update and further cart preparation remain to be verified."
+}

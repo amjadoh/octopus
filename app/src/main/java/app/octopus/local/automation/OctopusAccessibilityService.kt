@@ -39,6 +39,8 @@ object ReadOnlyServiceBridge {
 object LiveCatalogBridge {
     private var navigator = WeakReference<CatalogNavigator>(null)
     fun attach(value: CatalogNavigator?) { navigator = WeakReference(value) }
+    fun compareDraft(): Boolean = navigator.get()?.compareDraft() ?: false
+    fun prepareComparedHungerStation(): Boolean = navigator.get()?.prepareComparedHungerStation() ?: false
     fun browseRestaurants(): Boolean = navigator.get()?.browseRestaurants() ?: false
     fun search(query: String): Boolean = navigator.get()?.search(query) ?: false
     fun openMenu(restaurant: app.octopus.local.providers.LiveRestaurant): Boolean = navigator.get()?.openMenu(restaurant) ?: false
