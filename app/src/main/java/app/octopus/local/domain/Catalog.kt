@@ -48,7 +48,7 @@ data class RestaurantMenu(
     }
 }
 data class ProductSelection(val productId: String, val choices: Map<String, Set<String>>, val quantity: Int)
-enum class SelectionError { STALE_MENU, PARTIAL_MENU, PRODUCT_MISSING, UNAVAILABLE, INVALID_QUANTITY, UNKNOWN_GROUP, UNKNOWN_CHOICE, REQUIRED_CHOICES, AMBIGUOUS_CHOICES }
+enum class SelectionError { STALE_MENU, PARTIAL_MENU, PRODUCT_MISSING, UNAVAILABLE, INVALID_QUANTITY, UNKNOWN_GROUP, UNKNOWN_CHOICE, REQUIRED_CHOICES, AMBIGUOUS_CHOICES, INVALID_METADATA }
 sealed interface SelectionResult {
     data class Accepted(val item: CanonicalItem) : SelectionResult
     data class Rejected(val reason: SelectionError) : SelectionResult
@@ -56,12 +56,38 @@ sealed interface SelectionResult {
 
 /** All user selections are validated against the source menu; unknown prices remain unknown. */
 class MenuSelectionValidator(private val maxAgeMillis: Long = 300_000) {
+    fun selectConfigured(details: ConfiguredProduct, selection: ProductSelection, now: Long): SelectionResult {
+        // Product option coverage is independent of whether the restaurant's entire catalog was read.
+        if (!details.source.fresh(now, maxAgeMillis)) return SelectionResult.Rejected(SelectionError.STALE_MENU)
+        if (!details.optionsComplete) return SelectionResult.Rejected(SelectionError.PARTIAL_MENU)
+        if (details.sizeGroupId != null && details.product.size != null) return SelectionResult.Rejected(SelectionError.INVALID_METADATA)
+        if (selection.productId != details.product.id) return SelectionResult.Rejected(SelectionError.PRODUCT_MISSING)
+        val result = configure(details.product, selection)
+        if (result !is SelectionResult.Accepted || details.sizeGroupId == null) return result
+        val group = details.product.groups.single { it.id == details.sizeGroupId }
+        val choice = selection.choices[group.id].orEmpty().singleOrNull()
+            ?: return SelectionResult.Rejected(SelectionError.REQUIRED_CHOICES)
+        val size = group.choices.single { it.id == choice }.title
+        return SelectionResult.Accepted(result.item.copy(size = size, options = result.item.options.filterNot { it.group == group.title }))
+    }
+
     fun select(menu: RestaurantMenu, selection: ProductSelection, now: Long): SelectionResult {
         fun reject(reason: SelectionError) = SelectionResult.Rejected(reason)
         if (!menu.source.fresh(now, maxAgeMillis)) return reject(SelectionError.STALE_MENU)
         if (!menu.complete) return reject(SelectionError.PARTIAL_MENU)
         if (selection.quantity !in 1..99) return reject(SelectionError.INVALID_QUANTITY)
         val product = menu.products.singleOrNull { it.id == selection.productId } ?: return reject(SelectionError.PRODUCT_MISSING)
+        return configure(product, selection)
+    }
+
+    private fun configure(product: MenuProduct, selection: ProductSelection): SelectionResult {
+        fun reject(reason: SelectionError) = SelectionResult.Rejected(reason)
+        if (IdentityText.clean(product.title).isBlank() || product.title.length > 512 ||
+            product.size?.let { IdentityText.clean(it).isBlank() || it.length > 300 } == true ||
+            product.groups.any { group -> IdentityText.clean(group.title).isBlank() || group.title.length > 300 ||
+                group.choices.any { IdentityText.clean(it.title).isBlank() || it.title.length > 300 } })
+            return reject(SelectionError.INVALID_METADATA)
+        if (selection.quantity !in 1..99) return reject(SelectionError.INVALID_QUANTITY)
         if (!product.available) return reject(SelectionError.UNAVAILABLE)
         if (selection.choices.keys.any { key -> product.groups.none { it.id == key } }) return reject(SelectionError.UNKNOWN_GROUP)
         val options = mutableListOf<CartOption>()

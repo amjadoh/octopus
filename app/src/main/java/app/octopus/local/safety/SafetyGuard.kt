@@ -5,7 +5,7 @@ import app.octopus.local.providers.ProviderPolicies
 import app.octopus.local.providers.CatalogScreen
 
 enum class ProposedAction { CLICK, SCROLL, INPUT_TEXT, GESTURE, GLOBAL_ACTION, CREATE_ORDER, PAYMENT }
-enum class CatalogAction { OPEN_SEARCH, SET_QUERY, SELECT_SUGGESTION, OPEN_RESTAURANT, VIEW_MENU_NOTICE, SCROLL_MENU }
+enum class CatalogAction { OPEN_SEARCH, SET_QUERY, SELECT_SUGGESTION, OPEN_RESTAURANT, VIEW_MENU_NOTICE, SCROLL_MENU, OPEN_PRODUCT, SCROLL_PRODUCT, RETURN_TO_CATALOG }
 
 class SafetyGuard {
     // Phase one is read-only. There is intentionally no Android action executor.
@@ -20,6 +20,10 @@ class SafetyGuard {
             CatalogAction.OPEN_RESTAURANT -> screen == CatalogScreen.RESULTS
             CatalogAction.VIEW_MENU_NOTICE -> screen == CatalogScreen.RESTAURANT_NOTICE && label == "عرض قائمة المطعم"
             CatalogAction.SCROLL_MENU -> screen == CatalogScreen.MENU
+            CatalogAction.OPEN_PRODUCT -> screen == CatalogScreen.MENU
+            CatalogAction.SCROLL_PRODUCT -> screen == CatalogScreen.PRODUCT
+            CatalogAction.RETURN_TO_CATALOG -> screen in setOf(CatalogScreen.PRODUCT, CatalogScreen.CART,
+                CatalogScreen.MENU, CatalogScreen.RESULTS, CatalogScreen.SEARCH)
         }
     }
     fun allowsRead(provider: ProviderId, foregroundPackage: String?, active: Boolean, consent: Boolean, allowed: Boolean): Boolean =

@@ -19,7 +19,11 @@ class InspectionReader {
             if (!node.isVisibleToUser) return
             val index = nodes.length()
             val editable = node.isEditable || node.className?.toString()?.contains("EditText") == true
-            if (node.isPassword) return
+            if (node.isPassword || InspectionRedactor.privateSubtree(node.viewIdResourceName.orEmpty())) return
+            if (android.os.Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive) {
+                truncated = true
+                return
+            }
             val rect = Rect().also(node::getBoundsInScreen)
             val result = JSONObject().put("index", index).put("parent", parent)
                 .put("class", InspectionRedactor.className(node.className) ?: JSONObject.NULL)

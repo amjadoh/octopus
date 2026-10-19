@@ -29,6 +29,8 @@ object InspectionRedactor {
         "تأكيد الطلب" to "FORBIDDEN_ORDER", "إرسال الطلب" to "FORBIDDEN_ORDER",
         "place order" to "FORBIDDEN_ORDER", "ادفع الآن" to "FORBIDDEN_PAYMENT",
         "الدفع" to "FORBIDDEN_PAYMENT", "pay now" to "FORBIDDEN_PAYMENT",
+        "إتمام الدفع" to "AMBIGUOUS_CHECKOUT", "اتمام الدفع" to "AMBIGUOUS_CHECKOUT",
+        "اذهب للدفع" to "REVIEW_NAVIGATION_LABEL",
     )
     fun tag(value: CharSequence?, request: InspectionRequest): String? {
         if (value == null || value.length !in 1..120) return null
@@ -39,8 +41,20 @@ object InspectionRedactor {
         return labels[text]
     }
     fun resourceId(value: String?): String? = value?.takeIf {
-        it.length <= 180 && Regex("[a-zA-Z][a-zA-Z0-9_.]*:id/[a-zA-Z][a-zA-Z0-9_]*").matches(it)
+        it.length <= 180 && (Regex("[a-zA-Z][a-zA-Z0-9_.]*:id/[a-zA-Z][a-zA-Z0-9_]*").matches(it) ||
+            it in knownFlutterIds || Regex("gridMenuCell-[0-9]{1,4}-[0-9]{1,4}").matches(it) ||
+            Regex("UniversalSearch_(autocomplete_cell|autocomplete_recent_cell|static_vertical_cell|recent_search_cell|popular_search_cell)_[0-9]{1,4}").matches(it))
     }
+    // Bare Flutter IDs do not use Android's package:id/name syntax. Keep only observed static keys.
+    private val knownFlutterIds = setOf("pdpCloseButton", "pdpZoomButton", "flutterAddButton",
+        "menuBackButton", "menuSearchButton", "FlutterCart_back_button", "FlutterCart_title",
+        "FlutterCart_scroll_view", "FlutterCart_cartItem", "FlutterCart_addMoreItemButton",
+        "FlutterCart_footer_main_action_button", "menuItemActionDualButtonValue",
+        "UniversalSearch_back_button", "UniversalSearch_search_bar_text_field", "universal_search_swimlane_component")
+
+    fun privateSubtree(id: String): Boolean = Regex(
+        "address|location|welcome|wallet|phone|email|password|otp|verification|recipient|contact|credit.?card|bank.?card|card.?number|cvv|cvc|expiry|iban",
+        RegexOption.IGNORE_CASE).containsMatchIn(id)
     fun priceHints(value: CharSequence?): List<String> {
         if (value == null || value.length !in 1..120) return emptyList()
         val known = mapOf("الإجمالي" to "TOTAL", "الاجمالي" to "TOTAL", "إجمالي" to "TOTAL", "اجمالي" to "TOTAL",

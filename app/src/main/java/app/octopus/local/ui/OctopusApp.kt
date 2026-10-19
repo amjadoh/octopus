@@ -168,7 +168,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
             text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("تستخدم النسخة التشخيصية خدمة الإتاحة لقراءة مؤشرات السعر الظاهرة في كيتا وهنقرستيشن أثناء اختبار تبدأه أنت فقط. قيد كيتا موثق في صفحة التطبيقات؛ موافقتك لا تعني موافقة المنصة.")
                 Text("لا تنقر الخدمة ولا تضيف وجبات ولا تعدل السلال ولا تنشئ طلبًا أو تنفذ دفعًا.")
-                Text("تُحفظ محليًا مبالغ مرشحة وحالات الاختبار وإصدارات التطبيقات. لا تُحفظ كلمات المرور أو رموز التحقق أو بيانات البطاقات أو صور الشاشة، ولا تُرسل البيانات إلى الإنترنت.")
+                Text("تُحفظ محليًا مبالغ مرشحة وحالات القراءة وإصدارات التطبيقات، ومعرّفات العناصر وتسميات وظيفية محددة أثناء الجلسة لتفسير فشل القراءة تلقائيًا. لا تُحفظ كلمات المرور أو رموز التحقق أو بيانات البطاقات أو نصوص الشاشة الخام أو صورها، ولا تُرسل البيانات إلى الإنترنت.")
                 Text("يمكنك الإيقاف فورًا من الزر الظاهر أثناء الاختبار، أو تعطيل الخدمة من إعدادات Android. تنتهي الجلسة خلال 90 ثانية كحد أقصى.")
             } },
             confirmButton = { TextButton(onClick = {
@@ -186,7 +186,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
             confirmButton = { TextButton(onClick = {
                 ReadOnlyServiceBridge.stop()
                 LiveCatalogBridge.stop()
-                graph.scope.launch { graph.recorder.clear(); graph.inspectionDao.clear(); graph.orders.clear(); graph.settingsStore.clear(); deleteConfirmation = false }
+                graph.scope.launch { graph.recorder.clear(); graph.inspectionRecorder.clear(); graph.clearOrders(); graph.settingsStore.clear(); graph.catalog.value = app.octopus.local.providers.LiveCatalogState(); deleteConfirmation = false }
             }) { Text("حذف البيانات", color = Red) } },
             dismissButton = { TextButton(onClick = { deleteConfirmation = false }) { Text("إلغاء") } })
         if (updateDialog) AlertDialog(onDismissRequest = { updateDialog = false },
@@ -421,7 +421,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
         } }
         item { Panel {
             SectionTitle("بياناتك المحلية")
-            Text("نحفظ حالات الاختبار والمبالغ المرشحة وإصدارات التطبيقات والفحوص المنقحة التي تطلبها. لا نصوص خام أو صور شاشة أو بيانات دخول أو خادم خارجي.", fontSize = 13.sp, lineHeight = 22.sp, color = Muted)
+            Text("نحفظ حالات القراءة والمبالغ المرشحة وإصدارات التطبيقات وسجلًا منقحًا للعناصر أثناء الجلسة التي تبدأها، لتفسير التعطل دون فحص منفصل. لا نصوص خام أو صور شاشة أو بيانات دخول أو خادم خارجي.", fontSize = 13.sp, lineHeight = 22.sp, color = Muted)
             OutlinedButton(onClick = onExport, Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text("تصدير السجل بعد مراجعته") }
             TextButton(onClick = onDelete) { Icon(Icons.Outlined.DeleteOutline, null, tint = Red); Spacer(Modifier.width(7.dp)); Text("حذف جميع بيانات الأخطبوط", color = Red) }
         } }

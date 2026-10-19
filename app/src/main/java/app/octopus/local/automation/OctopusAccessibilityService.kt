@@ -15,6 +15,10 @@ import app.octopus.local.*
 import app.octopus.local.data.DiagnosticReport
 import app.octopus.local.data.ScreenInspectionReport
 import app.octopus.local.diagnostics.InspectionRequest
+import app.octopus.local.diagnostics.InspectionStage
+import app.octopus.local.diagnostics.SessionEvidence
+import app.octopus.local.diagnostics.SessionEvidenceBuffer
+import app.octopus.local.diagnostics.recordAutomaticEvidence
 import app.octopus.local.domain.*
 import app.octopus.local.providers.adapterFor
 import app.octopus.local.providers.ProviderPolicies
@@ -37,6 +41,7 @@ object LiveCatalogBridge {
     fun attach(value: CatalogNavigator?) { navigator = WeakReference(value) }
     fun search(query: String): Boolean = navigator.get()?.search(query) ?: false
     fun openMenu(restaurant: app.octopus.local.providers.LiveRestaurant): Boolean = navigator.get()?.openMenu(restaurant) ?: false
+    fun openProduct(restaurant: app.octopus.local.providers.LiveRestaurant, item: app.octopus.local.providers.LiveMenuItem): Boolean = navigator.get()?.openProduct(restaurant, item) ?: false
     fun stop() { navigator.get()?.stop() }
 }
 
@@ -46,6 +51,9 @@ class OctopusAccessibilityService : AccessibilityService() {
     private val guard = SafetyGuard()
     private val reader = SnapshotReader()
     private val inspectionReader = InspectionReader()
+    private val automaticEvidence = SessionEvidenceBuffer()
+    private val automaticRequest = InspectionRequest(InspectionStage.REVIEW, "", "")
+    private var evidenceGeneration = 0L
     private var inspection: InspectionRequest? = null
     private val stability = StabilityGate()
     private var sessionId: String? = null
@@ -113,6 +121,8 @@ class OctopusAccessibilityService : AccessibilityService() {
         sawTarget = false
         lastVisibleNodes = 0
         stability.reset()
+        automaticEvidence.clear()
+        evidenceGeneration = graph.inspectionRecorder.generation()
         graph.session.value = SessionState(SessionPhase.WAITING_FOR_SCREEN, selected,
             requestedInspection?.let { "افتح ${it.stage.title} ثم اضغط زر «افحص هذه الشاشة» الظاهر فوق التطبيق." }
                 ?: "افتح شاشة مراجعة الطلب يدويًا؛ القراءة فقط نشطة.", 90)
@@ -171,11 +181,17 @@ class OctopusAccessibilityService : AccessibilityService() {
                     val report = ScreenInspectionReport(UUID.randomUUID().toString(), selected.name,
                         installation?.version ?: "unknown", request.stage.name, System.currentTimeMillis(),
                         structure.nodes, structure.truncated, structure.count, observation.toString())
+                    val captureGeneration = evidenceGeneration
                     finish("SCREEN_STRUCTURE_CAPTURED", if (structure.truncated) "حُفظ فحص جزئي للشاشة؛ لا يثبت دعمها آليًا." else "حُفظ فحص عناصر الشاشة؛ لا يثبت تجهيز السلة أو المقارنة.", null)
-                    graph.scope.launch { graph.inspectionDao.insert(report); graph.inspectionDao.trim() }
+                    graph.scope.launch { graph.inspectionRecorder.record(listOf(report), captureGeneration) }
                 }
                 return
             }
+            // Every user-started read already visits this screen. Preserve useful structure in that same
+            // session so a failed total does not require a second manual inspection or screenshots.
+            val structure = inspectionReader.read(root, automaticRequest)
+            automaticEvidence.observe(SessionEvidence("AUTO_PRICE_READING", structure.nodes, structure.count,
+                structure.truncated, System.currentTimeMillis()), SystemClock.elapsedRealtime())
             val candidate = adapterFor(selected).extract(snapshot)
             val candidateTotal = candidate.total
             if (candidateTotal == null || candidateTotal < 0 || snapshot.truncated) {
@@ -195,6 +211,8 @@ class OctopusAccessibilityService : AccessibilityService() {
     private fun finish(code: String, message: String, candidate: QuoteCandidate?) {
         val id = sessionId ?: return
         val selected = provider ?: return
+        val frames = automaticEvidence.drain()
+        val captureGeneration = evidenceGeneration
         // Invalidate before callbacks, database writes, or UI changes.
         sessionId = null
         provider = null
@@ -208,7 +226,10 @@ class OctopusAccessibilityService : AccessibilityService() {
         candidate?.fields?.forEach { (key, value) -> fields.put(key.name, value) }
         val report = DiagnosticReport(id, selected.name, installation?.version ?: "unknown", adapterFor(selected).adapterVersion,
             System.currentTimeMillis(), code, candidate?.total, fields.toString(), lastVisibleNodes)
-        graph.scope.launch { graph.recorder.record(report) }
+        graph.scope.launch {
+            graph.recorder.record(report)
+            runCatching { graph.inspectionRecorder.recordAutomaticEvidence(selected, installation?.version ?: "unknown", frames, code, captureGeneration) }
+        }
         graph.session.value = SessionState(if (candidate != null || code == "SCREEN_STRUCTURE_CAPTURED") SessionPhase.COMPLETED else SessionPhase.STOPPED, selected, message)
     }
 

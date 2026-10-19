@@ -14,6 +14,24 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Validate explicitly requested preview or complete-comparison release
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          evidence = json.loads(Path('docs/COMPARISON_RELEASE_GATE.json').read_text(encoding='utf-8'))
+          plan = json.loads(Path('docs/RELEASE_PLAN.json').read_text(encoding='utf-8'))
+          if plan.get('scope') == 'preview_current_work':
+              assert plan.get('userRequestedPreview') is True and plan.get('prerelease') is True
+              assert plan.get('realComparisonComplete') is False
+              assert plan.get('tag') == 'v1.2.0-alpha' and plan.get('version') == '1.2.0' and plan.get('versionCode') == 7
+              notes = Path('docs/PREVIEW_RELEASE.md').read_text(encoding='utf-8')
+              assert 'المقارنة الفعلية وتجهيز سلتَي كيتا وهنقرستيشن غير مكتملين' in notes
+          else:
+              checks = ['ready', 'realProviderCartPreparationVerified', 'realFinalTotalsVerified', 'realTwoProviderComparisonVerified', 'realSelectedCartHandoffVerified']
+              assert all(evidence.get(key) is True for key in checks), 'Release blocked: actual comparison/cart/handoff is not verified'
+              assert set(evidence.get('providersVerified', [])) == {'keeta', 'hungerstation'}, 'Both real providers are required'
+          PY
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -60,7 +78,7 @@ jobs:
       - name: Verify APKs and prepare release files
         run: |
           python3 .github/scripts/prepare_preview.py
-          git archive --format=zip --prefix=octopus-android/ HEAD -o release/octopus-source-1.1.0.zip
+          git archive --format=zip --prefix=octopus-android/ HEAD -o release/octopus-source-1.2.0.zip
           cp docs/TEST_ON_PHONE.md release/TEST_ON_PHONE.md
           cp docs/PREVIEW_RELEASE.md release/release-notes.md
           cd release
@@ -80,7 +98,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      RELEASE_TAG: v1.1.0-alpha
+      RELEASE_TAG: v1.2.0-alpha
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -92,12 +110,12 @@ jobs:
           if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > draft-state.txt; then
             test "$(cat draft-state.txt)" = true
           else
-            gh release create "$RELEASE_TAG" --draft --prerelease --target "$GITHUB_SHA" --title 'الأخطبوط 1.1.0 — بحث المطاعم والقوائم (تجريبي)' --notes-file release/release-notes.md
+            gh release create "$RELEASE_TAG" --draft --prerelease --target "$GITHUB_SHA" --title 'الأخطبوط 1.2.0 — خيارات الوجبة والطلب المحفوظ (تجريبي)' --notes-file release/release-notes.md
           fi
           gh release edit "$RELEASE_TAG" --draft --prerelease --target "$GITHUB_SHA" --notes-file release/release-notes.md
-          gh release upload "$RELEASE_TAG" release/octopus-1.1.0.apk release/octopus-source-1.1.0.zip release/validation-summary-ci.json release/SHA256SUMS.txt release/TEST_ON_PHONE.md
+          gh release upload "$RELEASE_TAG" release/octopus-1.2.0.apk release/octopus-source-1.2.0.zip release/validation-summary-ci.json release/SHA256SUMS.txt release/TEST_ON_PHONE.md
           gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' > asset-names.txt
-          grep -Fx 'octopus-1.1.0.apk' asset-names.txt
+          grep -Fx 'octopus-1.2.0.apk' asset-names.txt
       - name: Publish prerelease after successful upload
         run: |
           gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false

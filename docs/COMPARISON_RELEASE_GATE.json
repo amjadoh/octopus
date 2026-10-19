@@ -1,0 +1,9 @@
+{
+  "ready": false,
+  "realProviderCartPreparationVerified": false,
+  "realFinalTotalsVerified": false,
+  "realTwoProviderComparisonVerified": false,
+  "realSelectedCartHandoffVerified": false,
+  "providersVerified": [],
+  "note": "Local development only. Unit replay and fake ports do not qualify as delivery-app verification."
+}
