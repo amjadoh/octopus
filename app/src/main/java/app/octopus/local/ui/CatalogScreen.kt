@@ -53,6 +53,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
     var localError by remember { mutableStateOf<String?>(null) }
     var quoteTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(15_000); quoteTime = System.currentTimeMillis() } }
+    val currentQuoteTime = maxOf(quoteTime, System.currentTimeMillis())
     fun search() {
         if (!(if (browsing) LiveCatalogBridge.browseRestaurants() else LiveCatalogBridge.search(query)))
             localError = "تعذر البدء. تحقق من اتصال خدمة الأخطبوط والسماح لهنقرستيشن."
@@ -183,10 +184,10 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
             if (state.previews.isNotEmpty()) {
                 item { Text("مقارنة طلبك", fontSize = 22.sp, fontWeight = FontWeight.Bold) }
                 item { Text("قراءة قبل تجهيز السلة. الإجمالي النهائي ومطابقة العنوان والفرع بين التطبيقين غير متحققة؛ لم أحدد الأرخص.", fontSize = 12.sp, color = OctopusPalette.Muted) }
-                item { ComparisonSummary(state.previews, cart) }
+                item { ComparisonSummary(state.previews, cart, currentQuoteTime) }
                 items(state.previews, key = { it.provider }) { preview ->
-                    val fresh = preview.fresh(cart, maxOf(quoteTime, System.currentTimeMillis()))
-                    CostPreviewCard(preview, fresh, !state.busy, onSelect = {
+                    val fresh = preview.fresh(cart, currentQuoteTime)
+                    CostPreviewCard(preview, fresh, !state.busy, currentQuoteTime, onSelect = {
                         val started = if (preview.provider == ProviderId.KEETA) LiveCatalogBridge.prepareComparedKeeta()
                             else LiveCatalogBridge.prepareComparedHungerStation()
                         if (!started) localError = "انتهت صلاحية القراءة أو تغير الطلب؛ أعد المقارنة."
@@ -278,7 +279,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
 }
 
 @Composable
-private fun CostPreviewCard(preview: MenuCostPreview, fresh: Boolean, enabled: Boolean, onSelect: () -> Unit) {
+private fun CostPreviewCard(preview: MenuCostPreview, fresh: Boolean, enabled: Boolean, now: Long, onSelect: () -> Unit) {
     var allOffers by remember(preview) { mutableStateOf(false) }
     val accent = if (preview.provider == ProviderId.KEETA) Color(0xFFF9D941) else Color(0xFFFFCA45)
     Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
@@ -311,7 +312,7 @@ private fun CostPreviewCard(preview: MenuCostPreview, fresh: Boolean, enabled: B
                 }
             }
             if (preview.offers.size > 3) TextButton(onClick = { allOffers = !allOffers }) { Text(if (allOffers) "اختصر العروض" else "كل العروض (${preview.offers.size})") }
-            preview.calculation?.takeIf { fresh }?.let { calculation ->
+            preview.calculationAt(now)?.takeIf { fresh }?.let { calculation ->
                 calculation.decisions.forEach { decision ->
                     Text(when (decision.status) {
                         OfferStatus.ELIGIBLE -> decision.rule.title + if (decision.rule.id in calculation.selected) " • محسوب حسب الشروط المقروءة" else " • بديل غير مجموع مع العرض المختار"
@@ -337,9 +338,8 @@ private fun CostPreviewCard(preview: MenuCostPreview, fresh: Boolean, enabled: B
 
 
 @Composable
-private fun ComparisonSummary(previews: List<MenuCostPreview>, cart: CanonicalCart) {
+private fun ComparisonSummary(previews: List<MenuCostPreview>, cart: CanonicalCart, now: Long) {
     val sources = listOf(ProviderId.HUNGERSTATION, ProviderId.KEETA).map { id -> previews.firstOrNull { it.provider == id } }
-    val now = System.currentTimeMillis()
     Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(22.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(Modifier.fillMaxWidth()) {
@@ -354,9 +354,9 @@ private fun ComparisonSummary(previews: List<MenuCostPreview>, cart: CanonicalCa
                     sources.forEach { source ->
                         val value = if (source?.fresh(cart, now) != true) "غير مقروء" else when (index) {
                             0 -> source.itemSubtotal?.let(::money) ?: "غير مقروء"
-                            1 -> source.calculation?.itemDiscount?.let(::money) ?: "غير مقروء"
-                            2 -> source.calculation?.delivery?.let(::money) ?: "غير مؤكد"
-                            3 -> source.calculation?.knownPartTotal?.let(::money) ?: "غير مكتمل"
+                            1 -> source.calculationAt(now)?.itemDiscount?.let(::money) ?: "غير مقروء"
+                            2 -> source.calculationAt(now)?.delivery?.let(::money) ?: "غير مؤكد"
+                            3 -> source.calculationAt(now)?.knownPartTotal?.let(::money) ?: "غير مكتمل"
                             else -> "غير متحقق"
                         }
                         Text(value, Modifier.weight(1f), textAlign = TextAlign.Center, fontSize = 12.sp,

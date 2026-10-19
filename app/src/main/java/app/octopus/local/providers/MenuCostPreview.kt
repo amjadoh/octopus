@@ -20,7 +20,8 @@ data class MenuCostPreview(
 ) {
     // A menu does not prove mandatory fees, voucher application, branch or equal delivery context.
     val finalTotal: Long? get() = null
-    val calculation get() = itemSubtotal?.let { OfferCalculator.evaluate(it, deliveryBeforeOffers, rules) }
+    fun calculationAt(now: Long) = itemSubtotal?.let { OfferCalculator.evaluate(it, deliveryBeforeOffers, rules, now) }
+    val calculation get() = calculationAt(System.currentTimeMillis())
     fun fresh(cart: CanonicalCart, now: Long) = cart.fingerprint == cartFingerprint &&
         now >= capturedAtMillis && now - capturedAtMillis <= 300_000
 }
