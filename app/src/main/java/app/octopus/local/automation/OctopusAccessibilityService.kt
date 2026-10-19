@@ -32,6 +32,14 @@ object ReadOnlyServiceBridge {
     fun stop() { service.get()?.stopRead("USER_STOPPED", "أوقفت القراءة. لم تُعدّل أي سلة.") }
 }
 
+object LiveCatalogBridge {
+    private var navigator = WeakReference<CatalogNavigator>(null)
+    fun attach(value: CatalogNavigator?) { navigator = WeakReference(value) }
+    fun search(query: String): Boolean = navigator.get()?.search(query) ?: false
+    fun openMenu(restaurant: app.octopus.local.providers.LiveRestaurant): Boolean = navigator.get()?.openMenu(restaurant) ?: false
+    fun stop() { navigator.get()?.stop() }
+}
+
 class OctopusAccessibilityService : AccessibilityService() {
     private val graph get() = (application as OctopusApplication).graph
     private val handler = Handler(Looper.getMainLooper())
@@ -47,6 +55,7 @@ class OctopusAccessibilityService : AccessibilityService() {
     private var lastVisibleNodes = 0
     private var overlay: View? = null
     private var captureRequested = false
+    private var catalogNavigator: CatalogNavigator? = null
     private val poll = object : Runnable {
         override fun run() {
             val token = sessionId ?: return
@@ -58,6 +67,8 @@ class OctopusAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         stopRead("SERVICE_RECONNECTED", "أعيد اتصال الخدمة؛ لن تُستأنف القراءة تلقائيًا.")
         ReadOnlyServiceBridge.attach(this)
+        catalogNavigator?.stop()
+        catalogNavigator = CatalogNavigator(this, graph).also(LiveCatalogBridge::attach)
         graph.serviceConnected.value = true
         // A service reconnect must never resume a previous session.
         graph.session.value = SessionState()
@@ -66,12 +77,15 @@ class OctopusAccessibilityService : AccessibilityService() {
         // Contents of AccessibilityEvent are not copied or logged.
         // Sampling verifies the current foreground package independently.
     }
-    override fun onInterrupt() { stopRead("SERVICE_INTERRUPTED", "توقفت الخدمة؛ ابدأ اختبارًا جديدًا عند العودة.") }
+    override fun onInterrupt() { catalogNavigator?.stop("انقطع اتصال الخدمة."); stopRead("SERVICE_INTERRUPTED", "توقفت الخدمة؛ ابدأ اختبارًا جديدًا عند العودة.") }
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
+        catalogNavigator?.stop("تغير تخطيط الهاتف؛ توقفت العملية بأمان.")
         stopRead("LAYOUT_CHANGED", "تغير تخطيط الشاشة؛ أعد الاختبار بعد استقرار وضع الجهاز.")
     }
     override fun onDestroy() {
+        catalogNavigator?.stop("انقطع اتصال الخدمة.")
+        LiveCatalogBridge.attach(null)
         stopRead("SERVICE_DISCONNECTED", "انقطع اتصال الخدمة.")
         graph.serviceConnected.value = false
         ReadOnlyServiceBridge.attach(null)
@@ -79,7 +93,7 @@ class OctopusAccessibilityService : AccessibilityService() {
     }
 
     fun startRead(selected: ProviderId, requestedInspection: InspectionRequest? = null): Boolean {
-        if (sessionId != null) return false
+        if (sessionId != null || catalogNavigator?.active == true) return false
         if (requestedInspection != null && (requestedInspection.restaurant.isBlank() || requestedInspection.item.isBlank() ||
             requestedInspection.restaurant.length > 100 || requestedInspection.item.length > 100)) return false
         val policy = ProviderPolicies.forProvider(selected)

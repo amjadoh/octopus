@@ -11,10 +11,10 @@ class DiagnosticUiTest {
     private fun scrollToText(text: String) {
         compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(text))
     }
-    @Test fun startsWithDiagnosticDisclosureAndEmptyHistory() {
-        compose.onNodeWithText("نسخة تشخيصية • قراءة فقط").assertIsDisplayed()
-        compose.onNodeWithText("السجل", useUnmergedTree = true).performClick()
-        compose.onNodeWithText("لا توجد قراءات بعد").assertIsDisplayed()
+    @Test fun startsWithRestaurantSearchAndNoInventedPrices() {
+        compose.onNodeWithText("المطاعم").assertIsDisplayed()
+        compose.onNodeWithText("اسم المطعم").assertIsDisplayed()
+        compose.onNodeWithText("0.00 ر.س").assertDoesNotExist()
     }
     @Test fun providerControlsAndNoFakePrice() {
         compose.onNodeWithText("التطبيقات", useUnmergedTree = true).performClick()

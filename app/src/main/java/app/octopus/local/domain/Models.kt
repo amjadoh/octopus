@@ -38,10 +38,42 @@ data class QuoteCandidate(val fields: Map<PriceField, Long>, val ambiguous: Bool
     val fingerprint: String get() = fields.toSortedMap(compareBy { it.ordinal }).toString() + ambiguous
 }
 
-// Future comparison domain. Diagnostic candidates must never enter this engine.
-data class CartOption(val group: String, val value: String)
-data class CanonicalItem(val name: String, val size: String?, val options: List<CartOption>, val quantity: Int)
-data class CanonicalCart(val restaurant: String, val branch: String?, val items: List<CanonicalItem>)
+// Diagnostic price candidates cannot be promoted to a verified order quote.
+data class CartOption(val group: String, val value: String, val quantity: Int = 1) {
+    init {
+        require(IdentityText.clean(group).isNotBlank() && IdentityText.clean(value).isNotBlank() && quantity in 1..99)
+        require(group.length <= 300 && value.length <= 300)
+    }
+}
+data class CanonicalItem(
+    val name: String,
+    val size: String?,
+    val options: List<CartOption>,
+    val quantity: Int,
+    val note: String? = null,
+) {
+    init {
+        require(IdentityText.clean(name).isNotBlank() && name.length <= 512 && quantity in 1..99)
+        require(size == null || (IdentityText.clean(size).isNotBlank() && size.length <= 300))
+        require(options.size <= 100)
+        require(options.map { IdentityText.clean(it.group) to IdentityText.clean(it.value) }.distinct().size == options.size)
+        require(note == null || note.length <= 500)
+    }
+}
+data class CanonicalCart(
+    val restaurant: String,
+    val branch: String?,
+    val items: List<CanonicalItem>,
+    val addressReference: String? = null,
+) {
+    init {
+        require(IdentityText.clean(restaurant).isNotBlank() && restaurant.length <= 512 && items.isNotEmpty() && items.size <= 100)
+        require(branch == null || (IdentityText.clean(branch).isNotBlank() && branch.length <= 512))
+        require(addressReference == null || (addressReference.isNotBlank() && addressReference.length <= 200))
+        require(items.groupBy { CartIdentity.itemKey(it) }.values.all { rows -> rows.sumOf { it.quantity } <= 99 })
+    }
+    val fingerprint: String get() = CartIdentity.cartFingerprint(this)
+}
 data class VerifiedQuote(
     val provider: ProviderId,
     val orderCost: Long?,

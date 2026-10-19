@@ -28,13 +28,22 @@ class QuoteExtractor {
 }
 
 class PriceComparisonEngine(private val maxAgeMillis: Long = 120_000) {
+    init { require(maxAgeMillis >= 0) }
     fun rank(quotes: List<VerifiedQuote>, now: Long): List<VerifiedQuote> {
         val valid = quotes.filter {
             it.orderCost != null && it.orderCost >= 0 && it.cartVerified && it.addressVerified &&
                 it.branchVerified && it.allMandatoryFeesIncluded &&
-                now - it.capturedAtMillis in 0..maxAgeMillis
+                it.cartFingerprint.isNotBlank() && it.addressReference.isNotBlank() &&
+                it.capturedAtMillis >= 0 && it.capturedAtMillis <= now && now - it.capturedAtMillis <= maxAgeMillis
         }
         if (valid.map { it.cartFingerprint to it.addressReference }.distinct().size > 1) return emptyList()
-        return valid.sortedBy { it.orderCost }
+        // One result per provider; never silently choose between conflicting simultaneous observations.
+        return valid.groupBy { it.provider }.values.mapNotNull { readings ->
+            val newest = readings.maxOf { it.capturedAtMillis }
+            readings.filter { it.capturedAtMillis == newest }.distinct().singleOrNull()
+        }.sortedWith(compareBy<VerifiedQuote> { it.orderCost }.thenBy { it.provider.ordinal })
     }
+
+    fun rankFor(cart: CanonicalCart, quotes: List<VerifiedQuote>, now: Long): List<VerifiedQuote> =
+        rank(quotes.filter { it.cartFingerprint == cart.fingerprint && it.addressReference == cart.addressReference }, now)
 }
