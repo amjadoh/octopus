@@ -63,6 +63,10 @@ object KeetaRidanBasket {
                 body.count { quantity(it) != null && !it.clickable } == 1
         }
     }
+    fun menuQuantity(f: CatalogFrame): Int? {
+        val bag=footerBag(f) ?: return null
+        return f.descendants(bag.index).filter { !it.clickable }.mapNotNull(::quantity).singleOrNull()
+    }
 
     private fun row(f: CatalogFrame): CatalogNode? {
         if (!KeetaMenuPreview.basketDrawer(f)) return null
