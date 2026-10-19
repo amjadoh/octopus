@@ -185,7 +185,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                 item { Text("قراءة قبل تجهيز السلة. الإجمالي النهائي ومطابقة العنوان والفرع بين التطبيقين غير متحققة؛ لم أحدد الأرخص.", fontSize = 12.sp, color = OctopusPalette.Muted) }
                 item { ComparisonSummary(state.previews, cart) }
                 items(state.previews, key = { it.provider }) { preview ->
-                    val fresh = preview.fresh(cart, quoteTime)
+                    val fresh = preview.fresh(cart, maxOf(quoteTime, System.currentTimeMillis()))
                     CostPreviewCard(preview, fresh, !state.busy, onSelect = {
                         val started = if (preview.provider == ProviderId.KEETA) LiveCatalogBridge.prepareComparedKeeta()
                             else LiveCatalogBridge.prepareComparedHungerStation()
