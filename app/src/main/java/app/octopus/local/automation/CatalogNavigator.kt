@@ -127,6 +127,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     frame = await { KeetaMenuPreview.menu(it) }
                 }
                 if (KeetaMenuPreview.menu(frame)) {
+                    frame = restoreKeetaHeader(frame)
                     var previous = ""
                     for (step in 0 until 12) {
                         val body = frame.nodes.joinToString { it.label + it.className }
@@ -218,6 +219,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                         closeKeetaReadSheet(frame); frame = await { KeetaMenuPreview.menu(it) }
                     }
                 }
+                if (KeetaMenuPreview.menu(frame) && KeetaRidanBasket.footerBag(frame) == null)
+                    frame = restoreKeetaHeader(frame)
                 if (KeetaRidanBasket.emptyMenu(frame)) {
                     check(!handoff) { "سلة كيتا أصبحت فارغة؛ أعد تجهيزها." }
                     val preview = graph.catalog.value.previews.single { it.provider == ProviderId.KEETA }
@@ -271,6 +274,25 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private fun keetaReadable(frame: CatalogFrame): Boolean = KeetaMenuPreview.product(frame) ||
         KeetaMenuPreview.menu(frame) || KeetaMenuPreview.basketDrawer(frame) ||
         KeetaPromotionEvidence.couponSheet(frame) || KeetaPromotionEvidence.terms(frame) || KeetaMenuPreview.searchCandidate(frame) != null
+
+    /** The collapsed RN header cannot be expanded through RecyclerView scrolling. Reopen the read-only search candidate. */
+    private suspend fun restoreKeetaHeader(previous: CatalogFrame): CatalogFrame {
+        if (previous.nodes.any { it.label == "توصيل" }) return previous
+        currentCoroutineContext().ensureActive(); checkSession()
+        val root = service.rootInActiveWindow ?: error("اختفت قائمة ريدان.")
+        try {
+            check(provider == ProviderId.KEETA && root.packageName?.toString() == provider.packageName)
+            val current = capture(root)
+            check(KeetaMenuPreview.menu(current) && current.nodes.none { it.label == "توصيل" }) {
+                "تغيرت قائمة كيتا؛ توقفت القراءة."
+            }
+            phase = "إعادة فتح قائمة ريدان لقراءة العروض"
+            check(service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)) { "تعذر الرجوع إلى نتائج البحث." }
+        } finally { @Suppress("DEPRECATION") root.recycle() }
+        await { KeetaMenuPreview.searchCandidate(it) != null }
+        keetaBasketAction { KeetaMenuPreview.searchCandidate(it) }
+        return await { KeetaMenuPreview.menu(it) && it.nodes.any { n -> n.label == "توصيل" } }
+    }
 
     private suspend fun openKeetaCoupon(previous: CatalogFrame, terms: Boolean) {
         currentCoroutineContext().ensureActive(); checkSession()
