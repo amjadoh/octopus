@@ -5,7 +5,7 @@
     android:notificationTimeout="250"
     android:accessibilityFlags="flagReportViewIds|flagIncludeNotImportantViews"
     android:canRetrieveWindowContent="true"
-    android:canPerformGestures="false"
+    android:canPerformGestures="true"
     android:isAccessibilityTool="false"
     android:packageNames="com.sankuai.sailor.afooddelivery,com.hungerstation.android.web"
     android:description="@string/service_description" />

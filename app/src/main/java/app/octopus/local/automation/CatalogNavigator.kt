@@ -1,6 +1,9 @@
 package app.octopus.local.automation
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
+import android.graphics.Path
+import android.graphics.Rect
 import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
@@ -22,6 +25,7 @@ import app.octopus.local.safety.CatalogAction
 import app.octopus.local.safety.SafetyGuard
 import app.octopus.local.safety.ProviderAccessRestrictions
 import kotlinx.coroutines.*
+import kotlin.coroutines.resume
 import org.json.JSONObject
 import org.json.JSONArray
 
@@ -275,23 +279,48 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         KeetaMenuPreview.menu(frame) || KeetaMenuPreview.basketDrawer(frame) ||
         KeetaPromotionEvidence.couponSheet(frame) || KeetaPromotionEvidence.terms(frame) || KeetaMenuPreview.searchCandidate(frame) != null
 
-    /** The collapsed RN header cannot be expanded through RecyclerView scrolling. Reopen the read-only search candidate. */
+    /** Expand the existing menu without exiting its in-memory basket session. */
     private suspend fun restoreKeetaHeader(previous: CatalogFrame): CatalogFrame {
-        if (previous.nodes.any { it.label == "توصيل" }) return previous
-        currentCoroutineContext().ensureActive(); checkSession()
-        val root = service.rootInActiveWindow ?: error("اختفت قائمة ريدان.")
-        try {
-            check(provider == ProviderId.KEETA && root.packageName?.toString() == provider.packageName)
-            val current = capture(root)
-            check(KeetaMenuPreview.menu(current) && current.nodes.none { it.label == "توصيل" }) {
-                "تغيرت قائمة كيتا؛ توقفت القراءة."
+        var frame=previous
+        val expectedQuantity=KeetaRidanBasket.menuQuantity(previous)
+        repeat(3) {
+            if(frame.nodes.any { it.label=="توصيل" }) return frame
+            currentCoroutineContext().ensureActive();checkSession()
+            val root=service.rootInActiveWindow ?: error("اختفت قائمة ريدان.")
+            val plan:HeaderSwipe
+            try {
+                check(provider==ProviderId.KEETA && root.packageName?.toString()==provider.packageName)
+                val current=capture(root)
+                check(KeetaMenuPreview.menu(current) && current.nodes.none { it.label=="توصيل" })
+                val target=current.nodes.single { it.scrollable && it.className=="androidx.recyclerview.widget.RecyclerView" }
+                val node=locateKeetaNode(root,target) ?: error("تعذر تحديد مساحة القائمة.")
+                val view=Rect();val window=Rect()
+                try { node.getBoundsInScreen(view);root.getBoundsInScreen(window) } finally { node.recycle() }
+                val footerNodes=root.findAccessibilityNodeInfosByText("إتمام الدفع")
+                val footerTop=try { footerNodes.filter { it.text?.toString()=="إتمام الدفع" }.singleOrNull()?.let {
+                    val rect=Rect();it.getBoundsInScreen(rect);rect.top
+                } } finally { footerNodes.forEach { it.recycle() } }
+                plan=KeetaHeaderScroll.plan(HeaderViewport(view.left,view.top,view.right,view.bottom),
+                    HeaderViewport(window.left,window.top,window.right,window.bottom),footerTop)
+                    ?: error("مساحة التمرير غير متحققة؛ لم أنفذ إيماءة.")
+            } finally { root.recycle() }
+            phase="قراءة العروض من قائمة ريدان الحالية"
+            val path=Path().apply { moveTo(plan.x.toFloat(),plan.fromY.toFloat());lineTo(plan.x.toFloat(),plan.toY.toFloat()) }
+            val gesture=GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path,0,450)).build()
+            val completed=withTimeout(3_000) { suspendCancellableCoroutine<Boolean> { continuation ->
+                val accepted=service.dispatchGesture(gesture,object:AccessibilityService.GestureResultCallback() {
+                    override fun onCompleted(gestureDescription:GestureDescription?) { if(continuation.isActive) continuation.resume(true) }
+                    override fun onCancelled(gestureDescription:GestureDescription?) { if(continuation.isActive) continuation.resume(false) }
+                },null)
+                if(!accepted && continuation.isActive) continuation.resume(false)
+            } }
+            check(completed) { "لم تكتمل إيماءة القائمة؛ توقفت القراءة." }
+            frame=await { KeetaMenuPreview.menu(it) }
+            check(expectedQuantity==null || KeetaRidanBasket.menuQuantity(frame)==expectedQuantity) {
+                "تغير عدد السلة أثناء القراءة؛ توقفت دون إضافة أو متابعة للدفع."
             }
-            phase = "إعادة فتح قائمة ريدان لقراءة العروض"
-            check(service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)) { "تعذر الرجوع إلى نتائج البحث." }
-        } finally { @Suppress("DEPRECATION") root.recycle() }
-        await { KeetaMenuPreview.searchCandidate(it) != null }
-        keetaBasketAction { KeetaMenuPreview.searchCandidate(it) }
-        return await { KeetaMenuPreview.menu(it) && it.nodes.any { n -> n.label == "توصيل" } }
+        }
+        error("لم تظهر ترويسة ريدان كاملة؛ لم أغادر المطعم أو أغير السلة.")
     }
 
     private suspend fun openKeetaCoupon(previous: CatalogFrame, terms: Boolean) {
@@ -319,8 +348,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         } finally { @Suppress("DEPRECATION") root.recycle() }
     }
 
-    private fun performKeetaReadAction(root: AccessibilityNodeInfo, target: CatalogNode, action: Int): Boolean {
-        require(action in setOf(AccessibilityNodeInfo.ACTION_CLICK, AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD))
+    private fun locateKeetaNode(root: AccessibilityNodeInfo, target: CatalogNode): AccessibilityNodeInfo? {
         fun locate(current: AccessibilityNodeInfo, cursor: IntArray): AccessibilityNodeInfo? {
             if (!current.isVisibleToUser) return null
             val private = privateId(current.viewIdResourceName.orEmpty())
@@ -332,7 +360,11 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             finally { children.forEach { @Suppress("DEPRECATION") it.recycle() } }
             return null
         }
-        val node = locate(root, intArrayOf(0)) ?: error("تعذر تحديد عنصر القراءة في كيتا.")
+        return locate(root,intArrayOf(0))
+    }
+    private fun performKeetaReadAction(root: AccessibilityNodeInfo, target: CatalogNode, action: Int): Boolean {
+        require(action in setOf(AccessibilityNodeInfo.ACTION_CLICK, AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD))
+        val node = locateKeetaNode(root,target) ?: error("تعذر تحديد عنصر القراءة في كيتا.")
         return try { node.performAction(action) } finally { @Suppress("DEPRECATION") node.recycle() }
     }
 
