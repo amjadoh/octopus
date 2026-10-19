@@ -5,5 +5,6 @@
   "realTwoProviderComparisonVerified": false,
   "realSelectedCartHandoffVerified": false,
   "providersVerified": [],
-  "note": "Local development only. Unit replay and fake ports do not qualify as delivery-app verification."
+  "note": "Live Ridan menu components, quantities, basket creation and handoff verified on Honor; see componentEvidence. Full final-review totals and equal delivery context remain unverified. Review navigation awaits explicit user clarification after automatic approval review rejected HungerStation Go to payment. No complete-comparison release is claimed.",
+  "componentEvidence": ["verification/2026-10-19/honor-menu-offers.json", "verification/2026-10-19/honor-basket-validation.json", "verification/2026-10-20/honor-final-device.json"]
 }
