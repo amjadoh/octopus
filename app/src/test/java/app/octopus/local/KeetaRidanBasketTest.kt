@@ -47,4 +47,26 @@ class KeetaRidanBasketTest {
         assertNull(KeetaRidanBasket.quantityTarget(fixture(1), false))
         assertNull(KeetaRidanBasket.quantityTarget(fixture(99), true))
     }
+    private fun product(quantity: Int = 1, entered: Boolean = false, scrollable: Boolean = false): CatalogFrame {
+        val nodes=mutableListOf<CatalogNode>()
+        fun n(p:Int,label:String="",cls:String="android.view.ViewGroup",click:Boolean=false,edit:Boolean=false,scroll:Boolean=false):Int {
+            val i=nodes.size;nodes+=CatalogNode(i,p,"",label,cls,click,edit,scroll,enteredText=edit&&entered);return i
+        }
+        val root=n(-1);n(root,"ريدان","android.widget.TextView")
+        val body=n(root,cls="android.widget.ScrollView",scroll=scrollable)
+        n(body,"نصف دجاج مضغوط","android.widget.TextView");n(body,"طلب خاص","android.widget.TextView")
+        n(body,cls="android.widget.EditText",edit=true)
+        val footer=n(root);n(footer,"$quantity","android.widget.TextView")
+        val button=n(footer);n(button,click=true);val labelBody=n(button)
+        n(labelBody,"إضافة إلى السلة","android.widget.TextView");n(labelBody,"${quantity*30}.00 ﷼","android.widget.TextView")
+        return CatalogFrame(nodes,true)
+    }
+    @Test fun freshAddRequiresOneMealExactPriceEmptyNoteAndCompleteProduct() {
+        assertNotNull(KeetaRidanBasket.addTarget(product(),3000))
+        assertNull(KeetaRidanBasket.addTarget(product(),3100))
+        assertNull(KeetaRidanBasket.addTarget(product(2),3000))
+        assertNull(KeetaRidanBasket.addTarget(product(entered=true),3000))
+        assertNull(KeetaRidanBasket.addTarget(product(scrollable=true),3000))
+        assertNull(KeetaRidanBasket.addTarget(product().copy(complete=false),3000))
+    }
 }

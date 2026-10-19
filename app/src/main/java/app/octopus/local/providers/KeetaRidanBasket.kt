@@ -14,6 +14,31 @@ object KeetaRidanBasket {
     private fun quantity(n: CatalogNode) = n.label.takeIf { it.matches(Regex("[0-9٠-٩]{1,2}")) }
         ?.let(MoneyParser::parse)?.div(100)?.toInt()?.takeIf { it in 1..99 }
 
+    fun emptyMenu(f: CatalogFrame): Boolean {
+        if (!KeetaMenuPreview.menu(f) || f.nodes.any { it.label in setOf("إتمام الدفع", "الأصناف المضافة", "تفريغ السلة") }) return false
+        val meal = KeetaMenuPreview.productTarget(f) ?: return false
+        return f.descendants(meal.index).none { quantity(it) != null }
+    }
+
+    fun addTarget(f: CatalogFrame, expectedUnit: Long): CatalogNode? {
+        if (!KeetaMenuPreview.product(f) || KeetaMenuPreview.price(f) != expectedUnit ||
+            KeetaMenuPreview.unitPrice(f) != expectedUnit) return null
+        val notes = f.nodes.singleOrNull { it.label == "طلب خاص" } ?: return null
+        val body = ancestors(f, notes).firstOrNull { it.className == "android.widget.ScrollView" } ?: return null
+        val content = f.descendants(body.index)
+        if (body.scrollable || content.filter { it.editable }.size != 1 || content.any { it.editable && it.enteredText }) return null
+        val add = f.nodes.singleOrNull { it.label == "إضافة إلى السلة" } ?: return null
+        for (group in ancestors(f, add)) {
+            val children = f.nodes.filter { it.parent == group.index }
+            if (f.descendants(group.index).size > 35) return null
+            if (children.size == 2 && children[0].clickable && children[0].enabled && children[0].label.isEmpty() &&
+                children[0].className == "android.view.ViewGroup" &&
+                f.descendants(children[1].index).count { it.label == "إضافة إلى السلة" } == 1 &&
+                f.descendants(children[1].index).count { it.label.contains('﷼') } == 1) return children[0]
+        }
+        return null
+    }
+
     fun closeDrawer(f: CatalogFrame): CatalogNode? {
         if (!KeetaMenuPreview.basketDrawer(f)) return null
         val heading = f.nodes.singleOrNull { it.label == "الأصناف المضافة" } ?: return null
