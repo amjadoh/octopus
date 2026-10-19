@@ -60,7 +60,7 @@ jobs:
       - name: Verify APKs and prepare release files
         run: |
           python3 .github/scripts/prepare_preview.py
-          git archive --format=zip --prefix=octopus-android/ HEAD -o release/octopus-source-1.0.0.zip
+          git archive --format=zip --prefix=octopus-android/ HEAD -o release/octopus-source-1.1.0.zip
           cp docs/TEST_ON_PHONE.md release/TEST_ON_PHONE.md
           cp docs/PREVIEW_RELEASE.md release/release-notes.md
           cd release
@@ -80,7 +80,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      RELEASE_TAG: v1.0.0-alpha
+      RELEASE_TAG: v1.1.0-alpha
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -92,13 +92,14 @@ jobs:
           if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > draft-state.txt; then
             test "$(cat draft-state.txt)" = true
           else
-            gh release create "$RELEASE_TAG" --draft --prerelease --target "$GITHUB_SHA" --title 'الأخطبوط 1.0.0 — إصلاح الإغلاق عند التشغيل' --notes-file release/release-notes.md
+            gh release create "$RELEASE_TAG" --draft --prerelease --target "$GITHUB_SHA" --title 'الأخطبوط 1.1.0 — بحث المطاعم والقوائم (تجريبي)' --notes-file release/release-notes.md
           fi
           gh release edit "$RELEASE_TAG" --draft --prerelease --target "$GITHUB_SHA" --notes-file release/release-notes.md
-          gh release upload "$RELEASE_TAG" release/octopus-1.0.0.apk release/octopus-source-1.0.0.zip release/validation-summary-ci.json release/SHA256SUMS.txt release/TEST_ON_PHONE.md
+          gh release upload "$RELEASE_TAG" release/octopus-1.1.0.apk release/octopus-source-1.1.0.zip release/validation-summary-ci.json release/SHA256SUMS.txt release/TEST_ON_PHONE.md
           gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' > asset-names.txt
-          grep -Fx 'octopus-1.0.0.apk' asset-names.txt
+          grep -Fx 'octopus-1.1.0.apk' asset-names.txt
       - name: Publish prerelease after successful upload
         run: |
           gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false
           gh release view "$RELEASE_TAG" --json url,isDraft,isPrerelease,assets
+

@@ -7,6 +7,7 @@ import androidx.room.Room
 import app.octopus.local.data.*
 import app.octopus.local.domain.*
 import app.octopus.local.diagnostics.DiagnosticRecorder
+import app.octopus.local.providers.LiveCatalogState
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
@@ -26,9 +27,13 @@ class AppGraph(private val app: Application) {
     private val inspectionDatabase = Room.databaseBuilder(app, InspectionDatabase::class.java, "octopus_screen_inspection.db").build()
     val inspectionDao = inspectionDatabase.inspections()
     val inspections = inspectionDao.observe().stateIn(scope, SharingStarted.Eagerly, emptyList())
+    // Separate storage leaves both existing diagnostic databases and their data intact.
+    private val orderDatabase = Room.databaseBuilder(app, OrderDatabase::class.java, "octopus_orders.db").build()
+    val orders = OrderRepository(orderDatabase.orders())
     val history = reports.observe().stateIn(scope, SharingStarted.Eagerly, emptyList())
     val session = MutableStateFlow(SessionState())
     val serviceConnected = MutableStateFlow(false)
+    val catalog = MutableStateFlow(LiveCatalogState())
     val installations = MutableStateFlow<List<ProviderInstallation>>(emptyList())
     init { refreshInstallations() }
     fun refreshInstallations() {

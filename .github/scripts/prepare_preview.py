@@ -14,7 +14,7 @@ out = root / 'release'
 out.mkdir(exist_ok=True)
 tool = Path(os.environ['ANDROID_HOME']) / 'build-tools/35.0.0'
 suites = [ET.parse(p).getroot() for p in (root / 'app/build/test-results').rglob('TEST-*.xml')]
-assert suites and sum(int(s.get('tests', 0)) for s in suites) >= 23
+assert suites and sum(int(s.get('tests', 0)) for s in suites) >= 75
 assert all(int(s.get(k, 0)) == 0 for s in suites for k in ('failures', 'errors', 'skipped'))
 ui_suites = [ET.parse(p).getroot() for p in (root / 'app/build/outputs/androidTest-results/connected').rglob('TEST-*.xml')]
 assert ui_suites and sum(int(s.get('tests', 0)) for s in ui_suites) >= 4, 'Actual emulator UI test results required'
@@ -36,14 +36,15 @@ for variant in ('diagnostic',):
     with zipfile.ZipFile(apk) as z:
         dex = b''.join(z.read(n) for n in z.namelist() if n.endswith('.dex'))
     assert (b'Lapp/octopus/local/demo/DemoCatalog;' in dex) == (variant == 'demo')
+    assert b'Lapp/octopus/local/automation/CatalogTestReceiver;' not in dex, 'Development broadcast bridge must not ship'
     if variant == 'demo':
         blocks = manifest.split('E: service ')
         service = next(b for b in blocks[1:] if 'app.octopus.local.automation.OctopusAccessibilityService' in b)
         assert 'android:enabled' in service and '0x0' in service.split('E: intent-filter')[0]
-    dest = out / 'octopus-1.0.0.apk'
+    dest = out / 'octopus-1.1.0.apk'
     shutil.copy2(apk, dest)
     apks.append({'file': dest.name, 'bytes': dest.stat().st_size, 'sha256': hashlib.sha256(dest.read_bytes()).hexdigest(), 'signatureVerified': True})
-summary = {'version': '1.0.0-alpha', 'commit': os.environ['GITHUB_SHA'],
+summary = {'version': '1.1.0-alpha', 'commit': os.environ['GITHUB_SHA'],
            'runUrl': f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
            'unitTestExecutions': sum(int(s.get('tests', 0)) for s in suites), 'lint': lint, 'apks': apks,
            'demoIsolatedFromDiagnosticApk': True, 'deviceUiTestsExecuted': True,
@@ -52,3 +53,5 @@ summary = {'version': '1.0.0-alpha', 'commit': os.environ['GITHUB_SHA'],
            'signingCertificateSha256': expected_cert}
 (out / 'validation-summary-ci.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
 print(json.dumps(summary, ensure_ascii=False, indent=2))
+
+

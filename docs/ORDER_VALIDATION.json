@@ -1,0 +1,77 @@
+{
+  "scope": "Unreleased order-domain implementation, not a functional provider integration",
+  "buildSuccessful": true,
+  "unitTests": 62,
+  "unitFailuresErrorsOrSkipped": 0,
+  "lintErrors": 0,
+  "lintWarnings": 4,
+  "androidUiTestApkCompiled": true,
+  "androidUiTestsExecutedForTheseChanges": false,
+  "realProviderCatalogVerified": false,
+  "realProviderCartPreparationVerified": false,
+  "realTwoProviderComparisonVerified": false,
+  "realProviderHandoffVerified": false,
+  "productReady": false,
+  "publishedToGitHub": false,
+  "sourceKotlinSha256": "d138f5744cea66de69713a1453c7039cc967f2580ce3e06752693ec56947cf20",
+  "testSuites": [
+    {
+      "name": "app.octopus.local.CartIdentityTest",
+      "tests": 5
+    },
+    {
+      "name": "app.octopus.local.CartPreparationTest",
+      "tests": 8
+    },
+    {
+      "name": "app.octopus.local.CartReconcilerTest",
+      "tests": 4
+    },
+    {
+      "name": "app.octopus.local.ComparisonContextTest",
+      "tests": 3
+    },
+    {
+      "name": "app.octopus.local.InspectionRedactorTest",
+      "tests": 6
+    },
+    {
+      "name": "app.octopus.local.ItemMatcherTest",
+      "tests": 3
+    },
+    {
+      "name": "app.octopus.local.MenuSelectionTest",
+      "tests": 4
+    },
+    {
+      "name": "app.octopus.local.MoneyParserTest",
+      "tests": 4
+    },
+    {
+      "name": "app.octopus.local.OrderPersistenceTest",
+      "tests": 3
+    },
+    {
+      "name": "app.octopus.local.PriceComparisonTest",
+      "tests": 4
+    },
+    {
+      "name": "app.octopus.local.ProviderPolicyTest",
+      "tests": 2
+    },
+    {
+      "name": "app.octopus.local.QuoteExtractorTest",
+      "tests": 4
+    },
+    {
+      "name": "app.octopus.local.QuoteValidationTest",
+      "tests": 9
+    },
+    {
+      "name": "app.octopus.local.SafetyGuardTest",
+      "tests": 3
+    }
+  ],
+  "historicalSnapshot": true,
+  "supersededBy": "DEVICE_VALIDATION_1.1.0.md and release validation-summary-ci.json"
+}

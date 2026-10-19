@@ -36,6 +36,7 @@ import app.octopus.local.AppGraph
 import app.octopus.local.BuildConfig
 import app.octopus.local.R
 import app.octopus.local.automation.ReadOnlyServiceBridge
+import app.octopus.local.automation.LiveCatalogBridge
 import app.octopus.local.data.*
 import app.octopus.local.diagnostics.DiagnosticExporter
 import app.octopus.local.domain.*
@@ -137,11 +138,11 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
         ) { padding ->
             Box(Modifier.padding(padding)) {
                 when (page) {
-                    Page.HOME -> HomeScreen(settings, connected, installations, history, session,
-                        onRead = { page = Page.READ }, onProviders = { page = Page.PROVIDERS },
+                    Page.HOME -> CatalogScreen(graph, onProviders = { page = Page.PROVIDERS },
                         onSetup = { if (!settings.consent) disclosure = true else openAccessibilitySettings() })
                     Page.PROVIDERS -> ProvidersScreen(installations, settings, onAllowed = { provider, allowed ->
                         ReadOnlyServiceBridge.stop()
+                        LiveCatalogBridge.stop()
                         graph.scope.launch { graph.settingsStore.setAllowed(provider, allowed) }
                     })
                     Page.READ -> ReadScreen(selected, { selected = it }, installations, settings, connected, session, history,
@@ -184,7 +185,8 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
             text = { Text("سيُحذف سجل الاختبارات والإعدادات والموافقة المحلية. لا يمس ذلك سلال تطبيقات التوصيل. يلزم الإعداد مجددًا عند العودة.") },
             confirmButton = { TextButton(onClick = {
                 ReadOnlyServiceBridge.stop()
-                graph.scope.launch { graph.recorder.clear(); graph.inspectionDao.clear(); graph.settingsStore.clear(); deleteConfirmation = false }
+                LiveCatalogBridge.stop()
+                graph.scope.launch { graph.recorder.clear(); graph.inspectionDao.clear(); graph.orders.clear(); graph.settingsStore.clear(); deleteConfirmation = false }
             }) { Text("حذف البيانات", color = Red) } },
             dismissButton = { TextButton(onClick = { deleteConfirmation = false }) { Text("إلغاء") } })
         if (updateDialog) AlertDialog(onDismissRequest = { updateDialog = false },
