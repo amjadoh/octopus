@@ -174,11 +174,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     System.currentTimeMillis(), KeetaMenuPreview.VERSION, rules = rules)
             } catch (cancelled: CancellationException) {
                 if (cancelled !is TimeoutCancellationException) throw cancelled
-                MenuCostPreview(ProviderId.KEETA, desired.fingerprint, null, emptyList(), System.currentTimeMillis(),
-                    KeetaMenuPreview.VERSION, "لم تظهر صفحة ريدان المعروفة في كيتا؛ سعره غير مقروء.")
+                keetaPriceWithoutCoupon(desired)
             } catch (_: Exception) {
-                MenuCostPreview(ProviderId.KEETA, desired.fingerprint, null, emptyList(), System.currentTimeMillis(),
-                    KeetaMenuPreview.VERSION, "تعذرت قراءة كيتا. لا يوجد سعر أو عرض محسوب له.")
+                keetaPriceWithoutCoupon(desired)
             }
             check(graph.draft.value?.fingerprint == desired.fingerprint) { "تغير طلبك؛ أعد المقارنة." }
             graph.catalog.value = graph.catalog.value.copy(previews = listOf(hunger, keeta),
@@ -279,7 +277,36 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
 
     private fun keetaReadable(frame: CatalogFrame): Boolean = KeetaMenuPreview.product(frame) ||
         KeetaMenuPreview.menu(frame) || KeetaMenuPreview.basketDrawer(frame) ||
-        KeetaPromotionEvidence.couponSheet(frame) || KeetaPromotionEvidence.terms(frame) || KeetaMenuPreview.searchCandidate(frame) != null
+        KeetaPromotionEvidence.couponSheet(frame) || KeetaPromotionEvidence.terms(frame) ||
+        KeetaPromotionEvidence.emptySheet(frame) || KeetaMenuPreview.searchCandidate(frame) != null
+
+    private suspend fun keetaPriceWithoutCoupon(desired:CanonicalCart):MenuCostPreview {
+        try {
+            return withTimeout(30_000) {
+                phase="قراءة سعر كيتا دون احتساب القسيمة غير المقروءة"
+                var frame=await { keetaReadable(it) }
+                repeat(3) {
+                    if(KeetaMenuPreview.menu(frame)) return@repeat
+                    check(KeetaMenuPreview.product(frame) || KeetaMenuPreview.basketDrawer(frame) ||
+                        KeetaPromotionEvidence.couponSheet(frame) || KeetaPromotionEvidence.terms(frame) || KeetaPromotionEvidence.emptySheet(frame))
+                    closeKeetaReadSheet(frame);frame=await { keetaReadable(it) }
+                }
+                check(KeetaMenuPreview.menu(frame))
+                frame=restoreKeetaHeader(frame)
+                val offers=PreviewEvidence.offers(frame)
+                val rules=MenuOfferRules.fromFrame(ProviderId.KEETA,frame).filter { it.target==app.octopus.local.pricing.OfferTarget.DELIVERY }
+                openKeetaPreviewProduct(frame)
+                frame=await { KeetaMenuPreview.product(it) }
+                val unit=KeetaMenuPreview.unitPrice(frame) ?: error("السعر غير مقروء")
+                MenuCostPreview(ProviderId.KEETA,desired.fingerprint,Math.multiplyExact(unit,desired.items.single().quantity.toLong()),
+                    offers,System.currentTimeMillis(),KeetaMenuPreview.VERSION,
+                    "تعذر التحقق من القسيمة؛ لم أحسب خصمًا غير مقروء.",rules=rules)
+            }
+        } catch(cancelled:CancellationException) { if(cancelled !is TimeoutCancellationException) throw cancelled }
+        catch(_:Exception) { }
+        return MenuCostPreview(ProviderId.KEETA,desired.fingerprint,null,emptyList(),System.currentTimeMillis(),
+            KeetaMenuPreview.VERSION,"لم تظهر صفحة ريدان المعروفة في كيتا؛ سعره غير مقروء.")
+    }
 
     /** Expand the existing menu without exiting its in-memory basket session. */
     private suspend fun restoreKeetaHeader(previous: CatalogFrame): CatalogFrame {
@@ -378,8 +405,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             check(provider == ProviderId.KEETA && root.packageName?.toString() == provider.packageName)
             val frame = capture(root)
             check(previous.complete && (KeetaMenuPreview.basketDrawer(frame) || KeetaMenuPreview.product(frame) ||
-                KeetaPromotionEvidence.couponSheet(frame) || KeetaPromotionEvidence.terms(frame)))
-            if (KeetaPromotionEvidence.couponSheet(frame) || KeetaPromotionEvidence.terms(frame)) {
+                KeetaPromotionEvidence.couponSheet(frame) || KeetaPromotionEvidence.terms(frame) || KeetaPromotionEvidence.emptySheet(frame)))
+            if (KeetaPromotionEvidence.couponSheet(frame) || KeetaPromotionEvidence.terms(frame) || KeetaPromotionEvidence.emptySheet(frame)) {
                 val target = KeetaPromotionEvidence.closeTarget(frame) ?: error("تعذر تحديد زر إغلاق شروط العرض.")
                 check(performKeetaReadAction(root, target, AccessibilityNodeInfo.ACTION_CLICK)) { "تعذر إغلاق شروط العرض." }
             } else if (KeetaMenuPreview.basketDrawer(frame)) {

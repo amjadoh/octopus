@@ -7,6 +7,14 @@ import org.junit.Test
 import java.time.Instant
 
 class KeetaPromotionEvidenceTest {
+    @Test fun onlyTheObservedTrulyBlankDynamicSheetHasARecoveryClose() {
+        val nodes=(0..9).map { n(it).copy(id=if(it==3) "com.sankuai.sailor.afooddelivery:id/fl_dynamic_container" else "",
+            className=if(it==8) "android.widget.ImageView" else "android.view.ViewGroup",clickable=it==8) }
+        val blank=CatalogFrame(nodes,true)
+        assertTrue(KeetaPromotionEvidence.emptySheet(blank));assertEquals(8,KeetaPromotionEvidence.closeTarget(blank)!!.index)
+        assertFalse(KeetaPromotionEvidence.emptySheet(blank.copy(complete=false)))
+        assertFalse(KeetaPromotionEvidence.emptySheet(blank.copy(nodes=nodes.map { if(it.index==9) it.copy(omittedText=true) else it })))
+    }
     @Test fun expiredOrIncompleteCountdownCannotAuthorizeOwnedCoupon() {
         fun sheet(seconds:String)=CatalogFrame(listOf(n(0,label="قسائمي"),n(1,label="خصم 10%"),n(2,label="وفر حتى 8 ﷼"),
             n(3,click=true),n(4,3,"تنتهي صلاحيتها في"),n(5,3,"00"),n(6,3,"00"),n(7,3,seconds)),true)
