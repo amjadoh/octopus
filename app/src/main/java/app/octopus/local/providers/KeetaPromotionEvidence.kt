@@ -6,6 +6,9 @@ import java.time.ZonedDateTime
 
 /** Read-only coupon terms and simultaneous savings evidence on the observed Keeta screens. */
 object KeetaPromotionEvidence {
+    fun emptySheet(frame:CatalogFrame)=frame.complete && frame.nodes.size in 8..12 &&
+        frame.hasId("fl_dynamic_container") && frame.nodes.none { it.label.isNotBlank() || it.omittedText || it.editable } &&
+        frame.nodes.count { it.className=="android.widget.ImageView" && it.clickable && it.enabled }==1
     private fun clean(s:String)=s.replace(Regex("[\\u064b-\\u065f\\u200e\\u200f\\u061c\\u202a-\\u202e\\u2066-\\u2069]"),"")
         .replace('٪','%').replace(Regex("[\\s\\u00a0]+")," ").trim()
     private val number="([0-9٠-٩]+(?:[.٫][0-9٠-٩]{1,2})?)"
@@ -30,6 +33,7 @@ object KeetaPromotionEvidence {
         return row.takeIf { timer.size==3 && timer.any { value -> value>0 } }
     }
     fun closeTarget(frame:CatalogFrame):CatalogNode?{
+        if(emptySheet(frame)) return frame.nodes.single { it.className=="android.widget.ImageView" && it.clickable && it.enabled }
         if(terms(frame)){
             val label=frame.nodes.singleOrNull{clean(it.label)=="حسنا"}?:return null
             return if(label.clickable&&label.enabled)label else ancestors(frame,label).firstOrNull{it.clickable&&it.enabled&&frame.descendants(it.index).size<=80}
