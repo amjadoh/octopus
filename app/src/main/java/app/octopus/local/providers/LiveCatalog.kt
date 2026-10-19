@@ -7,7 +7,7 @@ import java.util.Locale
 
 data class CatalogNode(val index: Int, val parent: Int, val id: String, val label: String, val className: String,
     val clickable: Boolean, val editable: Boolean, val scrollable: Boolean, val enabled: Boolean = true)
-enum class CatalogScreen { HOME, SEARCH, RESULTS, RESTAURANT_NOTICE, MENU, PRODUCT, CART, UNKNOWN }
+enum class CatalogScreen { HOME, BROWSE, BROWSE_PROMO, SEARCH, RESULTS, RESTAURANT_NOTICE, MENU, PRODUCT, CART, UNKNOWN }
 data class CatalogFrame(val nodes: List<CatalogNode>, val complete: Boolean) {
     fun hasId(suffix: String) = nodes.any { it.id == suffix || it.id.endsWith(":id/$suffix") }
     fun descendants(index: Int): List<CatalogNode> {
@@ -40,11 +40,36 @@ object HungerStationCatalog {
         frame.hasId("FlutterCart_title") -> CatalogScreen.CART
         frame.hasId("menuBackButton") && frame.hasId("menuSearchButton") -> CatalogScreen.MENU
         frame.hasId("searchVendorsRecycler") -> CatalogScreen.RESULTS
+        frame.hasId("vendor_list") && frame.hasId("close_button") -> CatalogScreen.BROWSE_PROMO
+        frame.hasId("vendorsRecycler") && frame.hasId("hsBackButton") -> CatalogScreen.BROWSE
         listOf("عرض قائمة المطعم", "اكتشف المطاعم", "رفض").all { label -> frame.nodes.any { it.label == label && it.clickable } } -> CatalogScreen.RESTAURANT_NOTICE
         frame.hasId("new_search_card_view") && frame.hasId("input_csc") -> CatalogScreen.HOME
         frame.nodes.any { it.editable } &&
             frame.nodes.any { it.id.startsWith("UniversalSearch_") || it.label == "البحث عن طريق المطابخ" } -> CatalogScreen.SEARCH
         else -> CatalogScreen.UNKNOWN
+    }
+
+    /** Honor / 8.0.303: category captions are baked into images. Admit only the observed seven-card grid. */
+    fun browseEntry(frame: CatalogFrame): CatalogNode? {
+        if (screen(frame) != CatalogScreen.HOME) return null
+        val groups = frame.nodes.filter { it.id.endsWith(":id/home_modules_parent") }.mapNotNull { group ->
+            val cards = frame.nodes.filter { it.parent == group.index }
+            if (cards.size != 7 || cards.any { !it.clickable || !it.enabled || it.id.isNotEmpty() ||
+                    it.className != "android.view.ViewGroup" || frame.descendants(it.index).none { child ->
+                        child.parent == it.index && child.id.endsWith(":id/banner_image") } }) null
+            else cards.first()
+        }
+        return groups.singleOrNull()
+    }
+
+    fun browsedRestaurants(frame: CatalogFrame): List<LiveRestaurant> {
+        if (screen(frame) != CatalogScreen.BROWSE) return emptyList()
+        val list = frame.nodes.singleOrNull { it.id.endsWith(":id/vendorsRecycler") } ?: return emptyList()
+        return frame.descendants(list.index).filter { it.id.endsWith(":id/vendor_name") && it.label.isNotBlank() }
+            .map { title ->
+                val siblings = frame.nodes.filter { it.parent == title.parent }
+                LiveRestaurant(title.label, siblings.singleOrNull { it.id.endsWith(":id/vendor_genre") }?.label, title.label)
+            }.distinctBy { it.name }
     }
 
     fun searchInputs(frame: CatalogFrame): List<CatalogNode> {

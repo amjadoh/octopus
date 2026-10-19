@@ -8,8 +8,8 @@ enum class ElementOperation { CLICK, SET_TEXT, SCROLL_FORWARD }
 /** Exhaustive mapping: adding an action can never silently turn a scroll into a click. */
 fun CatalogAction.operation(): ElementOperation = when (this) {
     CatalogAction.SET_QUERY -> ElementOperation.SET_TEXT
-    CatalogAction.SCROLL_MENU, CatalogAction.SCROLL_PRODUCT -> ElementOperation.SCROLL_FORWARD
-    CatalogAction.OPEN_BASKET, CatalogAction.ADD_RIDAN, CatalogAction.OPEN_SEARCH, CatalogAction.SELECT_SUGGESTION, CatalogAction.OPEN_RESTAURANT,
+    CatalogAction.SCROLL_RESTAURANTS, CatalogAction.SCROLL_MENU, CatalogAction.SCROLL_PRODUCT -> ElementOperation.SCROLL_FORWARD
+    CatalogAction.OPEN_BROWSE, CatalogAction.CLOSE_BROWSE_PROMO, CatalogAction.OPEN_BASKET, CatalogAction.ADD_RIDAN, CatalogAction.OPEN_SEARCH, CatalogAction.SELECT_SUGGESTION, CatalogAction.OPEN_RESTAURANT,
     CatalogAction.VIEW_MENU_NOTICE, CatalogAction.OPEN_PRODUCT, CatalogAction.RETURN_TO_CATALOG -> ElementOperation.CLICK
 }
 
@@ -20,6 +20,7 @@ object CatalogCommands {
             CatalogScreen.PRODUCT -> "pdpCloseButton"
             CatalogScreen.CART -> "FlutterCart_back_button"
             CatalogScreen.MENU -> "menuBackButton"
+            CatalogScreen.BROWSE -> "com.hungerstation.android.web:id/hsBackButton"
             CatalogScreen.RESULTS -> "com.hungerstation.android.web:id/backButton"
             CatalogScreen.SEARCH -> "UniversalSearch_back_button"
             else -> return null

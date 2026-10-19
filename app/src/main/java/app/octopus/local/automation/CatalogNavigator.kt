@@ -49,6 +49,35 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         graph.catalog.value = graph.catalog.value.copy(busy = false, message = message)
     }
 
+    fun browseRestaurants(): Boolean = begin {
+        phase = "فتح استعراض المطاعم"
+        openHome()
+        val home = await { HungerStationCatalog.browseEntry(it) != null }
+        val entry = HungerStationCatalog.browseEntry(home)!!
+        act(home, CatalogAction.OPEN_BROWSE, { it == entry })
+        var listing = await { HungerStationCatalog.screen(it) in setOf(CatalogScreen.BROWSE, CatalogScreen.BROWSE_PROMO) }
+        if (HungerStationCatalog.screen(listing) == CatalogScreen.BROWSE_PROMO) {
+            act(listing, CatalogAction.CLOSE_BROWSE_PROMO, { it.id.endsWith(":id/close_button") && it.clickable })
+            listing = await { HungerStationCatalog.screen(it) == CatalogScreen.BROWSE }
+        }
+        val restaurants = linkedMapOf<String, LiveRestaurant>()
+        var previous = ""
+        for (page in 0 until 10) {
+            phase = "قراءة المطاعم المتاحة"
+            val visible = HungerStationCatalog.browsedRestaurants(listing)
+            visible.forEach { restaurants.putIfAbsent(it.name, it) }
+            val fingerprint = visible.joinToString { it.name }
+            if (fingerprint == previous && fingerprint.isNotEmpty()) break
+            previous = fingerprint
+            if (!act(listing, CatalogAction.SCROLL_RESTAURANTS,
+                    { it.id.endsWith(":id/vendorsRecycler") && it.scrollable }, allowNoOp = true)) break
+            listing = await { HungerStationCatalog.screen(it) == CatalogScreen.BROWSE }
+        }
+        check(restaurants.isNotEmpty()) { "تعذرت قراءة المطاعم؛ لم تُعرض قائمة تجريبية." }
+        graph.catalog.value = graph.catalog.value.copy(menu = null, product = null, restaurants = restaurants.values.toList(),
+            message = "${restaurants.size} مطعمًا من هنقرستيشن للعنوان النشط. هذه قائمة جزئية؛ اختر مطعمًا لقراءة قائمته أو حدّث الاستعراض.")
+    }
+
     fun search(text: String): Boolean {
         if (text.isBlank() || text.length > 100) return false
         query = text.trim()
