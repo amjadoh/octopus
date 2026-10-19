@@ -693,6 +693,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     .put("keetaDrawer", provider == ProviderId.KEETA && KeetaMenuPreview.basketDrawer(frame))
                     .put("keetaBasketRead", provider == ProviderId.KEETA && KeetaRidanBasket.evidence(frame) != null)
                     .put("keetaDrawerClose", provider == ProviderId.KEETA && KeetaRidanBasket.closeDrawer(frame) != null)
+                    .put("keetaProduct", provider == ProviderId.KEETA && KeetaMenuPreview.product(frame))
+                    .put("keetaAddReady", provider == ProviderId.KEETA && KeetaRidanBasket.addTarget(frame, KeetaMenuPreview.unitPrice(frame) ?: -1) != null)
+                    .put("enteredFields", frame.nodes.count { it.editable && it.enteredText })
                     .put("editables", frame.nodes.count { it.editable })
                     .put("scrollables", JSONArray(frame.nodes.filter { it.scrollable }.map { it.className + ":" + it.id }))
                     .put("ids", JSONArray(frame.nodes.map { it.id }.filter { it.isNotBlank() }.distinct()))
@@ -739,7 +742,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 error("ظهرت شاشة دخول أو حماية؛ أكملها بنفسك داخل المنصة.")
             nodes += CatalogNode(index, parent, id, label, node.className?.toString().orEmpty(), node.isClickable, node.isEditable, node.isScrollable, node.isEnabled,
                 omittedText = provider == ProviderId.KEETA && !private && !node.isEditable && raw.any(Char::isLetter) && label.isBlank(),
-                enteredText = node.isEditable && !node.text.isNullOrBlank())
+                enteredText = node.isEditable && !node.isShowingHintText && !node.text.isNullOrBlank() &&
+                    node.text?.toString() != node.hintText?.toString())
             val children = catalogChildren(node)
             try { for (child in children) walk(child, index, depth + 1) }
             finally { children.forEach { @Suppress("DEPRECATION") it.recycle() } }
