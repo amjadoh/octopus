@@ -42,7 +42,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private val traceRequest = InspectionRequest(InspectionStage.MENU, "", "")
     val active: Boolean get() = job?.isActive == true
 
-    fun stop(message: String = "أوقفت البحث. لم تتغير أي سلة.") {
+    fun stop(message: String = "أوقفت العملية. راجع السلة إن بدأ تجهيزها.") {
         generation++
         sessionEvidence = null
         job?.cancel(); job = null
@@ -101,6 +101,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 val launch = service.packageManager.getLaunchIntentForPackage(provider.packageName) ?: error("كيتا غير مثبت.")
                 service.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 var frame = await { keetaReadable(it) }
+                if (KeetaMenuPreview.searchCandidate(frame) != null) {
+                    keetaBasketAction { KeetaMenuPreview.searchCandidate(it) }
+                    frame = await { KeetaMenuPreview.menu(it) }
+                }
                 if (KeetaMenuPreview.basketDrawer(frame) || KeetaMenuPreview.product(frame)) {
                     closeKeetaReadSheet(frame)
                     frame = await { keetaReadable(it) && !KeetaMenuPreview.basketDrawer(it) && !KeetaMenuPreview.product(it) }
@@ -179,14 +183,82 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         val desired = graph.draft.value ?: return false
         val details = comparedProduct ?: return false
         val now = System.currentTimeMillis()
-        if (!PreviewEvidence.supports(desired) || desired.items.single().quantity != 1 || graph.catalog.value.previews.none {
+        if (!PreviewEvidence.supports(desired) || graph.catalog.value.previews.none {
                 it.provider == ProviderId.HUNGERSTATION && it.itemSubtotal != null && it.fresh(desired, now) }) return false
-        return prepareRidan(details, ProductSelection(details.product.id, emptyMap(), 1))
+        return prepareRidan(details, ProductSelection(details.product.id, emptyMap(), 1), desired.items.single().quantity)
+    }
+
+    /** Only changes the fully visible, single fixed-meal Ridan basket after explicit provider selection. */
+    fun prepareComparedKeeta(handoff: Boolean = false): Boolean {
+        val desired = graph.draft.value ?: return false
+        if (!PreviewEvidence.supports(desired)) return false
+        if (handoff) {
+            val saved = graph.catalog.value.preparedBasket ?: return false
+            if (saved.provider != ProviderId.KEETA || saved.restaurant != desired.restaurant || saved.lines.size != 1 ||
+                saved.lines.single().let { it.name != desired.items.single().name || it.quantity != desired.items.single().quantity || it.choices.isNotEmpty() }) return false
+        } else if (graph.catalog.value.previews.none {
+                it.provider == ProviderId.KEETA && it.itemSubtotal != null && it.fresh(desired, System.currentTimeMillis()) }) return false
+        return begin(returnOnSuccess = !handoff) {
+            provider = ProviderId.KEETA; checkSession(); targetSeen = false
+            check(graph.installations.value.any { it.provider == provider && it.version == KeetaMenuPreview.VERSION })
+            phase = "التحقق من سلة ريدان في كيتا"
+            val launch = service.packageManager.getLaunchIntentForPackage(provider.packageName) ?: error("كيتا غير مثبت.")
+            service.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            var frame = await { keetaReadable(it) }
+            if (KeetaMenuPreview.searchCandidate(frame) != null) {
+                keetaBasketAction { KeetaMenuPreview.searchCandidate(it) }
+                frame = await { KeetaMenuPreview.menu(it) }
+            }
+            if (!KeetaMenuPreview.basketDrawer(frame)) {
+                if (KeetaMenuPreview.product(frame) || KeetaPromotionEvidence.terms(frame) || KeetaPromotionEvidence.couponSheet(frame)) {
+                    closeKeetaReadSheet(frame)
+                    frame = await { KeetaMenuPreview.menu(it) || KeetaPromotionEvidence.couponSheet(it) }
+                    if (KeetaPromotionEvidence.couponSheet(frame)) {
+                        closeKeetaReadSheet(frame); frame = await { KeetaMenuPreview.menu(it) }
+                    }
+                }
+                keetaBasketAction { KeetaRidanBasket.footerBag(it) }
+                frame = await { KeetaMenuPreview.basketDrawer(it) }
+            }
+            var evidence = KeetaRidanBasket.evidence(frame) ?: error("سلة كيتا ليست وجبة ريدان الواحدة المقروءة بالكامل؛ لم أغيرها.")
+            val quantity = desired.items.single().quantity
+            if (handoff) check(evidence.lines.single().quantity == quantity) { "تغيرت الكمية؛ أعد تجهيز السلة." }
+            var changes = 0
+            while (evidence.lines.single().quantity != quantity) {
+                check(++changes <= 98 && graph.draft.value?.fingerprint == desired.fingerprint)
+                val before = evidence.lines.single().quantity!!
+                val increase = before < quantity
+                phase = "مطابقة كمية ريدان في كيتا"
+                keetaBasketAction { current ->
+                    if (KeetaRidanBasket.evidence(current)?.lines?.singleOrNull()?.quantity != before) null
+                    else KeetaRidanBasket.quantityTarget(current, increase)
+                }
+                val expected = before + if (increase) 1 else -1
+                frame = await { KeetaRidanBasket.evidence(it)?.lines?.singleOrNull()?.quantity == expected }
+                evidence = KeetaRidanBasket.evidence(frame) ?: error("تعذرت إعادة قراءة السلة بعد تعديل واحد؛ توقفت دون إعادة الإجراء.")
+            }
+            check(graph.draft.value?.fingerprint == desired.fingerprint)
+            graph.catalog.value = graph.catalog.value.copy(preparedBasket = evidence,
+                message = "تحققت سلة كيتا: نصف دجاج مضغوط، الكمية $quantity. لم يُفتح الدفع ولم يُؤكد طلب.")
+        }
+    }
+
+    private suspend fun keetaBasketAction(selector: (CatalogFrame) -> CatalogNode?) {
+        currentCoroutineContext().ensureActive(); checkSession()
+        val root = service.rootInActiveWindow ?: error("اختفت سلة كيتا.")
+        try {
+            check(provider == ProviderId.KEETA && root.packageName?.toString() == provider.packageName)
+            val frame = capture(root)
+            val target = selector(frame) ?: error("تعذر إثبات زر السلة أو الكمية؛ لم أنفذ الإجراء.")
+            check(target.label != "إتمام الدفع" && target.label != "تفريغ السلة")
+            // One dispatch only, then await the exact resulting quantity. Never retry a mutation.
+            check(performKeetaReadAction(root, target, AccessibilityNodeInfo.ACTION_CLICK)) { "تعذر تنفيذ إجراء السلة؛ لم أكرره." }
+        } finally { @Suppress("DEPRECATION") root.recycle() }
     }
 
     private fun keetaReadable(frame: CatalogFrame): Boolean = KeetaMenuPreview.product(frame) ||
         KeetaMenuPreview.menu(frame) || KeetaMenuPreview.basketDrawer(frame) ||
-        KeetaPromotionEvidence.couponSheet(frame) || KeetaPromotionEvidence.terms(frame)
+        KeetaPromotionEvidence.couponSheet(frame) || KeetaPromotionEvidence.terms(frame) || KeetaMenuPreview.searchCandidate(frame) != null
 
     private suspend fun openKeetaCoupon(previous: CatalogFrame, terms: Boolean) {
         currentCoroutineContext().ensureActive(); checkSession()
@@ -242,7 +314,13 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             if (KeetaPromotionEvidence.couponSheet(frame) || KeetaPromotionEvidence.terms(frame)) {
                 val target = KeetaPromotionEvidence.closeTarget(frame) ?: error("تعذر تحديد زر إغلاق شروط العرض.")
                 check(performKeetaReadAction(root, target, AccessibilityNodeInfo.ACTION_CLICK)) { "تعذر إغلاق شروط العرض." }
-            } else check(service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)) { "تعذر إغلاق معاينة السلة." }
+            } else if (KeetaMenuPreview.basketDrawer(frame)) {
+                val target = KeetaRidanBasket.closeDrawer(frame) ?: error("تعذر تحديد إغلاق معاينة السلة.")
+                check(performKeetaReadAction(root, target, AccessibilityNodeInfo.ACTION_CLICK)) { "تعذر إغلاق معاينة السلة." }
+            } else {
+                val target = KeetaMenuPreview.closeProduct(frame) ?: error("تعذر تحديد إغلاق الوجبة.")
+                check(performKeetaReadAction(root, target, AccessibilityNodeInfo.ACTION_CLICK)) { "تعذر إغلاق معاينة الوجبة." }
+            }
         } finally { @Suppress("DEPRECATION") root.recycle() }
     }
 
@@ -420,8 +498,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     }
 
     /** Explicit UI request only. Never replaces a nonmatching basket or opens checkout. */
-    fun prepareRidan(details: ConfiguredProduct, selection: ProductSelection): Boolean {
+    fun prepareRidan(details: ConfiguredProduct, selection: ProductSelection, desiredQuantity: Int = selection.quantity): Boolean {
         if (!RidanCartProgram.supports(details, selection, System.currentTimeMillis())) return false
+        if (desiredQuantity !in 1..99 || graph.draft.value?.items?.singleOrNull()?.quantity != desiredQuantity) return false
         val priorMenu = graph.catalog.value.menu
         return begin {
             phase = "تجهيز سلة ريدان"
@@ -448,20 +527,36 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU && it.hasId("FlutterMenu_goToCartButton") }
             }
             val count = menu.nodes.singleOrNull { it.id == "FlutterMenu_goToCartQuantity" }?.label?.trim()
-            check(count in setOf("1", "١")) { "سلة ريدان تحتوي أصنافًا أو كميات مختلفة؛ لم أعدلها أو أكرر الإضافة." }
+            val menuCount = count?.let { app.octopus.local.pricing.MoneyParser.parse(it)?.div(100)?.toInt() }
+            check(menuCount in 1..99) { "تعذرت قراءة كمية السلة؛ لم أعدلها أو أكرر الإضافة." }
             val target = HungerStationBasketControls.openTarget(menu) ?: error("تعذر تحديد زر السلة الموثوق.")
             val command = BasketOpenCommand(menu, target, System.currentTimeMillis())
             act(menu, CatalogAction.OPEN_BASKET, { it == target }, basketCommand = command)
-            val cart = await { HungerStationCatalog.screen(it) == CatalogScreen.CART }
+            var cart = await { HungerStationCatalog.screen(it) == CatalogScreen.CART }
             // The fixed footer's count is one, and exactly one fully parsed row must agree.
-            val evidence = BasketEvidenceReader.hungerStation(cart, endOfCartObserved = false)
+            var evidence = BasketEvidenceReader.hungerStation(cart, endOfCartObserved = false)
             check(evidence.restaurant == RidanCartProgram.RESTAURANT && evidence.lines.size == 1 &&
                 cart.nodes.count { it.id == "FlutterCart_cartItem" } == 1 && evidence.lines.single().let {
-                    it.name == details.product.title && it.quantity == 1 && it.choices.isEmpty() }) {
+                    it.name == details.product.title && it.quantity == menuCount && it.choices.isEmpty() }) {
                 "لم تتطابق السلة المقروءة مع الوجبة؛ لا توجد إضافة أخرى أو تأكيد طلب."
             }
+            var changes = 0
+            while (evidence.lines.single().quantity != desiredQuantity) {
+                check(++changes <= 98 && graph.draft.value?.items?.singleOrNull()?.quantity == desiredQuantity)
+                val before = evidence.lines.single().quantity!!
+                val increase = before < desiredQuantity
+                val command = RidanQuantityCommand(before, increase, System.currentTimeMillis())
+                val targetQuantity = RidanQuantityCommand.target(cart, before, increase) ?: error("تعذر تحديد زر كمية الوجبة؛ لم أعدله.")
+                act(cart, CatalogAction.ADJUST_RIDAN_QUANTITY, { it == targetQuantity }, quantityCommand = command)
+                val expected = before + if (increase) 1 else -1
+                cart = await { HungerStationCatalog.screen(it) == CatalogScreen.CART &&
+                    BasketEvidenceReader.hungerStation(it, false).lines.singleOrNull()?.quantity == expected }
+                evidence = BasketEvidenceReader.hungerStation(cart, false)
+                check(evidence.restaurant == details.restaurant && evidence.lines.singleOrNull()?.name == details.product.title &&
+                    evidence.lines.single().choices.isEmpty()) { "تغيرت الوجبة؛ توقفت دون إعادة الإجراء." }
+            }
             graph.catalog.value = graph.catalog.value.copy(menu = priorMenu,
-                message = "تم التحقق من سلة ريدان: ${details.product.title}، الكمية 1. لم يُؤكد طلب أو دفع. سعر الأصناف ليس إجمالي التوصيل.",
+                message = "تم التحقق من سلة ريدان: ${details.product.title}، الكمية $desiredQuantity. لم يُؤكد طلب أو دفع. سعر الأصناف ليس إجمالي التوصيل.",
                 preparedBasket = evidence)
         }
     }
@@ -470,14 +565,15 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         val saved = graph.catalog.value.preparedBasket ?: return false
         val draft = graph.draft.value ?: return false
         if (saved.restaurant != RidanCartProgram.RESTAURANT || draft.restaurant != saved.restaurant ||
-            draft.items.size != 1 || draft.items.single().let { it.name != RidanCartProgram.TITLE || it.quantity != 1 || it.options.isNotEmpty() }) return false
+            draft.items.size != 1 || draft.items.single().let { it.name != RidanCartProgram.TITLE || it.quantity !in 1..99 || it.options.isNotEmpty() }) return false
         return begin(returnOnSuccess = false) {
             phase = "التحقق من سلة ريدان قبل التسليم"
             check(!navigateToRestaurant(LiveRestaurant(RidanCartProgram.RESTAURANT, null, RidanCartProgram.RESTAURANT))) {
                 "المطعم غير متاح حاليًا؛ لم يتغير طلبك."
             }
             val menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
-            check(menu.nodes.singleOrNull { it.id == "FlutterMenu_goToCartQuantity" }?.label?.trim() in setOf("1", "١")) {
+            check(menu.nodes.singleOrNull { it.id == "FlutterMenu_goToCartQuantity" }?.label?.let {
+                app.octopus.local.pricing.MoneyParser.parse(it)?.div(100)?.toInt() } == draft.items.single().quantity) {
                 "تغيرت السلة؛ لم تُعدّل ولم تُضف وجبة."
             }
             val target = HungerStationBasketControls.openTarget(menu) ?: error("تعذر فتح السلة بأمان.")
@@ -513,7 +609,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             catch (cancelled: CancellationException) {
                 outcome = if (cancelled is TimeoutCancellationException) "TIMEOUT" else "STOPPED"
                 if (cancelled is TimeoutCancellationException) {
-                    graph.catalog.value = graph.catalog.value.copy(error = "انتهت مهلة $phase. لم تتغير السلال.")
+                    graph.catalog.value = graph.catalog.value.copy(error = "انتهت مهلة $phase. توقفت الإجراءات؛ راجع السلة إن بدأ تجهيزها.")
                     returnToApp()
                 }
                 throw cancelled
@@ -521,7 +617,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 outcome = "FAILED"
                 // Only our own fixed errors are surfaced; no provider exception text or screen dump is logged.
                 graph.catalog.value = graph.catalog.value.copy(error = failure.message?.takeIf { it.any { c -> c in '\u0600'..'\u06ff' } }
-                    ?: "توقفت العملية عند شاشة غير مدعومة. لم تتغير السلال.")
+                    ?: "توقفت العملية عند شاشة غير مدعومة؛ راجع السلة إن بدأ تجهيزها.")
                 returnToApp()
             } finally {
                 val frames = evidence.drain()
@@ -579,6 +675,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     structure.nodes, structure.count, structure.truncated, System.currentTimeMillis()), SystemClock.elapsedRealtime())
                 lastStats = JSONObject().put("phase", phase).put("screen", HungerStationCatalog.screen(frame).name)
                     .put("complete", frame.complete).put("nodeCount", frame.nodes.size).put("sensitiveSkipped", sensitiveSkipped)
+                    .put("keetaMenu", provider == ProviderId.KEETA && KeetaMenuPreview.menu(frame))
+                    .put("keetaDrawer", provider == ProviderId.KEETA && KeetaMenuPreview.basketDrawer(frame))
+                    .put("keetaBasketRead", provider == ProviderId.KEETA && KeetaRidanBasket.evidence(frame) != null)
+                    .put("keetaDrawerClose", provider == ProviderId.KEETA && KeetaRidanBasket.closeDrawer(frame) != null)
                     .put("editables", frame.nodes.count { it.editable })
                     .put("scrollables", JSONArray(frame.nodes.filter { it.scrollable }.map { it.className + ":" + it.id }))
                     .put("ids", JSONArray(frame.nodes.map { it.id }.filter { it.isNotBlank() }.distinct()))
@@ -646,7 +746,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
 
     private suspend fun act(previous: CatalogFrame, action: CatalogAction, selector: (CatalogNode) -> Boolean,
         text: String? = null, allowNoOp: Boolean = false, ridanProgram: RidanCartProgram? = null,
-        basketCommand: BasketOpenCommand? = null): Boolean {
+        basketCommand: BasketOpenCommand? = null, quantityCommand: RidanQuantityCommand? = null): Boolean {
         currentCoroutineContext().ensureActive(); checkSession()
         val root = service.rootInActiveWindow ?: error("اختفت الشاشة قبل الإجراء.")
         try {
@@ -660,6 +760,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             val allowed = when (action) {
                 CatalogAction.ADD_RIDAN -> graph.settings.value.catalogConsent &&
                     ridanProgram?.consumeAdd(fresh, node, System.currentTimeMillis()) == true
+                CatalogAction.ADJUST_RIDAN_QUANTITY -> graph.settings.value.catalogConsent &&
+                    quantityCommand?.consume(fresh, node, System.currentTimeMillis()) == true
                 CatalogAction.OPEN_BASKET -> basketCommand != null && SafetyGuard().allowsBasketOpen(basketCommand,
                     fresh, root.packageName?.toString(), HungerStationCatalog.TESTED_VERSION,
                     graph.settings.value.catalogConsent, currentCoroutineContext().isActive) &&

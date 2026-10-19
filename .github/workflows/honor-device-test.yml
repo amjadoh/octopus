@@ -2,6 +2,14 @@ name: Signed Honor device test (no release)
 on:
   push:
     branches: [codex/honor-ridan-test]
+    paths:
+      - 'app/**'
+      - 'gradle/**'
+      - '*.gradle.kts'
+      - 'gradle.properties'
+      - 'gradlew*'
+      - '.github/**'
+      - 'docs/PREVIEW_SIGNING_CERT_SHA256.txt'
   workflow_dispatch:
 permissions:
   contents: read
@@ -41,4 +49,4 @@ jobs:
             app/build/outputs/apk/diagnostic/debug/app-diagnostic-debug.apk
             app/build/test-results/testDiagnosticDebugUnitTest/TEST-*.xml
           if-no-files-found: error
-          retention-days: 3
+          retention-days: 90

@@ -30,6 +30,7 @@ import app.octopus.local.providers.*
 import app.octopus.local.pricing.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.math.BigDecimal
 
 private fun money(value: Long) = BigDecimal.valueOf(value, 2).stripTrailingZeros().toPlainString() + " ر.س"
@@ -50,6 +51,8 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
     var changing by remember { mutableStateOf(false) }
     var showProduct by remember { mutableStateOf(true) }
     var localError by remember { mutableStateOf<String?>(null) }
+    var quoteTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) { while (true) { delay(15_000); quoteTime = System.currentTimeMillis() } }
     fun search() {
         if (!(if (browsing) LiveCatalogBridge.browseRestaurants() else LiveCatalogBridge.search(query)))
             localError = "تعذر البدء. تحقق من اتصال خدمة الأخطبوط والسماح لهنقرستيشن."
@@ -170,8 +173,10 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                             Icon(Icons.Outlined.CompareArrows, null); Spacer(Modifier.width(8.dp)); Text("قارن قبل اختيار التطبيق")
                         }
                         if (state.preparedBasket?.restaurant == cart.restaurant) TextButton(onClick = {
-                            if (!LiveCatalogBridge.openPreparedRidanBasket()) localError = "أعد التحقق من السلة قبل فتحها."
-                        }, enabled = !state.busy) { Text("افتح سلة هنقرستيشن المتحققة") }
+                            val opened = if (state.preparedBasket?.provider == ProviderId.KEETA) LiveCatalogBridge.prepareComparedKeeta(true)
+                                else LiveCatalogBridge.openPreparedRidanBasket()
+                            if (!opened) localError = "أعد التحقق من السلة قبل فتحها."
+                        }, enabled = !state.busy) { Text("افتح سلة ${state.preparedBasket?.provider?.title} المتحققة") }
                     }
                 }
             }
@@ -180,9 +185,11 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                 item { Text("قراءة قبل تجهيز السلة. الإجمالي النهائي ومطابقة العنوان والفرع بين التطبيقين غير متحققة؛ لم أحدد الأرخص.", fontSize = 12.sp, color = OctopusPalette.Muted) }
                 item { ComparisonSummary(state.previews, cart) }
                 items(state.previews, key = { it.provider }) { preview ->
-                    val fresh = preview.fresh(cart, System.currentTimeMillis())
-                    CostPreviewCard(preview, fresh, !state.busy && cart.items.singleOrNull()?.quantity == 1, onSelect = {
-                        if (!LiveCatalogBridge.prepareComparedHungerStation()) localError = "انتهت صلاحية القراءة أو تغير الطلب؛ أعد المقارنة."
+                    val fresh = preview.fresh(cart, quoteTime)
+                    CostPreviewCard(preview, fresh, !state.busy, onSelect = {
+                        val started = if (preview.provider == ProviderId.KEETA) LiveCatalogBridge.prepareComparedKeeta()
+                            else LiveCatalogBridge.prepareComparedHungerStation()
+                        if (!started) localError = "انتهت صلاحية القراءة أو تغير الطلب؛ أعد المقارنة."
                     })
                 }
             }
@@ -253,7 +260,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                 }
             }
         }
-        item { Text("نسخة اختبار: قراءة المطاعم وتجهيز ريدان في هنقرستيشن متاحان ضمن النطاق المختبر. المقارنة الكاملة بالرسوم والعروض وتجهيز كيتا لم تكتمل بعد.", fontSize = 11.sp, color = OctopusPalette.Muted) }
+        item { Text("المقارنة الحية وتجهيز السلة حاليًا لنصف دجاج مضغوط من ريدان. المبلغ المحسوب يشمل الأصناف والتوصيل؛ الإجمالي مع رسوم الخدمة يحتاج مراجعة داخل المنصة.", fontSize = 11.sp, color = OctopusPalette.Muted) }
     }
     state.product?.takeIf { showProduct && !state.busy }?.let { details ->
         ProductConfigurationSheet(graph, details, onDismiss = { showProduct = false }, onSaved = {
@@ -320,10 +327,10 @@ private fun CostPreviewCard(preview: MenuCostPreview, fresh: Boolean, enabled: B
             HorizontalDivider(color = OctopusPalette.Line)
             Text("الإجمالي النهائي غير متحقق", fontWeight = FontWeight.Bold)
             preview.error?.let { Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error) }
-            if (preview.provider == ProviderId.HUNGERSTATION) OutlinedButton(onClick = onSelect,
+            OutlinedButton(onClick = onSelect,
                 enabled = enabled && fresh && preview.itemSubtotal != null, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(15.dp)) {
-                Text("اختر هنقرستيشن وجهّز السلة")
-            } else Text("تجهيز سلة كيتا قيد الاستكمال", fontSize = 12.sp, color = OctopusPalette.Muted)
+                Text("اختر ${preview.provider.title} وجهّز السلة")
+            }
         }
     }
 }

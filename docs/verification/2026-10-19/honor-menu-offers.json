@@ -6,7 +6,8 @@
   "unitPriceHalala": 3000,
   "verifiedInOctopus": [
     {"quantity": 1, "hungerstationItems": 3000, "hungerstationDelivery": 2400, "hungerstationKnownPart": 5400, "keetaDiscount": 0, "keetaDelivery": 0, "keetaKnownPart": 3000},
-    {"quantity": 2, "hungerstationItems": 6000, "hungerstationDelivery": 1000, "hungerstationKnownPart": 7000, "keetaDiscount": 600, "keetaDelivery": 0, "keetaKnownPart": 5400}
+    {"quantity": 2, "hungerstationItems": 6000, "hungerstationDelivery": 1000, "hungerstationKnownPart": 7000, "keetaDiscount": 600, "keetaDelivery": 0, "keetaKnownPart": 5400},
+    {"quantity": 3, "hungerstationItems": 9000, "hungerstationDelivery": 1000, "hungerstationKnownPart": 10000, "keetaDiscount": 800, "keetaDelivery": 0, "keetaKnownPart": 8200}
   ],
   "verifiedInNativeKeeta": [
     {"quantity": 1, "items": 3000, "discount": 0, "delivery": 0, "knownPart": 3000},
