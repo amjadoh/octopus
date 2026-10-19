@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-19",
+  "buildSuccessful": true,
+  "unitTests": 142,
+  "unitFailures": 0,
+  "unitErrors": 0,
+  "unitSkipped": 0,
+  "lintErrors": 0,
+  "androidApi": 36,
+  "androidTestsPassed": true,
+  "androidTests": 7,
+  "androidTestScope": "Own UI (4) and synthetic accessibility-node privacy/restriction checks (3)",
+  "newBasketNavigationTests": 15,
+  "realProviderNavigationVerified": false,
+  "twoProviderComparisonVerified": false,
+  "finalTotalsVerified": false,
+  "cartCompletenessVerified": false,
+  "physicalPhoneUsed": false,
+  "sparePhoneAvailableNow": false,
+  "newReleasePublished": false,
+  "note": "HS post-add basket navigation built using previous redacted device layouts. Actual Keeta and HungerStation login remain restricted on emulator. User will supply spare-phone model and Android version later.",
+  "evidenceScope": "Latest local development only; earlier historical physical-device observations are described separately in CONVERSATION_CONTEXT.md."
+}

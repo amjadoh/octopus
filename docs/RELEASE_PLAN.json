@@ -2,9 +2,9 @@
   "version": "1.2.0",
   "versionCode": 7,
   "tag": "v1.2.0-alpha",
-  "scope": "preview_current_work",
-  "userRequestedPreview": true,
+  "scope": "real_comparison_pending",
+  "userRequestedPreview": false,
   "realComparisonComplete": false,
   "prerelease": true,
-  "note": "User requested publication of current work before live comparison verification. This authorizes an explicitly incomplete preview only; the complete-comparison gate remains false."
+  "note": "The 1.2.0 preview was already published under its earlier one-time authorization. Current local work must not be published until the full real-provider comparison release gate passes. No new release version has been selected."
 }

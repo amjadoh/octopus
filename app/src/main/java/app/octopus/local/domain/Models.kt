@@ -32,6 +32,7 @@ data class SafeSnapshot(
     val visibleNodeCount: Int,
     val sensitiveScreen: Boolean,
     val truncated: Boolean = false,
+    val accessRestriction: app.octopus.local.safety.ProviderAccessRestriction? = null,
 )
 data class QuoteCandidate(val fields: Map<PriceField, Long>, val ambiguous: Boolean) {
     val total: Long? get() = if (ambiguous) null else fields[PriceField.ORDER_TOTAL]

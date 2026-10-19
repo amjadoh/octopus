@@ -1,0 +1,136 @@
+<div id="octopus-diagnostic-preview" dir="rtl" lang="ar" class="viz-dotted-background">
+  <style>
+    #octopus-diagnostic-preview{color-scheme:light dark;font-family:Tahoma,"Segoe UI",Arial,sans-serif;padding:18px 6px;--oc-green:#166f58;--oc-ink:light-dark(#182d29,#e9f2ed);--oc-muted:light-dark(#65716c,#abbcb1);--oc-bg:light-dark(#f7f8f5,#131e19);--oc-surface:light-dark(#ffffff,#1b2922);--oc-line:light-dark(#e3e9e2,#34483c);--oc-pale:light-dark(#eaf3ec,#223e30);--oc-pill:light-dark(#166f58,#b2d6be);--oc-amber-bg:light-dark(#fff4d9,#40361f);--oc-amber:light-dark(#8a610c,#f3d799);color:var(--oc-ink)}
+    #octopus-diagnostic-preview *{box-sizing:border-box}
+    #octopus-diagnostic-preview button,#octopus-diagnostic-preview input{font:inherit}
+    #octopus-diagnostic-preview button{cursor:pointer}
+    #octopus-diagnostic-preview button:disabled{cursor:not-allowed;opacity:.5}
+    #octopus-diagnostic-preview .oc-stage{max-width:422px;margin:auto}
+    #octopus-diagnostic-preview .oc-caption{color:var(--oc-muted);font-size:12px;text-align:center;margin:0 0 12px}
+    #octopus-diagnostic-preview .oc-phone{background:var(--oc-bg);border:1px solid var(--oc-line);border-radius:30px;box-shadow:0 12px 48px #10291b12;overflow:hidden;position:relative}
+    #octopus-diagnostic-preview .oc-header{display:flex;align-items:center;gap:10px;padding:23px 20px 17px;border-bottom:1px solid var(--oc-line);background:var(--oc-bg)}
+    #octopus-diagnostic-preview .oc-logo{width:44px;height:44px;flex-shrink:0}
+    #octopus-diagnostic-preview .oc-brand{flex:1}
+    #octopus-diagnostic-preview .oc-brand strong{font-size:23px;display:block;line-height:1.45}
+    #octopus-diagnostic-preview .oc-brand span{font-size:11px;color:var(--oc-muted)}
+    #octopus-diagnostic-preview .oc-icon-button{border:0;background:transparent;color:var(--oc-ink);padding:10px;border-radius:12px;min-width:44px;min-height:44px}
+    #octopus-diagnostic-preview svg.oc-icon{width:21px;height:21px;vertical-align:middle;flex-shrink:0}
+    #octopus-diagnostic-preview .oc-main{padding:21px;min-height:568px;display:flex;flex-direction:column;gap:20px}
+    #octopus-diagnostic-preview .oc-row{display:flex;align-items:center;gap:12px;min-width:0}
+    #octopus-diagnostic-preview .oc-between{justify-content:space-between}
+    #octopus-diagnostic-preview .oc-grow{flex:1;min-width:0}
+    #octopus-diagnostic-preview .oc-muted{color:var(--oc-muted);font-size:12px;line-height:1.8}
+    #octopus-diagnostic-preview .oc-pill{display:inline-flex;align-items:center;gap:5px;border-radius:30px;padding:6px 10px;font-size:11px;background:var(--oc-pale);color:var(--oc-pill);white-space:nowrap}
+    #octopus-diagnostic-preview .oc-hero{border-radius:24px;background:linear-gradient(130deg,light-dark(#e8f2e8,#223e30),light-dark(#f1f4e8,#283629));padding:23px;position:relative;isolation:isolate;overflow:hidden}
+    #octopus-diagnostic-preview .oc-hero:after{content:"";position:absolute;width:160px;height:160px;border:24px solid light-dark(#c9dec94d,#7ba58b16);border-radius:50%;left:-95px;top:16px;z-index:-1}
+    #octopus-diagnostic-preview .oc-hero h2{font-size:28px;line-height:1.5;margin:12px 0 10px;font-weight:700;letter-spacing:-.6px}
+    #octopus-diagnostic-preview .oc-hero p{font-size:13px;line-height:1.9;color:var(--oc-muted);margin:0 0 17px}
+    #octopus-diagnostic-preview .oc-button{border:0;border-radius:14px;background:var(--oc-green);color:#fff;padding:13px 16px;min-height:49px;width:100%;font-size:13px;font-weight:600}
+    #octopus-diagnostic-preview .oc-outline{background:var(--oc-surface);border:1px solid var(--oc-line);color:var(--oc-pill)}
+    #octopus-diagnostic-preview .oc-link{border:0;background:transparent;color:var(--oc-pill);font-size:12px;padding:10px 0;min-height:40px}
+    #octopus-diagnostic-preview .oc-card{padding:18px;background:var(--oc-surface);border:1px solid var(--oc-line);border-radius:21px;display:flex;flex-direction:column;gap:14px}
+    #octopus-diagnostic-preview h3{font-size:16px;margin:0;font-weight:700}
+    #octopus-diagnostic-preview .oc-intro h2{font-size:26px;margin:0 0 6px;line-height:1.5}
+    #octopus-diagnostic-preview .oc-intro p{margin:0;color:var(--oc-muted);font-size:13px;line-height:1.9}
+    #octopus-diagnostic-preview .oc-mark{width:45px;height:45px;border-radius:14px;display:grid;place-items:center;background:light-dark(#fff3b9,#534716);font-size:24px;font-weight:700;flex-shrink:0}
+    #octopus-diagnostic-preview .oc-mark.hunger{background:light-dark(#ffecd1,#4d3722)}
+    #octopus-diagnostic-preview .oc-provider strong{display:block;font-size:15px;margin-bottom:3px}
+    #octopus-diagnostic-preview .oc-provider small{font-size:11px;color:var(--oc-muted);line-height:1.8}
+    #octopus-diagnostic-preview .oc-divider{height:1px;background:var(--oc-line);border:0;margin:0}
+    #octopus-diagnostic-preview .oc-dot{width:10px;height:10px;border:1.5px solid var(--oc-green);border-radius:100%;flex-shrink:0}
+    #octopus-diagnostic-preview .oc-note{background:var(--oc-pale);color:var(--oc-pill);padding:13px;border-radius:15px;display:flex;gap:9px;align-items:flex-start;font-size:11px;line-height:1.9}
+    #octopus-diagnostic-preview .oc-note .oc-icon{margin-top:2px;width:18px;height:18px}
+    #octopus-diagnostic-preview .oc-step{display:flex;gap:10px;align-items:flex-start}
+    #octopus-diagnostic-preview .oc-step-number{width:28px;height:28px;border-radius:50%;background:var(--oc-pale);color:var(--oc-pill);display:grid;place-items:center;font-size:12px;flex-shrink:0}
+    #octopus-diagnostic-preview .oc-step strong{font-size:13px;display:block;margin-bottom:4px}
+    #octopus-diagnostic-preview .oc-step p{font-size:11px;color:var(--oc-muted);line-height:1.9;margin:0}
+    #octopus-diagnostic-preview .oc-nav{display:flex;background:var(--oc-surface);border-top:1px solid var(--oc-line);padding:10px 10px 16px;gap:3px}
+    #octopus-diagnostic-preview .oc-nav button{border:0;background:transparent;color:var(--oc-muted);font-size:11px;min-height:56px;flex:1;padding:0;display:flex;align-items:center;flex-direction:column;gap:5px}
+    #octopus-diagnostic-preview .oc-nav button span{width:54px;height:29px;border-radius:22px;display:grid;place-items:center}
+    #octopus-diagnostic-preview .oc-nav button[aria-current="page"]{color:var(--oc-pill)}
+    #octopus-diagnostic-preview .oc-nav button[aria-current="page"] span{background:var(--oc-pale)}
+    #octopus-diagnostic-preview .oc-nav .oc-icon{width:20px;height:20px}
+    #octopus-diagnostic-preview .oc-check{appearance:none;min-width:39px;height:24px;background:var(--oc-line);border-radius:20px;border:0;position:relative;margin:0;cursor:pointer}
+    #octopus-diagnostic-preview .oc-check:after{content:"";position:absolute;width:18px;height:18px;top:3px;left:3px;background:var(--oc-surface);border-radius:50%;transition:transform .15s}
+    #octopus-diagnostic-preview .oc-check:checked{background:var(--oc-green)}
+    #octopus-diagnostic-preview .oc-check:checked:after{transform:translateX(15px)}
+    #octopus-diagnostic-preview .oc-info-row{display:flex;justify-content:space-between;gap:16px;font-size:11px;line-height:1.9}
+    #octopus-diagnostic-preview .oc-info-row span:first-child{color:var(--oc-muted)}
+    #octopus-diagnostic-preview .oc-info-row span{max-width:56%}
+    #octopus-diagnostic-preview .oc-select{flex:1;min-height:43px;border:1px solid var(--oc-line);border-radius:13px;background:var(--oc-surface);color:var(--oc-ink);font-size:13px}
+    #octopus-diagnostic-preview .oc-select[aria-pressed="true"]{background:var(--oc-pale);border-color:var(--oc-pill);color:var(--oc-pill)}
+    #octopus-diagnostic-preview .oc-preflight{display:flex;align-items:center;gap:9px;font-size:12px;line-height:1.7}
+    #octopus-diagnostic-preview .oc-circle{border:1.5px solid var(--oc-muted);border-radius:100%;width:17px;height:17px;flex-shrink:0}
+    #octopus-diagnostic-preview .oc-circle.yes{background:var(--oc-green);border-color:var(--oc-green)}
+    #octopus-diagnostic-preview .oc-empty{padding:18px 0;display:flex;flex-direction:column;gap:15px}
+    #octopus-diagnostic-preview .oc-empty .oc-icon{width:36px;height:36px;color:var(--oc-pill)}
+    #octopus-diagnostic-preview .oc-dialog-wrap{position:absolute;inset:0;z-index:8;background:#10251b88;padding:85px 15px 20px;display:flex;align-items:flex-start}
+    #octopus-diagnostic-preview .oc-dialog{background:var(--oc-surface);border-radius:23px;padding:23px;box-shadow:0 18px 60px #0003;width:100%;display:flex;flex-direction:column;gap:14px}
+    #octopus-diagnostic-preview .oc-dialog h3{font-size:20px}
+    #octopus-diagnostic-preview .oc-dialog p{font-size:12px;line-height:1.9;margin:0;color:var(--oc-muted)}
+    #octopus-diagnostic-preview .oc-message{font-size:12px;line-height:1.9;padding:12px;background:var(--oc-amber-bg);color:var(--oc-amber);border-radius:13px}
+    #octopus-diagnostic-preview .oc-danger{color:light-dark(#9c3333,#edacac)}
+    #octopus-diagnostic-preview [hidden]{display:none!important}
+    @media(max-width:370px){#octopus-diagnostic-preview .oc-main{padding:16px;gap:16px}#octopus-diagnostic-preview .oc-header{padding-inline:16px}#octopus-diagnostic-preview .oc-hero{padding:18px}#octopus-diagnostic-preview .oc-hero h2{font-size:25px}#octopus-diagnostic-preview .oc-pill{font-size:10px}#octopus-diagnostic-preview .oc-row{gap:9px}}
+  </style>
+  <div class="oc-stage">
+    <div class="oc-caption">معاينة الصفحات • غير متصلة بالجوال</div>
+    <section class="oc-phone" aria-label="صفحات الأخطبوط التشخيصية">
+      <header class="oc-header">
+        <svg class="oc-logo" viewBox="0 0 64 64" aria-label="شعار الأخطبوط" role="img"><circle cx="32" cy="32" r="30" fill="var(--oc-green)"/><path d="M19 30C19 14 45 14 45 30V36C45 41 52 38 52 43C52 49 42 49 40 42C40 51 33 52 32 43C31 52 24 51 24 42C22 49 12 49 12 43C12 38 19 41 19 36Z" fill="#fff"/><circle cx="25" cy="31" r="2" fill="var(--oc-green)"/><circle cx="39" cy="31" r="2" fill="var(--oc-green)"/></svg>
+        <div class="oc-brand"><strong>الأخطبوط</strong><span>طلبك واحد. خياراتك أوضح.</span></div>
+        <button type="button" class="oc-icon-button" data-page="settings" aria-label="الإعدادات"><svg class="oc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 3h4l1 3 3 1 3 3v4l-3 1-1 3-3 3h-4l-1-3-3-1-3-3v-4l3-1 1-3Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      </header>
+      <main class="oc-main" aria-live="polite"></main>
+      <nav class="oc-nav" aria-label="التنقل بين صفحات الأخطبوط"></nav>
+      <div class="oc-dialog-wrap" hidden></div>
+    </section>
+  </div>
+  <script>
+  (()=>{
+    const root=document.getElementById('octopus-diagnostic-preview');
+    const saved=window.openai?.widgetState?.modelContent;
+    const state={page:['home','providers','read','history','settings'].includes(saved?.page)?saved.page:'home',selected:saved?.selected==='hunger'?'hunger':'keeta',keeta:true,hunger:true};
+    const paths={home:'M3 11 12 3l9 8v10h-6v-7H9v7H3Z',apps:'M3 3h7v7H3ZM14 3h7v7h-7ZM3 14h7v7H3ZM14 14h7v7h-7Z',read:'M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4M7 9h10M7 13h10M7 17h6',history:'M3 11a9 9 0 1 1 2 7M3 4v7h7M12 7v5l3 2',shield:'M12 3 3 7v5c0 5 9 9 9 9s9-4 9-9V7ZM8 12l3 3 5-6',food:'M5 3v7m3-7v7M5 7h3M6.5 10v11M17 3c-4 4-4 9 0 9V3Zm0 9v9',info:'M12 16v-5M12 7v1M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0',receipt:'M6 3l3 2 3-2 3 2 3-2v18l-3-2-3 2-3-2-3 2ZM9 9h6M9 13h6',lock:'M5 10h14v11H5ZM8 10V7a4 4 0 0 1 8 0v3'};
+    const icon=name=>`<svg class="oc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name]||paths.info}"/></svg>`;
+    const name=id=>id==='keeta'?'كيتا':'هنقرستيشن';
+    const note=(text,type='info')=>`<div class="oc-note">${icon(type)}<span>${text}</span></div>`;
+    const mark=id=>`<div class="oc-mark ${id==='hunger'?'hunger':''}" aria-hidden="true">${id==='keeta'?'ك':'هـ'}</div>`;
+    const info=(a,b)=>`<div class="oc-info-row"><span>${a}</span><span>${b}</span></div>`;
+    const step=(n,a,b)=>`<div class="oc-step"><span class="oc-step-number">${n}</span><div><strong>${a}</strong><p>${b}</p></div></div>`;
+    const intro=(a,b)=>`<div class="oc-intro"><h2>${a}</h2><p>${b}</p></div>`;
+    const button=(text,action,extra='')=>`<button type="button" class="oc-button ${extra}" data-action="${action}">${text}</button>`;
+    function render(){
+      root.querySelector('.oc-dialog-wrap').hidden=true;
+      let content='';
+      if(state.page==='home') content=`<div class="oc-row oc-between"><span class="oc-pill">نسخة تشخيصية • قراءة فقط</span><span class="oc-muted" style="font-size:10px">محلي على جهازك</span></div><div class="oc-hero">${icon('food')}<h2>وجباتك هنا.<br>والمقارنة تبدأ من هنا.</h2><p>نجهّز أساس المقارنة بين كيتا وهنقرستيشن، بدءًا من قراءة السعر الحقيقي.</p>${button('جرّب قراءة السلة','read')}</div><div><div class="oc-row oc-between"><h3>تطبيقات التوصيل</h3><button type="button" class="oc-link" data-page="providers">إدارة التطبيقات</button></div><div class="oc-card">${['keeta','hunger'].map((id,i)=>`${i?'<hr class="oc-divider">':''}<div class="oc-row oc-provider">${mark(id)}<div class="oc-grow"><strong>${name(id)}</strong><small>بانتظار فحص التطبيق على جوالك</small></div><span class="oc-dot"></span></div>`).join('')}</div></div><div class="oc-card"><h3>خطوتك التالية</h3>${step('١','فعّل القراءة بإذنك','راجع الإفصاح ثم فعّل الخدمة من إعدادات Android.')}${button('إعداد خدمة القراءة','disclosure','oc-outline')}</div>${note('إضافة الوجبات والمقارنة التلقائية تأتي بعد إثبات القراءة. لا توجد أسعار وهمية.','shield')}`;
+      if(state.page==='providers') content=intro('تطبيقات التوصيل','اختر التطبيقات التي تسمح للأخطبوط بقراءتها خلال الاختبار.')+['keeta','hunger'].map(id=>`<div class="oc-card"><div class="oc-row oc-provider">${mark(id)}<div class="oc-grow"><strong>${name(id)}</strong><small>يُفحص التثبيت والإصدار على جوالك</small></div><input type="checkbox" class="oc-check" data-provider="${id}" ${state[id]?'checked':''} aria-label="السماح بقراءة ${name(id)}"></div><hr class="oc-divider">${info('الحالة','بانتظار الجهاز')}${info('القدرة الحالية','قراءة تشخيصية فقط')}${info('التحقق على جهازك','لم يتم بعد')}${info('بناء السلة تلقائيًا','غير منفذ في هذه النسخة')}</div>`).join('')+note('يُستخدم الحساب النشط في كل تطبيق. لا حاجة لتوحيد الحسابات أو إدخال كلمة مرور هنا.','lock');
+      if(state.page==='read') content=intro('اختبار القراءة','نتحقق مما يظهر للتطبيق فعليًا. سلتك تبقى كما هي.')+`<div class="oc-row">${['keeta','hunger'].map(id=>`<button type="button" class="oc-select" data-select="${id}" aria-pressed="${state.selected===id}">${name(id)}</button>`).join('')}</div><div class="oc-card"><h3>قبل أن تبدأ</h3>${[['تثبيت '+name(state.selected)+' على الجهاز',false],['السماح بقراءة '+name(state.selected),state[state.selected]],['الموافقة على الإفصاح',false],['خدمة القراءة متصلة',false]].map(([text,yes])=>`<div class="oc-preflight"><span class="oc-circle ${yes?'yes':''}"></span>${text}</div>`).join('')}${button('إكمال الإعداد','disclosure','oc-outline')}</div><div class="oc-card"><h3>كيف تختبر؟</h3>${step('١','جهّز سلة حقيقية','اختر وجباتك وعنوانك داخل '+name(state.selected)+' يدويًا، وافتح مراجعة الطلب دون تنفيذه.')}${step('٢','عد إلى الأخطبوط وابدأ','نفتح التطبيق وننتظر ظهور الإجمالي. انتقل للمراجعة يدويًا إذا لزم.')}${step('٣','راجع نتيجة القراءة','تُحفظ قراءة مرشحة بعد استقرارها؛ ليست مقارنة مؤكدة بعد.')}<button type="button" class="oc-button" disabled>ابدأ القراءة وافتح ${name(state.selected)}</button><span class="oc-muted" style="font-size:11px">يتفعّل الزر في APK بعد إعداد الخدمة وتثبيت التطبيق.</span></div>${note('هذه معاينة صفحات فقط؛ لم يُفحص جوالك ولم تُقرأ أسعار أو سلال.')}`;
+      if(state.page==='history') content=intro('سجل الاختبارات','نتائج محلية واضحة، بما فيها الاختبارات المتوقفة والفاشلة.')+`<div class="oc-card"><div class="oc-empty">${icon('receipt')}<h3>لا توجد قراءات بعد</h3><div class="oc-muted">بعد أول اختبار على جوالك، ستظهر المنصة ووقت القراءة وحالتها هنا. لن نملأ السجل بنتائج تجريبية.</div></div></div><button type="button" class="oc-button oc-outline" disabled>تصدير سجل مختصر</button>`;
+      if(state.page==='settings') content=intro('الإعدادات والخصوصية','التحكم لك. بيانات الاختبار تبقى على الجهاز.')+`<div class="oc-card"><h3>الجهاز والخدمة</h3>${info('جهاز الاختبار المستهدف','Honor Magic V5')}${info('إصدار Android الفعلي','يُكتشف عند التشغيل')}${info('الخدمة','بانتظار التفعيل على الجهاز')}${button('إعداد خدمة القراءة','disclosure','oc-outline')}</div><div class="oc-card"><h3>بياناتك المحلية</h3><div class="oc-muted">نحفظ حالات الاختبار والمبالغ المرشحة وإصدارات التطبيقات فقط. لا صور شاشة ولا بيانات دخول ولا خادم خارجي.</div>${button('تصدير السجل بعد مراجعته','export','oc-outline')}<button type="button" class="oc-link oc-danger" data-action="delete">حذف جميع بيانات الأخطبوط</button></div>${note('النسخة 0.1.0-diagnostic • قراءة فقط. إضافة الوجبات والمقارنة الآلية لم تُنفذا بعد.','shield')}`;
+      root.querySelector('.oc-main').innerHTML=content;
+      root.querySelector('.oc-nav').innerHTML=[['home','الرئيسية'],['providers','التطبيقات'],['read','القراءة'],['history','السجل']].map(([id,label])=>`<button type="button" data-page="${id}" ${state.page===id?'aria-current="page"':''}><span>${icon(id==='providers'?'apps':id)}</span>${label}</button>`).join('');
+    }
+    function persist(){window.openai?.setWidgetState?.({modelContent:{page:state.page,selected:state.selected},privateContent:null}).catch(()=>{});}
+    function dialog(title,body,confirm='حسنًا'){
+      const wrap=root.querySelector('.oc-dialog-wrap');
+      wrap.innerHTML=`<section class="oc-dialog" role="dialog" aria-modal="true" aria-label="${title}"><h3>${title}</h3>${body}<button type="button" class="oc-button" data-action="close">${confirm}</button><button type="button" class="oc-link" data-action="close">إغلاق</button></section>`;
+      wrap.hidden=false;
+    }
+    root.addEventListener('click',event=>{
+      const button=event.target.closest('button');if(!button||!root.contains(button)||button.disabled)return;
+      if(button.dataset.page){state.page=button.dataset.page;render();persist();return;}
+      if(button.dataset.select){state.selected=button.dataset.select;render();persist();return;}
+      const action=button.dataset.action;
+      if(action==='read'){state.page='read';render();persist();}
+      if(action==='close')root.querySelector('.oc-dialog-wrap').hidden=true;
+      if(action==='disclosure')dialog('السماح بقراءة الشاشة',`<p>تستخدم النسخة التشخيصية خدمة الإتاحة لقراءة مؤشرات السعر الظاهرة في كيتا وهنقرستيشن أثناء اختبار تبدأه أنت فقط.</p><p>لا تنقر الخدمة ولا تضيف وجبات ولا تعدّل السلال ولا تنشئ طلبًا أو تنفذ دفعًا.</p><p>البيانات محلية، ولا تُحفظ كلمات المرور أو رموز التحقق أو بيانات البطاقات أو صور الشاشة.</p><div class="oc-message">هذه معاينة للإفصاح. تفعيل الخدمة يتم داخل نسخة Android على جوالك.</div>`,'العودة للمعاينة');
+      if(action==='export')dialog('تصدير سجل مختصر','<p>لا توجد اختبارات في هذه المعاينة. في APK تختار مكان الحفظ بنفسك بعد مراجعة محتوى التصدير.</p>');
+      if(action==='delete')dialog('حذف بيانات الأخطبوط','<p>لا توجد بيانات هاتف مخزنة في هذه المعاينة. في APK يتطلب حذف البيانات تأكيدك، ولا يمس سلال تطبيقات التوصيل.</p>');
+    });
+    root.addEventListener('change',event=>{if(event.target.dataset.provider){state[event.target.dataset.provider]=event.target.checked;render();persist();}});
+    window.addEventListener('openai:set_globals',event=>{const next=event.detail?.globals?.widgetState?.modelContent;if(next&&['home','providers','read','history','settings'].includes(next.page)){state.page=next.page;state.selected=next.selected==='hunger'?'hunger':'keeta';render();}});
+    render();
+  })();
+  </script>
+</div>

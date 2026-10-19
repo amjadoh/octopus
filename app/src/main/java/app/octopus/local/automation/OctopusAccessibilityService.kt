@@ -163,6 +163,10 @@ class OctopusAccessibilityService : AccessibilityService() {
             sawTarget = true
             val snapshot = reader.read(root)
             lastVisibleNodes = snapshot.visibleNodeCount
+            snapshot.accessRestriction?.let { restriction ->
+                stopRead("PROVIDER_${restriction.name}", restriction.userMessage)
+                return
+            }
             if (snapshot.sensitiveScreen) { stopRead("SENSITIVE_SCREEN", "شاشة دخول أو بيانات حساسة؛ أكمل يدويًا ثم ابدأ اختبارًا جديدًا."); return }
             inspection?.let { request ->
                 if (!captureRequested) return
