@@ -41,6 +41,7 @@ object LiveCatalogBridge {
     fun attach(value: CatalogNavigator?) { navigator = WeakReference(value) }
     fun compareDraft(): Boolean = navigator.get()?.compareDraft() ?: false
     fun prepareComparedHungerStation(): Boolean = navigator.get()?.prepareComparedHungerStation() ?: false
+    fun prepareComparedKeeta(handoff: Boolean = false): Boolean = navigator.get()?.prepareComparedKeeta(handoff) ?: false
     fun browseRestaurants(): Boolean = navigator.get()?.browseRestaurants() ?: false
     fun search(query: String): Boolean = navigator.get()?.search(query) ?: false
     fun openMenu(restaurant: app.octopus.local.providers.LiveRestaurant): Boolean = navigator.get()?.openMenu(restaurant) ?: false

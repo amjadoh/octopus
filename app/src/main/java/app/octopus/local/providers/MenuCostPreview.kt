@@ -60,7 +60,7 @@ object KeetaMenuPreview {
     private const val TITLE = "نصف دجاج مضغوط"
     fun functionalLabel(raw: String): String {
         val text = raw.trim()
-        return if (text in setOf("ريدان", TITLE, "طلب خاص", "إضافة إلى السلة", "توصيل", "استلام شخصي",
+        return if (text in setOf("ريدان", "feed shopcard", TITLE, "طلب خاص", "إضافة إلى السلة", "توصيل", "استلام شخصي",
                 "الاصناف الرئيسية", "الأصناف الرئيسية", "الأصناف المضافة", "تفريغ السلة", "إتمام الدفع", "قسائمي", "شروط الاستخدام", "عرض خاص", "حسنًا", "حسنا", "1", "١") || text.matches(Regex("[0-9٠-٩]{1,2}")) || PreviewEvidence.offer(text) ||
             (text.length < 40 && text.contains('﷼') && MoneyParser.parse(text) != null) ||
             (text.length < 900 && Regex("وفر حتى|وف[َّ]*رت|تحتفظ Keeta|تنتهي|قسيمة|القسيمة|طلبات التوصيل فقط|اختر|إلزامي|الزامي|مطلوب|اختياري|اشتراك|مشترك|عضوية|قسيمة|كوبون|أول طلب|الجدد").containsMatchIn(text))) text else ""
@@ -69,6 +69,16 @@ object KeetaMenuPreview {
         frame.nodes.none { it.label == "طلب خاص" } && frame.nodes.count { it.label == "ريدان" } == 1 &&
         frame.nodes.any { it.label in setOf("الاصناف الرئيسية", "الأصناف الرئيسية") } &&
         frame.nodes.count { it.scrollable && it.className == "androidx.recyclerview.widget.RecyclerView" } == 1
+
+    /** Read-only candidate opening. The resulting menu must independently say Ridan before any cart action. */
+    fun searchCandidate(frame: CatalogFrame): CatalogNode? {
+        if (!frame.complete || frame.nodes.singleOrNull { it.id.endsWith(":id/tv_keyword") }?.label != "ريدان" ||
+            !frame.hasId("flash_list_view") || !frame.hasId("titlebar")) return null
+        val card = frame.nodes.firstOrNull { it.id.endsWith(":id/dl_item_root") } ?: return null
+        return frame.descendants(card.index).singleOrNull {
+            it.label == "feed shopcard" && it.clickable && it.enabled && it.className == "android.widget.Button"
+        }
+    }
 
     fun basketDrawer(frame: CatalogFrame): Boolean = frame.complete &&
         frame.nodes.any { it.label == "ريدان" } && frame.nodes.count { it.label == "الأصناف المضافة" } == 1 &&
@@ -82,6 +92,21 @@ object KeetaMenuPreview {
             result += current
         }
         return result
+    }
+    fun closeProduct(frame: CatalogFrame): CatalogNode? {
+        if (!product(frame)) return null
+        val notes = frame.nodes.singleOrNull { it.label == "طلب خاص" } ?: return null
+        val modal = ancestors(frame, notes).firstOrNull { parent ->
+            val children = frame.nodes.filter { it.parent == parent.index }
+            children.size == 3 && children[0].className == "android.widget.FrameLayout" &&
+                frame.descendants(children[0].index).any { it.className == "android.widget.ScrollView" } &&
+                frame.descendants(children[2].index).any { it.label == "إضافة إلى السلة" }
+        } ?: return null
+        val close = frame.nodes.filter { it.parent == modal.index }[1]
+        val body = frame.descendants(close.index)
+        if (body.size > 8 || body.any { it.label.isNotEmpty() || it.omittedText } ||
+            body.count { it.className == "android.widget.ImageView" } != 1) return null
+        return body.singleOrNull { it.clickable && it.enabled && it.className == "android.view.ViewGroup" }
     }
     fun product(frame: CatalogFrame): Boolean {
         if (!frame.complete || frame.nodes.none { it.label == "ريدان" } ||

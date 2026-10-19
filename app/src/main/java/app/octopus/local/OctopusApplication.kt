@@ -78,7 +78,8 @@ class AppGraph(private val app: Application) {
     }
     private suspend fun commitDraft(change: DraftChange): DraftChange {
         if (change is DraftChange.Changed) {
-            if (change.cart != draft.value) catalog.value = catalog.value.copy(preparedBasket = null, previews = emptyList())
+            if (change.cart != draft.value) catalog.value = catalog.value.copy(preparedBasket = null, previews = emptyList(),
+                message = "تغير طلبك؛ أعد المقارنة للتحقق من الأسعار والعروض والسلة.", error = null)
             withContext(Dispatchers.IO) { if (change.cart == null) orders.delete(activeOrderId) else orders.save(change.cart, activeOrderId) }
             draft.value = change.cart
         }
