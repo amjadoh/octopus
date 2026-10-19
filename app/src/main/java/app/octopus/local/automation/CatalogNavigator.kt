@@ -121,9 +121,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 }
                 if (KeetaPromotionEvidence.couponSheet(frame)) {
                     if (owned == null && KeetaPromotionEvidence.termsTarget(frame) != null) {
+                        val termsSeenAt = System.currentTimeMillis()
                         openKeetaCoupon(frame, true)
                         frame = await { KeetaPromotionEvidence.terms(it) }
-                        owned = KeetaPromotionEvidence.ownedRule(frame, System.currentTimeMillis(), true)
+                        owned = KeetaPromotionEvidence.ownedRule(frame, termsSeenAt, true)
                         closeKeetaReadSheet(frame)
                         frame = await { KeetaPromotionEvidence.couponSheet(it) }
                     }
@@ -144,9 +145,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                         openKeetaCoupon(frame, false)
                         frame = await { KeetaPromotionEvidence.couponSheet(it) }
                         if (KeetaPromotionEvidence.termsTarget(frame) != null) {
+                            val termsSeenAt = System.currentTimeMillis()
                             openKeetaCoupon(frame, true)
                             frame = await { KeetaPromotionEvidence.terms(it) }
-                            owned = KeetaPromotionEvidence.ownedRule(frame, System.currentTimeMillis(), true)
+                            owned = KeetaPromotionEvidence.ownedRule(frame, termsSeenAt, true)
                             closeKeetaReadSheet(frame)
                             frame = await { KeetaPromotionEvidence.couponSheet(it) }
                         }

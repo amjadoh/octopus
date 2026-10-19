@@ -7,6 +7,13 @@ import org.junit.Test
 import java.time.Instant
 
 class KeetaPromotionEvidenceTest {
+    @Test fun expiredOrIncompleteCountdownCannotAuthorizeOwnedCoupon() {
+        fun sheet(seconds:String)=CatalogFrame(listOf(n(0,label="قسائمي"),n(1,label="خصم 10%"),n(2,label="وفر حتى 8 ﷼"),
+            n(3,click=true),n(4,3,"تنتهي صلاحيتها في"),n(5,3,"00"),n(6,3,"00"),n(7,3,seconds)),true)
+        assertNotNull(KeetaPromotionEvidence.termsTarget(sheet("01")))
+        assertNull(KeetaPromotionEvidence.termsTarget(sheet("00")))
+        assertNull(KeetaPromotionEvidence.termsTarget(sheet("")))
+    }
     private val now=Instant.parse("2026-10-19T19:00:00Z").toEpochMilli()
     private fun n(i:Int,parent:Int=-1,label:String="",click:Boolean=false)=CatalogNode(i,parent,"",label,"android.view.ViewGroup",click,false,false)
     private val terms=CatalogFrame(listOf(n(0,label="ريدان"),n(1,label="قسائمي"),n(2,label="خصم 10%"),
