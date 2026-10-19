@@ -61,7 +61,12 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit)
             OutlinedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("طلبي في الأخطبوط • ${cart.restaurant}", fontWeight = FontWeight.Bold)
-                    Text("محفوظ محليًا. لم تُجهّز سلال المنصتين بعد، ولا يوجد إجمالي نهائي مقروء.", style = MaterialTheme.typography.bodySmall)
+                    Text(if (state.preparedBasket?.restaurant == cart.restaurant)
+                        "تم التحقق من صنف وكمية سلة هنقرستيشن في هذه الجلسة؛ لا يوجد إجمالي توصيل نهائي مقروء."
+                        else "محفوظ محليًا. لا يوجد إجمالي نهائي مقروء.", style = MaterialTheme.typography.bodySmall)
+                    if (state.preparedBasket?.restaurant == cart.restaurant) OutlinedButton(onClick = {
+                        if (!LiveCatalogBridge.openPreparedRidanBasket()) localError = "تغير الطلب أو انقطع اتصال الخدمة؛ أعد التحقق من السلة."
+                    }, enabled = !state.busy) { Text("افتح السلة المتحققة في هنقرستيشن") }
                     cart.items.forEach { line ->
                         Text(listOfNotNull(line.name, line.size).joinToString(" • "), fontWeight = FontWeight.Bold)
                         if (line.options.isNotEmpty()) Text(line.options.joinToString("، ") { "${it.group}: ${it.value}" })

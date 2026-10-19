@@ -9,7 +9,7 @@ enum class ElementOperation { CLICK, SET_TEXT, SCROLL_FORWARD }
 fun CatalogAction.operation(): ElementOperation = when (this) {
     CatalogAction.SET_QUERY -> ElementOperation.SET_TEXT
     CatalogAction.SCROLL_MENU, CatalogAction.SCROLL_PRODUCT -> ElementOperation.SCROLL_FORWARD
-    CatalogAction.OPEN_SEARCH, CatalogAction.SELECT_SUGGESTION, CatalogAction.OPEN_RESTAURANT,
+    CatalogAction.OPEN_BASKET, CatalogAction.ADD_RIDAN, CatalogAction.OPEN_SEARCH, CatalogAction.SELECT_SUGGESTION, CatalogAction.OPEN_RESTAURANT,
     CatalogAction.VIEW_MENU_NOTICE, CatalogAction.OPEN_PRODUCT, CatalogAction.RETURN_TO_CATALOG -> ElementOperation.CLICK
 }
 

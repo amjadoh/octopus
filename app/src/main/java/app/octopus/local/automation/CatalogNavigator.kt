@@ -15,6 +15,7 @@ import app.octopus.local.AppGraph
 import app.octopus.local.MainActivity
 import app.octopus.local.BuildConfig
 import app.octopus.local.domain.ProviderId
+import app.octopus.local.domain.*
 import app.octopus.local.diagnostics.*
 import app.octopus.local.providers.*
 import app.octopus.local.safety.CatalogAction
@@ -24,7 +25,7 @@ import kotlinx.coroutines.*
 import org.json.JSONObject
 import org.json.JSONArray
 
-/** Production reader/executor for the evidenced HS catalog screens only. Never edits a cart. */
+/** Evidenced HS catalog navigation plus an explicit, bounded Ridan basket preparation request. */
 class CatalogNavigator(private val service: AccessibilityService, private val graph: AppGraph) {
     private val provider = ProviderId.HUNGERSTATION
     private var job: Job? = null
@@ -167,7 +168,79 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         return viewOnlyNotice
     }
 
-    private fun begin(block: suspend () -> Unit): Boolean {
+    /** Explicit UI request only. Never replaces a nonmatching basket or opens checkout. */
+    fun prepareRidan(details: ConfiguredProduct, selection: ProductSelection): Boolean {
+        if (!RidanCartProgram.supports(details, selection, System.currentTimeMillis())) return false
+        val priorMenu = graph.catalog.value.menu
+        return begin {
+            phase = "تجهيز سلة ريدان"
+            val restaurant = LiveRestaurant(details.restaurant, null, details.restaurant)
+            check(!navigateToRestaurant(restaurant)) { "ريدان غير متاح للطلب حاليًا." }
+            var menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
+            val hasBasket = menu.nodes.any { it.id == "FlutterMenu_goToCartButton" }
+            if (!hasBasket) {
+                val program = RidanCartProgram.create(details, selection, menu, System.currentTimeMillis())
+                    ?: error("تعذر إثبات سلة ريدان الفارغة؛ لم تتغير السلال.")
+                val item = menu.nodes.singleOrNull { HungerStationCatalog.menuItem(it)?.let { item ->
+                    item.name == details.product.title && item.selector == details.product.id } == true }
+                    ?: error("الوجبة المختارة غير ظاهرة؛ لم تُستبدل بصنف آخر.")
+                act(menu, CatalogAction.OPEN_PRODUCT, { it == item })
+                val product = await { HungerStationCatalog.screen(it) == CatalogScreen.PRODUCT }
+                val reader = HungerStationProductReader(restaurant, LiveMenuItem(details.product.title, details.product.listedPriceHalala, details.product.id))
+                reader.observe(product)
+                val current = reader.finish(System.currentTimeMillis())
+                check(RidanCartProgram.supports(current, selection, System.currentTimeMillis())) { "تغيرت خيارات الوجبة؛ توقفت الإضافة." }
+                val add = product.nodes.singleOrNull { it.id == "flutterAddButton" }
+                    ?: error("لم يظهر زر إضافة واحد موثوق.")
+                // Consume before dispatch. Timeout/failure must never repeat the add.
+                act(product, CatalogAction.ADD_RIDAN, { it == add }, ridanProgram = program)
+                menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU && it.hasId("FlutterMenu_goToCartButton") }
+            }
+            val count = menu.nodes.singleOrNull { it.id == "FlutterMenu_goToCartQuantity" }?.label?.trim()
+            check(count in setOf("1", "١")) { "سلة ريدان تحتوي أصنافًا أو كميات مختلفة؛ لم أعدلها أو أكرر الإضافة." }
+            val target = HungerStationBasketControls.openTarget(menu) ?: error("تعذر تحديد زر السلة الموثوق.")
+            val command = BasketOpenCommand(menu, target, System.currentTimeMillis())
+            act(menu, CatalogAction.OPEN_BASKET, { it == target }, basketCommand = command)
+            val cart = await { HungerStationCatalog.screen(it) == CatalogScreen.CART }
+            // The fixed footer's count is one, and exactly one fully parsed row must agree.
+            val evidence = BasketEvidenceReader.hungerStation(cart, endOfCartObserved = false)
+            check(evidence.restaurant == RidanCartProgram.RESTAURANT && evidence.lines.size == 1 &&
+                cart.nodes.count { it.id == "FlutterCart_cartItem" } == 1 && evidence.lines.single().let {
+                    it.name == details.product.title && it.quantity == 1 && it.choices.isEmpty() }) {
+                "لم تتطابق السلة المقروءة مع الوجبة؛ لا توجد إضافة أخرى أو تأكيد طلب."
+            }
+            graph.catalog.value = graph.catalog.value.copy(menu = priorMenu,
+                message = "تم التحقق من سلة ريدان: ${details.product.title}، الكمية 1. لم يُؤكد طلب أو دفع. سعر الأصناف ليس إجمالي التوصيل.",
+                preparedBasket = evidence)
+        }
+    }
+
+    fun openPreparedRidanBasket(): Boolean {
+        val saved = graph.catalog.value.preparedBasket ?: return false
+        val draft = graph.draft.value ?: return false
+        if (saved.restaurant != RidanCartProgram.RESTAURANT || draft.restaurant != saved.restaurant ||
+            draft.items.size != 1 || draft.items.single().let { it.name != RidanCartProgram.TITLE || it.quantity != 1 || it.options.isNotEmpty() }) return false
+        return begin(returnOnSuccess = false) {
+            phase = "التحقق من سلة ريدان قبل التسليم"
+            check(!navigateToRestaurant(LiveRestaurant(RidanCartProgram.RESTAURANT, null, RidanCartProgram.RESTAURANT))) {
+                "المطعم غير متاح حاليًا؛ لم يتغير طلبك."
+            }
+            val menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
+            check(menu.nodes.singleOrNull { it.id == "FlutterMenu_goToCartQuantity" }?.label?.trim() in setOf("1", "١")) {
+                "تغيرت السلة؛ لم تُعدّل ولم تُضف وجبة."
+            }
+            val target = HungerStationBasketControls.openTarget(menu) ?: error("تعذر فتح السلة بأمان.")
+            act(menu, CatalogAction.OPEN_BASKET, { it == target }, basketCommand = BasketOpenCommand(menu, target, System.currentTimeMillis()))
+            val cart = await { HungerStationCatalog.screen(it) == CatalogScreen.CART }
+            val actual = BasketEvidenceReader.hungerStation(cart, false)
+            check(actual.restaurant == saved.restaurant && actual.lines == saved.lines &&
+                cart.nodes.count { it.id == "FlutterCart_cartItem" } == 1) { "تغيرت السلة منذ التجهيز؛ راجعها قبل المتابعة." }
+            graph.catalog.value = graph.catalog.value.copy(preparedBasket = actual,
+                message = "فُتحت سلة ريدان وتحققت الوجبة والكمية مجددًا. التحكم الآن لك؛ لم يُؤكد طلب أو دفع.")
+        }
+    }
+
+    private fun begin(returnOnSuccess: Boolean = true, block: suspend () -> Unit): Boolean {
         if (active || graph.session.value.active || !graph.settings.value.catalogConsent || provider !in graph.settings.value.allowed) return false
         graph.refreshInstallations()
         val installed = graph.installations.value.singleOrNull { it.provider == provider && it.installed } ?: return false
@@ -183,7 +256,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         graph.catalog.value = graph.catalog.value.copy(busy = true, error = null, menu = null, product = null, restaurants = emptyList(), message = "جارٍ قراءة البيانات من هنقرستيشن…")
         job = graph.scope.launch {
             var outcome = "COMPLETED"
-            try { withTimeout(150_000) { block() }; returnToApp() }
+            try { withTimeout(150_000) { block() }; if (returnOnSuccess) returnToApp() }
             catch (cancelled: CancellationException) {
                 outcome = if (cancelled is TimeoutCancellationException) "TIMEOUT" else "STOPPED"
                 if (cancelled is TimeoutCancellationException) {
@@ -306,7 +379,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         act(await { HungerStationCatalog.screen(it) == screen }, action, selector)
 
     private suspend fun act(previous: CatalogFrame, action: CatalogAction, selector: (CatalogNode) -> Boolean,
-        text: String? = null, allowNoOp: Boolean = false): Boolean {
+        text: String? = null, allowNoOp: Boolean = false, ridanProgram: RidanCartProgram? = null,
+        basketCommand: BasketOpenCommand? = null): Boolean {
         currentCoroutineContext().ensureActive(); checkSession()
         val root = service.rootInActiveWindow ?: error("اختفت الشاشة قبل الإجراء.")
         try {
@@ -317,8 +391,17 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             require(selected.size == 1) { "تعذر تحديد عنصر فريد؛ توقفت العملية." }
             val node = selected.single()
             check(node.enabled) { "العنصر غير متاح؛ توقفت العملية." }
-            check(SafetyGuard().allowsCatalogAction(action, HungerStationCatalog.screen(fresh), root.packageName?.toString(),
-                graph.settings.value.catalogConsent, currentCoroutineContext().isActive, fresh.complete, node.label)) { "الإجراء خارج نطاق البحث المسموح." }
+            val allowed = when (action) {
+                CatalogAction.ADD_RIDAN -> graph.settings.value.catalogConsent &&
+                    ridanProgram?.consumeAdd(fresh, node, System.currentTimeMillis()) == true
+                CatalogAction.OPEN_BASKET -> basketCommand != null && SafetyGuard().allowsBasketOpen(basketCommand,
+                    fresh, root.packageName?.toString(), HungerStationCatalog.TESTED_VERSION,
+                    graph.settings.value.catalogConsent, currentCoroutineContext().isActive) &&
+                    basketCommand.consume(fresh, HungerStationCatalog.TESTED_VERSION, true, System.currentTimeMillis())
+                else -> SafetyGuard().allowsCatalogAction(action, HungerStationCatalog.screen(fresh), root.packageName?.toString(),
+                    graph.settings.value.catalogConsent, currentCoroutineContext().isActive, fresh.complete, node.label)
+            }
+            check(allowed) { "الإجراء خارج نطاق العملية المسموحة." }
             fun locate(current: AccessibilityNodeInfo, cursor: IntArray): AccessibilityNodeInfo? {
                 if (!current.isVisibleToUser) return null
                 val private = privateId(current.viewIdResourceName.orEmpty())
@@ -333,6 +416,34 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             }
             var target = locate(root, intArrayOf(0)) ?: error("العنصر لم يعد متاحًا.")
             try {
+                // Samsung/HS 8.0.303 exposes a semantics EditText containing the
+                // actual editor. Keep editable branches out of capture; inspect
+                // only this observed search anchor, without reading child text.
+                if (action == CatalogAction.SET_QUERY &&
+                    target.viewIdResourceName == "UniversalSearch_search_bar_text_field") {
+                    val editors = mutableListOf<AccessibilityNodeInfo>()
+                    try {
+                        require(target.childCount <= 20) { "تغيرت بنية حقل البحث؛ توقفت العملية." }
+                        for (i in 0 until target.childCount) {
+                            val child = target.getChild(i) ?: continue
+                            if (child.isVisibleToUser && child.isEditable &&
+                                child.className?.toString() == "android.widget.EditText") {
+                                editors += child
+                            } else child.recycle()
+                        }
+                        require(editors.size <= 1) { "ظهر أكثر من حقل بحث داخلي؛ توقفت العملية." }
+                        editors.singleOrNull()?.let { editor ->
+                            check(editor.isEnabled && !editor.isPassword &&
+                                editor.viewIdResourceName.isNullOrEmpty() &&
+                                (android.os.Build.VERSION.SDK_INT < 34 || !editor.isAccessibilityDataSensitive)) {
+                                "حقل البحث الداخلي غير متاح؛ توقفت العملية."
+                            }
+                            val actualEditor = AccessibilityNodeInfo.obtain(editor)
+                            target.recycle()
+                            target = actualEditor
+                        }
+                    } finally { editors.forEach { it.recycle() } }
+                }
                 val androidAction = when (action.operation()) {
                     ElementOperation.SET_TEXT -> AccessibilityNodeInfo.ACTION_SET_TEXT
                     ElementOperation.SCROLL_FORWARD -> AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
