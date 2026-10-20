@@ -8,11 +8,20 @@ import app.octopus.local.providers.HungerStationCatalog
 import app.octopus.local.automation.ProductCommand
 import app.octopus.local.automation.HungerStationProductProgram
 import app.octopus.local.automation.BasketOpenCommand
+import app.octopus.local.providers.KeetaSearchAction
+import app.octopus.local.providers.KeetaMenuReader
+import app.octopus.local.providers.CatalogNode
 
 enum class ProposedAction { CLICK, SCROLL, INPUT_TEXT, GESTURE, GLOBAL_ACTION, CREATE_ORDER, PAYMENT }
 enum class CatalogAction { OPEN_BROWSE, CLOSE_BROWSE_PROMO, SCROLL_RESTAURANTS, OPEN_SEARCH, SET_QUERY, SELECT_SUGGESTION, OPEN_RESTAURANT, VIEW_MENU_NOTICE, SCROLL_MENU, OPEN_PRODUCT, SCROLL_PRODUCT, RETURN_TO_CATALOG, ADD_RIDAN, OPEN_BASKET, ADJUST_RIDAN_QUANTITY }
 
 class SafetyGuard {
+    fun allowsKeetaSearch(action: KeetaSearchAction, reader: KeetaMenuReader, frame: CatalogFrame,
+        node: CatalogNode, foregroundPackage: String?, version: String?, consent: Boolean, active: Boolean): Boolean =
+        consent && active && frame.complete && foregroundPackage == ProviderId.KEETA.packageName &&
+            version == reader.VERSION && frame.nodes.none { ProviderAccessRestrictions.detect(it.label) != null } &&
+            reader.searchTarget(frame, action) == node && node.enabled &&
+            if (action == KeetaSearchAction.ENTER_QUERY) node.editable else node.clickable && !node.editable
     // Unscoped actions stay denied; typed operations must pass their own bounded admission checks.
     fun allowsAction(@Suppress("UNUSED_PARAMETER") action: ProposedAction): Boolean = false
     /** Opening the evidenced menu basket control never authorizes checkout or basket mutation. */

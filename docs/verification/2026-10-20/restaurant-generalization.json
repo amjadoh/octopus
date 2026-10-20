@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-20",
+  "basedOnCommit": "d3cb0573eb4e715ef46b6915df523e7c87f9979f",
+  "scope": "Unreleased name-independent restaurant and meal selection using previously observed layout grammar",
+  "buildPassed": true,
+  "unitTests": {
+    "tests": 192,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lintErrors": 0,
+  "androidApi": 36,
+  "ownAndroidTests": {
+    "total": 7,
+    "passed": 7,
+    "scope": "Own UI and synthetic reader checks; includes Arabic restaurant text input"
+  },
+  "initialRuns": {
+    "unitTests": 191,
+    "unitFailures": 1,
+    "reason": "New negative test expected a partial result although partial screen is rejected with an exception; expectation corrected",
+    "androidTests": 7,
+    "androidFailures": 1,
+    "androidReason": "Historical name-field text selector did not match redesigned placeholder; driver updated to text-input semantics"
+  },
+  "newLiveProviderTests": false,
+  "physicalDeviceConnected": false,
+  "externalBasketsModified": false,
+  "fullFinalPriceComparisonVerified": false,
+  "newReleasePublished": false,
+  "supportedLocalSelection": "Any restaurant/name using complete observed plain or required-single-choice product grammar",
+  "automaticPreparationScope": "One plain item without size/options/note, exact restaurant/item names, known provider versions",
+  "unsupported": "Complex option rules, automatic multi-item carts, unknown navigation/layout, unresolved address/branch equivalence, final review totals",
+  "sourceIdentityChecks": "Synthetic cross-restaurant regression cases, not fresh Madwar app evidence"
+}

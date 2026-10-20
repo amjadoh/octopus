@@ -23,7 +23,7 @@ class RidanPreparationTest {
     @Test fun fixedMealHasNoRequiredOptionsAndCanBeSelected() {
         assertTrue(details().optionsComplete)
         assertTrue(RidanCartProgram.supports(details(),selection,now))
-        assertFalse(details(restaurant="مطعم آخر").optionsComplete)
+        assertTrue(details(restaurant="مطعم آخر").optionsComplete)
     }
     @Test fun missingBottomOrNewRequiredGroupStaysUnsupported() {
         assertFalse(details(product.copy(nodes=product.nodes.filterNot { it.index==2 })).optionsComplete)
@@ -61,5 +61,29 @@ class RidanPreparationTest {
         assertTrue(result.lines.single().choices.isEmpty())
         assertFalse(result.complete)
         assertFalse(result.recognizedOrderReview)
+    }
+    @Test fun otherRestaurantAndMealUseOwnOneShotPermit() {
+        val name="مدور"; val title="فطيرة شكشوكة بالجبن"
+        val frame=product.copy(nodes=product.nodes.map { if(it.label==RidanCartProgram.TITLE)it.copy(label=title) else it })
+        val reader=HungerStationProductReader(LiveRestaurant(name,null,name),LiveMenuItem(title,3000,"item"))
+        reader.observe(frame);val details=reader.finish(now)
+        val menu=emptyMenu.copy(nodes=emptyMenu.nodes.map { if(it.label=="ريدان")it.copy(label=name) else it })
+        assertTrue(details.optionsComplete)
+        val program=checkNotNull(RidanCartProgram.create(details,selection,menu,now))
+        assertFalse(program.consumeAdd(product,add,now))
+        assertTrue(program.consumeAdd(frame,add,now))
+        assertFalse(program.consumeAdd(frame,add,now))
+        assertNull(RidanCartProgram.create(details,selection,emptyMenu,now))
+    }
+    @Test fun unknownChoiceRowsAndIncompleteFramesCannotBecomePlainMeals() {
+        val unknown=product.copy(nodes=listOf(product.nodes[0],product.nodes[1],node(9,text="كبير",click=true))+product.nodes.drop(2))
+        assertFalse(details(unknown).optionsComplete)
+        assertThrows(IllegalArgumentException::class.java) { details(product.copy(complete=false)) }
+    }
+    @Test fun changedAddPriceCannotConsumeAValidPermit() {
+        val program=checkNotNull(RidanCartProgram.create(details(),selection,emptyMenu,now))
+        val changed=add.copy(label="إضافة\n§\n31")
+        assertFalse(program.consumeAdd(product.copy(nodes=product.nodes.map { if(it.id==changed.id)changed else it }),changed,now))
+        assertTrue(program.consumeAdd(product,add,now))
     }
 }

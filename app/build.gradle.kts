@@ -11,8 +11,8 @@ android {
         applicationId = "app.octopus.local"
         minSdk = 28
         targetSdk = 35
-        versionCode = 8
-        versionName = "1.3.0"
+        versionCode = 9
+        versionName = "1.3.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     val previewStoreFile = System.getenv("OCTOPUS_SIGNING_STORE_FILE")

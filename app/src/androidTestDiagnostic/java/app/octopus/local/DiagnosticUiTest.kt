@@ -13,7 +13,8 @@ class DiagnosticUiTest {
     }
     @Test fun startsWithRestaurantSearchAndNoInventedPrices() {
         compose.onNodeWithText("المطاعم").assertIsDisplayed()
-        compose.onNodeWithText("اسم المطعم").assertIsDisplayed()
+        compose.onNode(hasSetTextAction()).performScrollTo().assertIsDisplayed().performTextInput("مدور")
+        compose.onNode(hasSetTextAction()).assertTextContains("مدور")
         compose.onNodeWithText("0.00 ر.س").assertDoesNotExist()
     }
     @Test fun providerControlsAndNoFakePrice() {
@@ -25,7 +26,9 @@ class DiagnosticUiTest {
         compose.onNodeWithText("0.00 ر.س").assertDoesNotExist()
     }
     @Test fun inspectionPageIsExplicitAndDoesNotStartCaptureOnOpen() {
-        compose.onNodeWithText("القراءة", useUnmergedTree = true).performClick()
+        compose.onNodeWithContentDescription("الإعدادات").performClick()
+        scrollToText("أدوات فحص القراءة")
+        compose.onNodeWithText("أدوات فحص القراءة").performClick()
         scrollToText("فحص شاشة مراجعة الطلب")
         compose.onNodeWithText("فحص شاشة مراجعة الطلب").performClick()
         compose.onNodeWithText("فحص عناصر الشاشة").assertIsDisplayed()
