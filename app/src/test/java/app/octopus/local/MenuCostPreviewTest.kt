@@ -37,7 +37,7 @@ class MenuCostPreviewTest {
         assertEquals("",KeetaMenuPreview.functionalLabel("ملاحظة شخصية للطلب"))
         assertEquals("توصيل مجاني",KeetaMenuPreview.functionalLabel("توصيل مجاني"))
         assertFalse(PreviewEvidence.supports(cart.copy(items=cart.items.map { it.copy(note="خاص") })))
-        assertFalse(PreviewEvidence.supports(cart.copy(restaurant="مطعم آخر")))
+        assertTrue(PreviewEvidence.supports(cart.copy(restaurant="مطعم آخر")))
     }
     @Test fun menuOpeningCanOnlyTargetMatchingProductCardAndNeverItsAddButton() {
         val menu=CatalogFrame(listOf(n(0,label="ريدان"),n(1,label="توصيل"),n(2,label="الاصناف الرئيسية"),
@@ -55,5 +55,18 @@ class MenuCostPreviewTest {
         assertEquals(1500L,PreviewEvidence.hungerComponent(menu,"الحد الأدنى للطلب"))
         assertEquals(listOf("تطبيق تلقائي § 10 رسوم التوصيل الحد الأدنى: 35"),PreviewEvidence.offers(menu))
         assertNull(PreviewEvidence.hungerComponent(menu.copy(complete=false),"رسوم التوصيل"))
+    }
+    @Test fun selectedIdentityCannotBorrowAnotherMealPriceOrRetainUnrelatedText() {
+        val selected=KeetaMenuReader("مدور","فطيرة شكشوكة بالجبن")
+        val renamed=product.copy(nodes=product.nodes.map {
+            when(it.label) { "ريدان" -> it.copy(label=selected.restaurant); "نصف دجاج مضغوط" -> it.copy(label=selected.title); else -> it }
+        })
+        assertEquals(3000L,selected.price(renamed))
+        assertNull(selected.price(product))
+        assertNull(KeetaMenuPreview.price(renamed))
+        assertEquals(selected.restaurant,selected.functionalLabel(selected.restaurant))
+        assertEquals(selected.title,selected.functionalLabel(selected.title))
+        assertEquals("",selected.functionalLabel("شارع العنوان الخاص"))
+        assertEquals("",selected.functionalLabel("اسم وجبة مختلفة"))
     }
 }

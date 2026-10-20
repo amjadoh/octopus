@@ -33,4 +33,20 @@ class RidanQuantityCommandTest {
         assertNull(RidanQuantityCommand.target(f.copy(nodes=f.nodes+f.nodes[1].copy(index=9)),2,true))
         assertNull(RidanQuantityCommand.target(f.copy(nodes=f.nodes.map { if(it.id=="FlutterCart_title") it.copy(label="السلة\nمطعم آخر") else it }),2,true))
     }
+    @Test fun selectedRestaurantQuantityCannotChangeTheOldRestaurantBasket() {
+        val other=frame(2).copy(nodes=frame(2).nodes.map {
+            when(it.id) {
+                "FlutterCart_title" -> it.copy(label="السلة\nمدور")
+                "FlutterCart_cartItem" -> it.copy(label="فطيرة\n16\n§")
+                else -> it
+            }
+        })
+        val target=checkNotNull(RidanQuantityCommand.target(other,2,true,"مدور","فطيرة"))
+        val command=RidanQuantityCommand(2,true,1000,"مدور","فطيرة")
+        assertFalse(command.consume(frame(2),target,1000))
+        assertTrue(command.consume(other,target,1000))
+        assertFalse(command.consume(other,target,1000))
+        assertNull(RidanQuantityCommand.target(other,2,true,"مطعم آخر","فطيرة"))
+        assertNull(RidanQuantityCommand.target(other,2,true,"مدور","صنف آخر"))
+    }
 }

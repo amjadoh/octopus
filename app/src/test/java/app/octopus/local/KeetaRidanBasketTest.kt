@@ -69,4 +69,33 @@ class KeetaRidanBasketTest {
         assertNull(KeetaRidanBasket.addTarget(product(scrollable=true),3000))
         assertNull(KeetaRidanBasket.addTarget(product().copy(complete=false),3000))
     }
+    @Test fun selectedRestaurantAndMealAreBoundToTheirOwnEvidence() {
+        val selected = KeetaMenuReader("مدور", "فطيرة شكشوكة بالجبن")
+        val reader = KeetaBasketReader(selected)
+        val changed = fixture().copy(nodes = fixture().nodes.map {
+            when (it.label) {
+                "ريدان" -> it.copy(label = selected.restaurant)
+                "نصف دجاج مضغوط" -> it.copy(label = selected.title)
+                else -> it
+            }
+        })
+        assertEquals(selected.restaurant, reader.evidence(changed)!!.restaurant)
+        assertEquals(selected.title, reader.evidence(changed)!!.lines.single().name)
+        assertNotNull(reader.quantityTarget(changed, true))
+        assertNull(KeetaRidanBasket.evidence(changed))
+        assertNull(reader.evidence(fixture()))
+        assertNull(KeetaBasketReader(KeetaMenuReader("مطعم آخر", selected.title)).evidence(changed))
+    }
+    @Test fun selectedMealAddStillChecksPriceNotesOptionsAndQuantity() {
+        val selected = KeetaMenuReader("مطعم آخر", "فطيرة")
+        val reader = KeetaBasketReader(selected)
+        fun renamed(frame: CatalogFrame) = frame.copy(nodes=frame.nodes.map {
+            when(it.label) { "ريدان" -> it.copy(label=selected.restaurant); "نصف دجاج مضغوط" -> it.copy(label=selected.title); else -> it }
+        })
+        assertNotNull(reader.addTarget(renamed(product()),3000))
+        assertNull(reader.addTarget(renamed(product()),3100))
+        assertNull(reader.addTarget(renamed(product(entered=true)),3000))
+        assertNull(reader.addTarget(renamed(product(2)),3000))
+        assertNull(reader.addTarget(renamed(product(scrollable=true)),3000))
+    }
 }

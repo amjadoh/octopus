@@ -4,8 +4,8 @@ import app.octopus.local.domain.ProviderId
 import app.octopus.local.pricing.MoneyParser
 
 /** Honor 3.12.501 cart drawer only. No checkout or clear-cart selector. */
-object KeetaRidanBasket {
-    private const val TITLE = "نصف دجاج مضغوط"
+open class KeetaBasketReader(private val catalog: KeetaMenuReader) {
+    private val title get() = catalog.title
     private fun parent(f: CatalogFrame, n: CatalogNode) = f.nodes.singleOrNull { it.index == n.parent }
     private fun ancestors(f: CatalogFrame, n: CatalogNode): List<CatalogNode> {
         val result = mutableListOf<CatalogNode>(); var current = n
@@ -15,14 +15,14 @@ object KeetaRidanBasket {
         ?.let(MoneyParser::parse)?.div(100)?.toInt()?.takeIf { it in 1..99 }
 
     fun emptyMenu(f: CatalogFrame): Boolean {
-        if (!KeetaMenuPreview.menu(f) || f.nodes.any { it.label in setOf("إتمام الدفع", "الأصناف المضافة", "تفريغ السلة") }) return false
-        val meal = KeetaMenuPreview.productTarget(f) ?: return false
+        if (!catalog.menu(f) || f.nodes.any { it.label in setOf("إتمام الدفع", "الأصناف المضافة", "تفريغ السلة") }) return false
+        val meal = catalog.productTarget(f) ?: return false
         return f.descendants(meal.index).none { quantity(it) != null }
     }
 
     fun addTarget(f: CatalogFrame, expectedUnit: Long): CatalogNode? {
-        if (!KeetaMenuPreview.product(f) || KeetaMenuPreview.price(f) != expectedUnit ||
-            KeetaMenuPreview.unitPrice(f) != expectedUnit) return null
+        if (!catalog.product(f) || catalog.price(f) != expectedUnit ||
+            catalog.unitPrice(f) != expectedUnit) return null
         val notes = f.nodes.singleOrNull { it.label == "طلب خاص" } ?: return null
         val body = ancestors(f, notes).firstOrNull { it.className == "android.widget.ScrollView" } ?: return null
         val content = f.descendants(body.index)
@@ -40,7 +40,7 @@ object KeetaRidanBasket {
     }
 
     fun closeDrawer(f: CatalogFrame): CatalogNode? {
-        if (!KeetaMenuPreview.basketDrawer(f)) return null
+        if (!catalog.basketDrawer(f)) return null
         val heading = f.nodes.singleOrNull { it.label == "الأصناف المضافة" } ?: return null
         val modal = ancestors(f, heading).getOrNull(2) ?: return null
         val close = f.nodes.firstOrNull { it.parent == modal.index } ?: return null
@@ -51,7 +51,7 @@ object KeetaRidanBasket {
     }
 
     fun footerBag(f: CatalogFrame): CatalogNode? {
-        if (!KeetaMenuPreview.menu(f)) return null
+        if (!catalog.menu(f)) return null
         val checkout = f.nodes.singleOrNull { it.label == "إتمام الدفع" } ?: return null
         val footer = ancestors(f, checkout).firstOrNull { p ->
             f.nodes.count { it.parent == p.index && it.clickable } == 3 &&
@@ -69,7 +69,7 @@ object KeetaRidanBasket {
     }
 
     private fun row(f: CatalogFrame): CatalogNode? {
-        if (!KeetaMenuPreview.basketDrawer(f)) return null
+        if (!catalog.basketDrawer(f)) return null
         val heading = f.nodes.singleOrNull { it.label == "الأصناف المضافة" } ?: return null
         val pane = parent(f, parent(f, heading) ?: return null) ?: return null
         val scroll = f.descendants(pane.index).singleOrNull { it.className == "android.widget.ScrollView" } ?: return null
@@ -81,8 +81,8 @@ object KeetaRidanBasket {
         val card = cards.singleOrNull()?.takeIf { it.clickable && it.enabled } ?: return null
         val body = f.descendants(card.index)
         if (body.size > 65 || body.any { it.omittedText || it.editable } ||
-            body.filter { it.label.isNotEmpty() }.any { it.label != TITLE && quantity(it) == null && !it.label.contains('﷼') } ||
-            body.count { it.label == TITLE } != 1 || body.count { quantity(it) != null && it.clickable } != 1 ||
+            body.filter { it.label.isNotEmpty() }.any { it.label != title && quantity(it) == null && !it.label.contains('﷼') } ||
+            body.count { it.label == title } != 1 || body.count { quantity(it) != null && it.clickable } != 1 ||
             body.count { it.label.contains('﷼') && MoneyParser.parse(it.label) != null } != 1) return null
         return card
     }
@@ -92,7 +92,7 @@ object KeetaRidanBasket {
         val body = f.descendants(row.index)
         val count = body.singleOrNull { quantity(it) != null && it.clickable }?.let(::quantity) ?: return null
         val amount = body.singleOrNull { it.label.contains('﷼') }?.label?.let(MoneyParser::parse) ?: return null
-        return BasketEvidence(ProviderId.KEETA, "ريدان", listOf(BasketLineEvidence(TITLE, emptyList(), count, amount)), amount, true)
+        return BasketEvidence(ProviderId.KEETA, catalog.restaurant, listOf(BasketLineEvidence(title, emptyList(), count, amount)), amount, true)
     }
 
     fun quantityTarget(f: CatalogFrame, increase: Boolean): CatalogNode? {
@@ -109,3 +109,6 @@ object KeetaRidanBasket {
         return controls[0].takeIf { it.clickable && it.enabled && it.label.isEmpty() && it.className == "android.view.ViewGroup" }
     }
 }
+
+/** Legacy recorded fixture context only. */
+object KeetaRidanBasket : KeetaBasketReader(KeetaMenuPreview)

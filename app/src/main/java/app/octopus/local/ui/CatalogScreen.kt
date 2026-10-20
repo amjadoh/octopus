@@ -261,7 +261,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                 }
             }
         }
-        item { Text("المقارنة الحية وتجهيز السلة حاليًا لنصف دجاج مضغوط من ريدان. المبلغ المحسوب يشمل الأصناف والتوصيل؛ الإجمالي مع رسوم الخدمة يحتاج مراجعة داخل المنصة.", fontSize = 11.sp, color = OctopusPalette.Muted) }
+        item { Text("اختر المطعم والوجبة. تُقبل الخيارات عند اكتمال قراءتها؛ المقارنة وتجهيز السلة التلقائي حاليًا لصنف واحد دون خيارات أو ملاحظة. الأصناف والتوصيل لا يمثلان الإجمالي النهائي مع الرسوم.", fontSize = 11.sp, color = OctopusPalette.Muted) }
     }
     state.product?.takeIf { showProduct && !state.busy }?.let { details ->
         ProductConfigurationSheet(graph, details, onDismiss = { showProduct = false }, onSaved = {

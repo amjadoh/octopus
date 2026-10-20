@@ -14,8 +14,10 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
     private var enabled = false
 
     fun observe(frame: CatalogFrame) {
+        if (!frame.complete) unsupported = true
         require(HungerStationCatalog.screen(frame) == CatalogScreen.PRODUCT) { "تعذر التعرف على خيارات الوجبة." }
         val nodes = frame.nodes.filter { it.label.isNotBlank() }
+        if (frame.nodes.any { it.enteredText } || nodes.count { !it.clickable && clean(it.label) == item.name } > 1) unsupported = true
         titleSeen = titleSeen || nodes.any { !it.clickable && clean(it.label) == item.name }
         enabled = frame.nodes.singleOrNull { it.id == "flutterAddButton" }?.enabled == true
         bodies += nodes.joinToString("|") { it.id + clean(it.label) }
@@ -36,6 +38,7 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
                 val value = text.lineSequence().first().trim()
                 // Recorded choice rows are merged names with order-count/price suffixes; recommendation rows are excluded above.
                 val choiceShape = text.contains('\n') && (text.contains("طلب") || text.contains('§'))
+                if (!choiceShape && value.any(Char::isLetter)) unsupported = true
                 if (choiceShape && value.any(Char::isLetter)) {
                     val current = group
                     if (current == null) {
@@ -55,13 +58,8 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
 
     fun finish(atMillis: Long): ConfiguredProduct {
         require(titleSeen) { "اسم الوجبة داخل خياراتها لم يطابق اختيارك." }
-        // The saved evidence covers this bounded configuration. Other PDP shapes remain readable but not selectable yet.
-        val evidencedConfiguration = IdentityText.clean(restaurant.name) == "المضياف العربي" &&
-            IdentityText.clean(item.name) == "دجاج مظبي" && groups.keys.toList() == listOf("اختر الحجم", "إضافات")
-        val ridanFixedMeal = IdentityText.clean(restaurant.name) == "ريدان" &&
-            IdentityText.clean(item.name) == "نصف دجاج مضغوط" && groups.isEmpty()
-        val complete = (evidencedConfiguration || ridanFixedMeal) && bottomSeen && !unsupported &&
-            groups.values.all { it.choices.isNotEmpty() }
+        // Completeness follows the observed option grammar and end marker, never a restaurant name.
+        val complete = bottomSeen && !unsupported && groups.values.all { it.choices.isNotEmpty() }
         val options = groups.values.filter { it.choices.isNotEmpty() }.map { MenuChoiceGroup(it.title, it.title, 1, 1, it.choices.values.toList()) }
         val fingerprint = MessageDigest.getInstance("SHA-256").digest(bodies.joinToString().toByteArray()).joinToString("") { "%02x".format(it) }
         return ConfiguredProduct(restaurant.name, MenuProduct(item.selector, item.name, null, enabled, item.listedPrice, options),

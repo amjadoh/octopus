@@ -20,8 +20,8 @@ object KeetaPromotionEvidence {
         frame.nodes.any{clean(it.label).startsWith("خصم ")} && frame.nodes.any{clean(it.label).contains("وفر حتى")}
     fun terms(frame:CatalogFrame)=frame.complete && frame.nodes.any{it.label=="شروط الاستخدام"} &&
         frame.nodes.any{clean(it.label).contains("طلبات التوصيل فقط")}
-    fun couponTarget(frame:CatalogFrame):CatalogNode?{
-        if(!KeetaMenuPreview.menu(frame)||couponSheet(frame)||terms(frame))return null
+    fun couponTarget(frame:CatalogFrame, catalog:KeetaMenuReader=KeetaMenuPreview):CatalogNode?{
+        if(!catalog.menu(frame)||couponSheet(frame)||terms(frame))return null
         val title=frame.nodes.singleOrNull{Regex("^خصم $number% من $number (?:﷼|ريال)$").matches(clean(it.label))}?:return null
         return ancestors(frame,title).firstOrNull{it.clickable&&it.enabled&&frame.descendants(it.index).size<=80}
     }
@@ -71,9 +71,9 @@ object KeetaPromotionEvidence {
             OfferTarget.ITEMS,minimum,percentBasisPoints=percent,maximumDiscount=cap,
             termsComplete=!unknown&&!missingText&&expires!=null,requiresCoupon=true,couponVerified=true,validUntilMillis=expires)
     }
-    fun simultaneous(frame:CatalogFrame,rule:OfferRule):Boolean{
-        if(!KeetaMenuPreview.menu(frame)||rule.percentBasisPoints==null||rule.maximumDiscount==null)return false
-        val card=KeetaMenuPreview.productTarget(frame)?:return false
+    fun simultaneous(frame:CatalogFrame,rule:OfferRule,catalog:KeetaMenuReader=KeetaMenuPreview):Boolean{
+        if(!catalog.menu(frame)||rule.percentBasisPoints==null||rule.maximumDiscount==null)return false
+        val card=catalog.productTarget(frame)?:return false
         val row=frame.descendants(card.index)
         val quantities=row.filter{clean(it.label).matches(Regex("[0-9٠-٩]{1,2}"))}.mapNotNull{MoneyParser.parse(it.label)?.div(100)}.distinct()
         val quantity=quantities.singleOrNull()?.takeIf{it in 1..99}?:return false

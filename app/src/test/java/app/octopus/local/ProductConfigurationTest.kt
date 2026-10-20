@@ -58,10 +58,10 @@ class ProductConfigurationTest {
         wrong.observe(frame("وجبة أخرى" to false,"غالبًا ما يتم طلبه مع" to false))
         assertThrows(IllegalArgumentException::class.java) { wrong.finish(1000) }
     }
-    @Test fun anUnobservedProductCannotBorrowTheRecordedConfigurationSupport() {
+    @Test fun anotherProductUsesTheSameCompleteObservedOptionGrammar() {
         val other = HungerStationProductReader(restaurant,item.copy(name="وجبة أخرى"))
         other.observe(frame("وجبة أخرى" to false,"غالبًا ما يتم طلبه مع" to false))
-        assertFalse(other.finish(1000).optionsComplete)
+        assertTrue(other.finish(1000).optionsComplete)
     }
     @Test fun oversizedInterfaceMetadataIsRejectedWithoutCrashingTheSelectionUi() {
         val details=read()
