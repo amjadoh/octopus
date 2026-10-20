@@ -24,6 +24,8 @@ import app.octopus.local.providers.*
 import app.octopus.local.safety.CatalogAction
 import app.octopus.local.safety.SafetyGuard
 import app.octopus.local.safety.ProviderAccessRestrictions
+import app.octopus.local.safety.CatalogFinancialBoundary
+import app.octopus.local.safety.CatalogTargetGuard
 import kotlinx.coroutines.*
 import kotlin.coroutines.resume
 import org.json.JSONObject
@@ -879,37 +881,47 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private fun capture(root: AccessibilityNodeInfo): CatalogFrame {
         val nodes = mutableListOf<CatalogNode>()
         var complete = true
+        var disabledFinancialControls = false
         sensitiveSkipped = 0
         fun walk(node: AccessibilityNodeInfo, parent: Int, depth: Int) {
             if (nodes.size >= 1800 || depth > 40) { complete = false; return }
             if (!node.isVisibleToUser) return
             val id = node.viewIdResourceName.orEmpty()
             // Personal home-header data is unnecessary for the catalog and never enters its state.
-            if (id.contains(Regex("checkout|payment|credit.?card|bank.?card|cvv", RegexOption.IGNORE_CASE)))
-                error("ظهرت شاشة مالية خارج مسار قراءة المطاعم؛ توقفت العملية.")
+            val financial = CatalogFinancialBoundary.classify(id, node.className?.toString().orEmpty(),
+                node.isClickable, node.isEditable, provider)
+            if (financial == CatalogFinancialBoundary.Decision.STOP)
+                error("توقفت القراءة عند عنصر مالي غير مدعوم. إذا كنت في مراجعة الدفع، ارجع إلى قائمة المطعم قبل بدء القراءة؛ لم يُؤكد طلب أو دفع.")
+            val disabledFinancial = financial == CatalogFinancialBoundary.Decision.DISABLED_CONTROL
+            disabledFinancialControls = disabledFinancialControls || disabledFinancial
             val private = privateId(id)
             if (node.isPassword) error("ظهرت شاشة كلمة مرور؛ توقفت القراءة.")
             if (android.os.Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive && !private) { sensitiveSkipped++; complete = false; return }
             val index = nodes.size
-            val raw = if (private || node.isEditable) "" else (node.text ?: node.contentDescription)?.toString().orEmpty()
+            val raw = if (private || node.isEditable || disabledFinancial) "" else (node.text ?: node.contentDescription)?.toString().orEmpty()
             if (raw.length > 1000) { complete = false; return }
             val label = if (provider == ProviderId.KEETA) keetaMenu.functionalLabel(raw) else raw
             ProviderAccessRestrictions.detect(raw)?.let { error(it.userMessage) }
-            if (!private && !node.isEditable) {
+            if (!private && !node.isEditable && !disabledFinancial) {
                 ProviderAccessRestrictions.detect(node.contentDescription)?.let { error(it.userMessage) }
             }
             if (Regex("تسجيل الدخول|كلمة المرور|رمز التحقق|captcha|card number|verification code|password", RegexOption.IGNORE_CASE).containsMatchIn(raw))
                 error("ظهرت شاشة دخول أو حماية؛ أكملها بنفسك داخل المنصة.")
-            nodes += CatalogNode(index, parent, id, label, node.className?.toString().orEmpty(), node.isClickable, node.isEditable, node.isScrollable, node.isEnabled,
+            nodes += CatalogNode(index, parent, id, label, node.className?.toString().orEmpty(), node.isClickable && !disabledFinancial, node.isEditable, node.isScrollable, node.isEnabled && !disabledFinancial,
                 omittedText = provider == ProviderId.KEETA && !private && !node.isEditable && raw.any(Char::isLetter) && label.isBlank(),
                 enteredText = node.isEditable && !node.isShowingHintText && !node.text.isNullOrBlank() &&
                     node.text?.toString() != node.hintText?.toString())
+            // catalogChildren applies the same privacy boundary during capture and target lookup.
             val children = catalogChildren(node)
             try { for (child in children) walk(child, index, depth + 1) }
             finally { children.forEach { @Suppress("DEPRECATION") it.recycle() } }
         }
         walk(root, -1, 0)
-        return CatalogFrame(nodes, complete)
+        val frame = CatalogFrame(nodes, complete)
+        check(!disabledFinancialControls || CatalogFinancialBoundary.permitsDisabledControls(frame, provider)) {
+            "زر مالي في شاشة غير معروفة؛ توقفت القراءة. ارجع إلى قائمة المطعم قبل بدء العملية."
+        }
+        return frame
     }
 
     private suspend fun scrollProduct(frame: CatalogFrame): Boolean {
@@ -949,19 +961,45 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     graph.settings.value.catalogConsent, currentCoroutineContext().isActive, fresh.complete, node.label)
             }
             check(allowed) { "الإجراء خارج نطاق العملية المسموحة." }
+            val operation = action.operation()
+            val actionTarget = if (operation == ElementOperation.CLICK)
+                CatalogTargetGuard.clickTarget(fresh, node, action, provider)
+                    ?: error("لم أتعرف على عنصر نقر آمن؛ توقفت العملية.")
+            else node
             fun locate(current: AccessibilityNodeInfo, cursor: IntArray): AccessibilityNodeInfo? {
                 if (!current.isVisibleToUser) return null
                 val private = privateId(current.viewIdResourceName.orEmpty())
                 if (current.isPassword || (android.os.Build.VERSION.SDK_INT >= 34 && current.isAccessibilityDataSensitive && !private)) return null
                 val here = cursor[0]++
-                if (here == node.index) return AccessibilityNodeInfo.obtain(current)
+                if (here == actionTarget.index) return AccessibilityNodeInfo.obtain(current)
                 val children = catalogChildren(current)
                 try { for (child in children) locate(child, cursor)?.let { return it } }
                 finally { children.forEach { @Suppress("DEPRECATION") it.recycle() } }
                 return null
             }
             var target = locate(root, intArrayOf(0)) ?: error("العنصر لم يعد متاحًا.")
+            fun verifyTarget(actual: AccessibilityNodeInfo, expected: CatalogNode) {
+                check(actual.refresh() && actual.isVisibleToUser && actual.isEnabled && !actual.isPassword &&
+                    actual.windowId == root.windowId && actual.packageName?.toString() == provider.packageName &&
+                    (android.os.Build.VERSION.SDK_INT < 34 || !actual.isAccessibilityDataSensitive)) {
+                    "تغير العنصر قبل الإجراء؛ توقفت العملية."
+                }
+                val id = actual.viewIdResourceName.orEmpty()
+                val className = actual.className?.toString().orEmpty()
+                check(CatalogFinancialBoundary.classify(id, className, actual.isClickable, actual.isEditable,
+                    provider) == CatalogFinancialBoundary.Decision.NORMAL) { "العنصر المالي غير مسموح." }
+                val label = if (privateId(id) || actual.isEditable) ""
+                    else (actual.text ?: actual.contentDescription)?.toString().orEmpty()
+                val observed = expected.copy(id = id, label = label, className = className,
+                    clickable = actual.isClickable, editable = actual.isEditable, scrollable = actual.isScrollable,
+                    enabled = actual.isEnabled)
+                check(CatalogTargetGuard.matches(expected, observed, provider)) {
+                    "لم يعد العنصر يطابق الاختيار؛ توقفت العملية."
+                }
+            }
+            var targetIdentity = actionTarget
             try {
+                verifyTarget(target, targetIdentity)
                 // Samsung/HS 8.0.303 exposes a semantics EditText containing the
                 // actual editor. Keep editable branches out of capture; inspect
                 // only this observed search anchor, without reading child text.
@@ -985,22 +1023,31 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                                 "حقل البحث الداخلي غير متاح؛ توقفت العملية."
                             }
                             val actualEditor = AccessibilityNodeInfo.obtain(editor)
+                            targetIdentity = actionTarget.copy(id = "", label = "", className = "android.widget.EditText",
+                                clickable = editor.isClickable, editable = true, scrollable = editor.isScrollable)
                             target.recycle()
                             target = actualEditor
                         }
                     } finally { editors.forEach { it.recycle() } }
                 }
-                val androidAction = when (action.operation()) {
+                val androidAction = when (operation) {
                     ElementOperation.SET_TEXT -> AccessibilityNodeInfo.ACTION_SET_TEXT
                     ElementOperation.SCROLL_FORWARD -> AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
                     ElementOperation.CLICK -> AccessibilityNodeInfo.ACTION_CLICK
                 }
-                if (androidAction == AccessibilityNodeInfo.ACTION_CLICK) {
-                    while (!target.isClickable) {
-                        val parent = target.parent ?: error("العنصر لا يدعم النقر.")
-                        @Suppress("DEPRECATION") target.recycle(); target = parent
+                verifyTarget(target, targetIdentity)
+                check(when (operation) {
+                    ElementOperation.CLICK -> target.isClickable && !target.isEditable
+                    ElementOperation.SET_TEXT -> target.isEditable && text != null
+                    ElementOperation.SCROLL_FORWARD -> target.isScrollable && !target.isEditable
+                }) { "العنصر لا يدعم الإجراء المطلوب." }
+                val active = service.rootInActiveWindow ?: error("اختفت الشاشة قبل الإجراء.")
+                try {
+                    check(active.packageName?.toString() == provider.packageName &&
+                        active.windowId == root.windowId && capture(active) == fresh) {
+                        "تغيرت الشاشة قبل الإجراء؛ توقفت العملية."
                     }
-                }
+                } finally { @Suppress("DEPRECATION") active.recycle() }
                 currentCoroutineContext().ensureActive(); checkSession()
                 val success = if (text != null) target.performAction(androidAction, Bundle().apply {
                     putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
@@ -1021,8 +1068,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     }
     /** The catalog back button shares an address container. Only that known grandchild is exposed. */
     private fun catalogChildren(node: AccessibilityNodeInfo): List<AccessibilityNodeInfo> {
-        if (node.isEditable) return emptyList()
         val id = node.viewIdResourceName.orEmpty()
+        if (!CatalogFinancialBoundary.permitsChildren(id, node.className?.toString().orEmpty(),
+                node.isClickable, node.isEditable, provider)) return emptyList()
         if (privateId(id)) {
             if (provider != ProviderId.HUNGERSTATION || !id.endsWith(":id/change_location_header_v2")) return emptyList()
             val controls = mutableListOf<AccessibilityNodeInfo>()

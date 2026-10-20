@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-20",
+  "status": "local_fix_not_published",
+  "reportedStage": "HungerStation after adding meal to cart",
+  "actualBlockingResourceIdKnown": false,
+  "change": "Financial navigation buttons are blanked, disabled and their descendants skipped, only on complete recognized HungerStation menu/cart frames; all other financial IDs and card fields still stop capture.",
+  "unitTests": {
+    "tests": 198,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lintErrors": 0,
+  "buildSucceeded": true,
+  "realProviderRetestPerformed": false,
+  "fullComparisonComplete": false
+}
