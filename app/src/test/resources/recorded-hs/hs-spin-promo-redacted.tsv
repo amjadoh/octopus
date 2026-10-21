@@ -1,0 +1,27 @@
+index	parent	id	label	class	clickable	editable	scrollable	enabled
+0	-1			android.widget.FrameLayout	false	false	false	true
+1	0			android.widget.LinearLayout	false	false	false	true
+2	1			android.widget.FrameLayout	false	false	false	true
+3	2	com.hungerstation.android.web:id/action_bar_root		android.widget.LinearLayout	false	false	false	true
+4	3	android:id/content		android.widget.FrameLayout	false	false	false	true
+5	4			androidx.compose.ui.platform.ComposeView	false	false	false	true
+6	5			android.view.View	false	false	false	true
+7	6			android.view.View	false	false	false	true
+8	7			android.view.View	false	false	false	true
+9	8			android.widget.TextView	false	false	false	true
+10	8			android.view.View	true	false	false	true
+11	10			android.view.View	false	false	false	true
+12	11			android.view.View	false	false	false	true
+13	12			android.view.View	false	false	false	true
+14	12			android.view.View	false	false	false	true
+15	12			android.view.View	false	false	false	true
+16	12			android.view.View	false	false	false	true
+17	12			android.view.View	false	false	false	true
+18	12			android.view.View	false	false	false	true
+19	11			android.view.View	false	false	false	true
+20	10			android.view.View	false	false	false	true
+21	8			android.view.View	false	false	false	true
+22	8			android.view.View	true	false	false	true
+23	22		لف	android.widget.TextView	false	false	false	true
+24	22			android.widget.Button	false	false	false	true
+25	7			android.view.View	true	false	false	true

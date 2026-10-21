@@ -11,8 +11,8 @@ android {
         applicationId = "app.octopus.local"
         minSdk = 28
         targetSdk = 35
-        versionCode = 10
-        versionName = "1.3.2"
+        versionCode = 11
+        versionName = "1.3.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     val previewStoreFile = System.getenv("OCTOPUS_SIGNING_STORE_FILE")
@@ -25,7 +25,10 @@ android {
         }
     }
     buildTypes {
-        debug { if (!previewStoreFile.isNullOrBlank()) signingConfig = signingConfigs.getByName("stablePreview") }
+        debug {
+            if (!previewStoreFile.isNullOrBlank()) signingConfig = signingConfigs.getByName("stablePreview")
+            if (providers.gradleProperty("octopusLiveBridge").orNull == "true") versionNameSuffix = "-device-tools"
+        }
         release { isMinifyEnabled = false }
     }
     flavorDimensions += "purpose"
@@ -48,6 +51,14 @@ android {
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true; buildConfig = true }
     testOptions { unitTests.isReturnDefaultValues = true }
+    // Explicit local device tooling only. Never part of the app APK or ordinary CI UI tests.
+    if (providers.gradleProperty("octopusLiveProbe").orNull == "true") {
+        sourceSets.getByName("androidTest").java.srcDir(rootProject.file("tools/live-device-probe"))
+    }
+    if (providers.gradleProperty("octopusLiveBridge").orNull == "true") {
+        sourceSets.getByName("debug").java.srcDir(rootProject.file("tools/live-device-bridge"))
+        sourceSets.getByName("debug").manifest.srcFile(rootProject.file("tools/live-device-bridge/AndroidManifest.xml"))
+    }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
 dependencies {

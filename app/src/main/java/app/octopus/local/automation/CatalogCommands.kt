@@ -10,12 +10,14 @@ fun CatalogAction.operation(): ElementOperation = when (this) {
     CatalogAction.SET_QUERY -> ElementOperation.SET_TEXT
     CatalogAction.SCROLL_RESTAURANTS, CatalogAction.SCROLL_MENU, CatalogAction.SCROLL_PRODUCT -> ElementOperation.SCROLL_FORWARD
     CatalogAction.OPEN_BROWSE, CatalogAction.CLOSE_BROWSE_PROMO, CatalogAction.OPEN_BASKET, CatalogAction.ADD_RIDAN, CatalogAction.ADJUST_RIDAN_QUANTITY, CatalogAction.OPEN_SEARCH, CatalogAction.SELECT_SUGGESTION, CatalogAction.OPEN_RESTAURANT,
-    CatalogAction.VIEW_MENU_NOTICE, CatalogAction.OPEN_PRODUCT, CatalogAction.RETURN_TO_CATALOG -> ElementOperation.CLICK
+    CatalogAction.VIEW_MENU_NOTICE, CatalogAction.OPEN_PRODUCT, CatalogAction.RETURN_TO_CATALOG,
+    CatalogAction.CLOSE_SPIN_PROMO -> ElementOperation.CLICK
 }
 
 object CatalogCommands {
     /** Back controls and the search control's child are present in the saved device observations. */
     fun backTarget(frame: CatalogFrame): CatalogNode? {
+        HungerStationSpinPromo.closeTarget(frame)?.let { return it }
         val id = when (HungerStationCatalog.screen(frame)) {
             CatalogScreen.PRODUCT -> "pdpCloseButton"
             CatalogScreen.CART -> "FlutterCart_back_button"

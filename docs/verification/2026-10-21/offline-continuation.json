@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-21",
+  "mode": "local replay and implementation from saved provider observations",
+  "newDeviceRun": false,
+  "userAskedToRepeatPreviousTests": false,
+  "implemented": [
+    "One shared HungerStation product-read session for browsing, comparison and preparation",
+    "Stop at the observed options end marker before further scrolling",
+    "Recognize the repeated recorded scrim and nutrition controls on subsequent option pages",
+    "Use the bounded pre-dispatch search retry when reopening restaurants, not only initial search",
+    "Read Keeta 3.13.203 product price without requiring an unobserved delivery-mode header or legacy coupon flow",
+    "Keep matching visible basket records independently for both providers",
+    "Invalidate only the provider being changed; filter records by the full requested cart fingerprint",
+    "Reopen the selected provider's recorded cart and recheck it rather than reusing the last provider's basket"
+  ],
+  "scope": {
+    "keetaCurrentProductFixture": "recorded-keeta/keeta-3.13.203-feta-product.tsv",
+    "hungerStationOptionsTests": "transcribed observed grammar and bounded read-session regression tests",
+    "hungerStationPreparation": "existing bounded plain-item and unselected paid-optional layout",
+    "keetaCurrentCartMutation": "still blocked; no current cart drawer observation establishes its supported shape",
+    "basketRecordCompleteness": "retained exactly as observed; visible contents never upgrade to complete",
+    "finalTotals": "unknown; saved records do not include provider final-review accessibility trees"
+  },
+  "localValidation": {
+    "unitTests": 235,
+    "failures": 0,
+    "errors": 0,
+    "lintPassed": true,
+    "developmentApkBuilt": true,
+    "deviceRun": false
+  },
+  "realTwoCartPreparationVerified": false,
+  "realTwoProviderFinalComparisonVerified": false,
+  "releasePublished": false
+}

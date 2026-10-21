@@ -39,6 +39,27 @@ class RidanPreparationTest {
         assertTrue(program.consumeAdd(product,add,now))
         assertFalse(program.consumeAdd(product,add,now))
     }
+    private fun optionalProduct(extraPrice: String = "6", total: String = "30"): CatalogFrame {
+        val changedAdd = add.copy(label = "إضافة\n§\n$total")
+        return product.copy(nodes = listOf(product.nodes[0], product.nodes[1],
+            node(10,text="يمكنك اضافة"), node(11,text="اختيار واحد"),
+            node(12,text="بطاطس\n(§\n$extraPrice\n+)",click=true), product.nodes[2], product.nodes[3], changedAdd))
+    }
+    @Test fun observedPaidOptionalChoiceCanBeOmittedOnlyWhenAddTotalStaysAtBasePrice() {
+        val frame = optionalProduct()
+        val program = checkNotNull(RidanCartProgram.create(details(frame),selection,emptyMenu,now))
+        assertTrue(program.consumeAdd(frame,frame.nodes.last(),now))
+        val selected = optionalProduct(total="36")
+        val denied = checkNotNull(RidanCartProgram.create(details(frame),selection,emptyMenu,now))
+        assertFalse(denied.consumeAdd(selected,selected.nodes.last(),now))
+    }
+    @Test fun freeOrUnknownOptionalSurchargeCannotUseThePlainItemPermit() {
+        for (price in listOf("0", "مجاني", "غير معروف")) {
+            val frame = optionalProduct(price)
+            val program = checkNotNull(RidanCartProgram.create(details(frame),selection,emptyMenu,now))
+            assertFalse(program.consumeAdd(frame,frame.nodes.last(),now))
+        }
+    }
     @Test fun existingCartAndUnknownContextAreNotReplaced() {
         assertNull(RidanCartProgram.create(details(),selection,emptyMenu.copy(nodes=emptyMenu.nodes+node(8,"FlutterMenu_goToCartButton")),now))
         assertNull(RidanCartProgram.create(details(),selection,emptyMenu.copy(complete=false),now))

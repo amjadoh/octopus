@@ -33,6 +33,7 @@ import org.json.JSONArray
 
 /** Evidenced HS catalog navigation plus an explicit, bounded Ridan basket preparation request. */
 class CatalogNavigator(private val service: AccessibilityService, private val graph: AppGraph) {
+    private class ScreenChangedBeforeAction : IllegalArgumentException("تغيرت الشاشة؛ أوقفت الإجراء بدل النقر على عنصر قديم.")
     private var provider = ProviderId.HUNGERSTATION
     private var comparedProduct: ConfiguredProduct? = null
     private var requestFingerprint: String? = null
@@ -42,7 +43,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private fun bindKeetaRequest(cart: CanonicalCart) {
         require(PreviewEvidence.supports(cart))
         requestFingerprint = cart.fingerprint
-        keetaContext = KeetaMenuReader(cart.restaurant, cart.items.single().name)
+        val version = graph.installations.value.singleOrNull { it.provider == ProviderId.KEETA }?.version
+        check(version in setOf("3.12.501", "3.13.203")) { "إصدار كيتا غير مدعوم في مسار القراءة الحالي." }
+        keetaContext = KeetaMenuReader(cart.restaurant, cart.items.single().name, version!!)
     }
     private var job: Job? = null
     private var overlay: Button? = null
@@ -54,8 +57,24 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private var sensitiveSkipped = 0
     private val inspectionReader = InspectionReader()
     private var sessionEvidence: SessionEvidenceBuffer? = null
+    private var catalogStop = CatalogStopState()
+    private var operation = CatalogOperation.BROWSE
+    private var priorRecognizedScreen: Pair<ProviderId, CatalogScreen>? = null
     private val traceRequest = InspectionRequest(InspectionStage.MENU, "", "")
     val active: Boolean get() = job?.isActive == true
+
+    private fun forgetPrepared(id: ProviderId) {
+        graph.catalog.value = graph.catalog.value.copy(preparedBasket = null,
+            preparedBaskets = graph.catalog.value.preparedBaskets.invalidate(id))
+    }
+
+    private fun rememberPrepared(desired: CanonicalCart, evidence: BasketEvidence, version: String) {
+        check(graph.draft.value?.fingerprint == desired.fingerprint) { "تغير طلبك؛ لم أحتفظ بسلة لطلب سابق." }
+        val record = PreparedBasketRecord.create(desired, evidence, version, System.currentTimeMillis())
+            ?: error("السلة المقروءة لا تطابق الطلب؛ لا توجد سلة جاهزة للتسليم.")
+        graph.catalog.value = graph.catalog.value.copy(preparedBasket = evidence,
+            preparedBaskets = graph.catalog.value.preparedBaskets.record(record))
+    }
 
     fun stop(message: String = "أوقفت العملية. راجع السلة إن بدأ تجهيزها.") {
         generation++
@@ -71,7 +90,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             graph.catalog.value = graph.catalog.value.copy(error = "المقارنة الحالية تحتاج صنفًا واحدًا دون خيارات أو ملاحظات؛ احتُفظ بطلبك دون حساب سعر ناقص.")
             return false
         }
-        return begin {
+        return begin(operation = CatalogOperation.COMPARE_MENU) {
             bindKeetaRequest(desired)
             comparedProduct = null
             graph.catalog.value = graph.catalog.value.copy(previews = emptyList())
@@ -79,23 +98,23 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             val restaurant = LiveRestaurant(desired.restaurant, null, desired.restaurant)
             check(!navigateToRestaurant(restaurant)) { "المطعم غير متاح للطلب في القراءة الحالية." }
             phase = "قراءة الوجبة في هنقرستيشن"
-            val menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
+            var menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
             val offerLabels = PreviewEvidence.offers(menu)
+            var previousItems: String? = null
+            for (page in 0 until 30) {
+                if (HungerStationCatalog.menuItems(menu).any { it.name == desired.items.single().name }) break
+                val visible = HungerStationCatalog.menuItems(menu).toString()
+                if (visible == previousItems) break
+                previousItems = visible
+                if (!act(menu, CatalogAction.SCROLL_MENU,
+                        { it.scrollable && it.className == "android.widget.ScrollView" }, allowNoOp = true)) break
+                menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
+            }
             val item = HungerStationCatalog.menuItems(menu).singleOrNull { it.name == desired.items.single().name }
                 ?: error("لم تظهر الوجبة المطابقة في هنقرستيشن؛ لم أستبدلها بوجبة أخرى.")
             act(menu, CatalogAction.OPEN_PRODUCT, { HungerStationCatalog.menuItem(it) == item })
-            val reader = HungerStationProductReader(restaurant, item)
-            var priorBody = ""
-            for (step in 0 until 12) {
-                val frame = await { HungerStationCatalog.screen(it) == CatalogScreen.PRODUCT }
-                reader.observe(frame)
-                val body = frame.nodes.joinToString { it.id + it.label }
-                if (body == priorBody) break
-                priorBody = body
-                phase = "قراءة خيارات هنقرستيشن"
-                if (!scrollProduct(frame)) break
-            }
-            val details = reader.finish(System.currentTimeMillis())
+            phase = "قراءة خيارات هنقرستيشن"
+            val details = readHungerProduct(restaurant, item).details
             check(details.optionsComplete && details.product.available && details.product.listedPriceHalala != null) {
                 "لم يكتمل التحقق من الوجبة في هنقرستيشن؛ لا توجد مقارنة مؤكدة."
             }
@@ -106,12 +125,13 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 minimumOrder = PreviewEvidence.hungerComponent(menu, "الحد الأدنى للطلب"),
                 rules = MenuOfferRules.fromFrame(ProviderId.HUNGERSTATION, menu))
             graph.catalog.value = graph.catalog.value.copy(previews = listOf(hunger), message = "قرأت هنقرستيشن؛ جارٍ قراءة كيتا دون تغيير السلال…")
-            val keeta = try {
-                provider = ProviderId.KEETA
-                checkSession()
-                check(graph.installations.value.any { it.provider == provider && it.version == keetaMenu.VERSION }) {
-                    "إصدار كيتا يحتاج تحققًا قبل قراءة المقارنة."
-                }
+            // An unsupported installation is a preflight failure, never a coupon-read fallback.
+            provider = ProviderId.KEETA
+            checkSession()
+            check(graph.installations.value.any { it.provider == provider && it.version == keetaMenu.VERSION }) {
+                "إصدار كيتا يحتاج تحققًا قبل قراءة المقارنة."
+            }
+            val keeta = if (keetaMenu.VERSION == "3.13.203") readCurrentKeetaProduct(desired) else try {
                 targetSeen = false
                 phase = "قراءة سعر كيتا وعروضه"
                 val launch = service.packageManager.getLaunchIntentForPackage(provider.packageName) ?: error("كيتا غير مثبت.")
@@ -187,6 +207,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             } catch (cancelled: CancellationException) {
                 if (cancelled !is TimeoutCancellationException) throw cancelled
                 keetaPriceWithoutCoupon(desired)
+            } catch (stopped: CatalogStoppedException) {
+                throw stopped
             } catch (_: Exception) {
                 keetaPriceWithoutCoupon(desired)
             }
@@ -210,14 +232,16 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         val desired = graph.draft.value ?: return false
         if (!PreviewEvidence.supports(desired)) return false
         if (handoff) {
-            val saved = graph.catalog.value.preparedBasket ?: return false
+            val saved = graph.catalog.value.preparedBaskets.forRequest(desired, ProviderId.KEETA)?.evidence ?: return false
             if (saved.provider != ProviderId.KEETA || saved.restaurant != desired.restaurant || saved.lines.size != 1 ||
                 saved.lines.single().let { it.name != desired.items.single().name || it.quantity != desired.items.single().quantity || it.choices.isNotEmpty() }) return false
         } else if (graph.catalog.value.previews.none {
                 it.provider == ProviderId.KEETA && it.itemSubtotal != null && it.fresh(desired, System.currentTimeMillis()) }) return false
-        return begin(returnOnSuccess = !handoff) {
+        return begin(returnOnSuccess = !handoff,
+            operation = if (handoff) CatalogOperation.OPEN_PREPARED_CART else CatalogOperation.BUILD_CART) {
             bindKeetaRequest(desired)
-            graph.catalog.value = graph.catalog.value.copy(preparedBasket = null)
+            check(keetaMenu.VERSION == "3.12.501") { "تجهيز سلة إصدار كيتا الحالي قيد التحقق؛ لم تتغير السلة." }
+            forgetPrepared(ProviderId.KEETA)
             provider = ProviderId.KEETA; checkSession(); targetSeen = false
             check(graph.installations.value.any { it.provider == provider && it.version == keetaMenu.VERSION })
             phase = "التحقق من سلة المطعم المختار في كيتا"
@@ -270,6 +294,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 evidence = keetaBasket.evidence(frame) ?: error("تعذرت إعادة قراءة السلة بعد تعديل واحد؛ توقفت دون إعادة الإجراء.")
             }
             check(graph.draft.value?.fingerprint == desired.fingerprint)
+            rememberPrepared(desired, evidence, keetaMenu.VERSION)
             graph.catalog.value = graph.catalog.value.copy(preparedBasket = evidence,
                 message = "تحققت سلة كيتا: ${desired.items.single().name}، الكمية $quantity. لم يُفتح الدفع ولم يُؤكد طلب.")
         }
@@ -336,6 +361,25 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         } finally { @Suppress("DEPRECATION") root.recycle() }
     }
 
+    /** Current native menu/product capture has no evidenced delivery-mode header or coupon path. */
+    private suspend fun readCurrentKeetaProduct(desired: CanonicalCart): MenuCostPreview {
+        targetSeen = false
+        phase = "قراءة الوجبة المطابقة في كيتا"
+        val launch = service.packageManager.getLaunchIntentForPackage(provider.packageName) ?: error("كيتا غير مثبت.")
+        service.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        var frame = openKeetaRequest()
+        if (keetaMenu.searchCandidate(frame) != null) {
+            keetaBasketAction { keetaMenu.searchCandidate(it) }
+            frame = await { keetaMenu.menu(it) }
+        }
+        if (keetaMenu.menu(frame)) {
+            openKeetaPreviewProduct(frame)
+            frame = await { keetaMenu.product(it) }
+        }
+        return keetaMenu.itemPreview(frame, desired, System.currentTimeMillis())
+            ?: error("تعذر التحقق من سعر الوجبة المطابقة في كيتا؛ لم تتغير السلة.")
+    }
+
     private suspend fun keetaPriceWithoutCoupon(desired:CanonicalCart):MenuCostPreview {
         try {
             return withTimeout(30_000) {
@@ -359,6 +403,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     "تعذر التحقق من القسيمة؛ لم أحسب خصمًا غير مقروء.",rules=rules)
             }
         } catch(cancelled:CancellationException) { if(cancelled !is TimeoutCancellationException) throw cancelled }
+        catch(stopped:CatalogStoppedException) { throw stopped }
         catch(_:Exception) { }
         return MenuCostPreview(ProviderId.KEETA,desired.fingerprint,null,emptyList(),System.currentTimeMillis(),
             keetaMenu.VERSION,"لم تظهر صفحة المطعم المختار المعروفة في كيتا؛ سعره غير مقروء.")
@@ -554,10 +599,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             phase = "فتح البحث"
             click(CatalogScreen.HOME, CatalogAction.OPEN_SEARCH) { it.id.endsWith(":id/new_search_card_view") }
             phase = "التعرف على حقل البحث"
-            val search = await { HungerStationCatalog.screen(it) == CatalogScreen.SEARCH }
             phase = "إدخال اسم المطعم"
-            val input = HungerStationCatalog.searchInputs(search).single()
-            act(search, CatalogAction.SET_QUERY, { it.index == input.index && it.editable }, query)
+            setHungerQuery(query)
             phase = "قراءة اقتراحات البحث"
             val suggestions = await { HungerStationCatalog.restaurantSuggestions(it).isNotEmpty() }
             // This is a real search suggestion, not a delivery/availability claim.
@@ -568,7 +611,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             phase = "قراءة نتائج المطاعم"
             val results = await { HungerStationCatalog.screen(it) == CatalogScreen.RESULTS }
             val restaurants = HungerStationCatalog.restaurants(results, query)
-            graph.catalog.value = LiveCatalogState(busy = true, restaurants = restaurants,
+            graph.catalog.value = graph.catalog.value.copy(busy = true, restaurants = restaurants,
+                menu = null, product = null, previews = emptyList(), preparedBasket = null,
                 message = if (restaurants.isEmpty()) "لم تظهر مطاعم يمكن التحقق من أسمائها في النتائج المقروءة." else "مطاعم مقروءة من هنقرستيشن للعنوان النشط؛ لم تُقارن الأسعار بعد.")
         }
     }
@@ -595,9 +639,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     }
 
     /** Opens and reads choices only. In particular it never presses flutterAddButton. */
-    fun openProduct(restaurant: LiveRestaurant, requested: LiveMenuItem): Boolean {
+    fun openProduct(restaurant: LiveRestaurant, requested: LiveMenuItem, returnToOctopus: Boolean = true): Boolean {
         val previousMenu = graph.catalog.value.menu
-        return begin {
+        return begin(returnOnSuccess = returnToOctopus, operation = CatalogOperation.READ_PRODUCT) {
             val viewOnly = navigateToRestaurant(restaurant)
             check(!viewOnly) { "المطعم يعرض تنبيه توفر؛ لن تُجهز وجبة منه." }
             phase = "العثور على الوجبة المختارة"
@@ -621,19 +665,25 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             }
             val selected = opened ?: error("لم تعد الوجبة المختارة ظاهرة؛ لم تُستبدل بوجبة أخرى.")
             phase = "قراءة خيارات الوجبة"
-            val reader = HungerStationProductReader(restaurant, selected)
-            var previous: CatalogFrame? = null
-            for (step in 0 until 30) {
-                val product = await { HungerStationCatalog.screen(it) == CatalogScreen.PRODUCT }
-                reader.observe(product)
-                if (reader.optionsEndObserved || product == previous) break
-                previous = product
-                if (!scrollProduct(product)) break
-            }
-            val details = reader.finish(System.currentTimeMillis())
+            val details = readHungerProduct(restaurant, selected).details
             graph.catalog.value = graph.catalog.value.copy(menu = previousMenu, product = details,
                 message = if (details.optionsComplete) "اختر خيارات الوجبة لحفظها في طلبك داخل الأخطبوط. لم تتغير سلة المنصة."
                     else "قراءة خيارات الوجبة جزئية أو غير مدعومة؛ لن تُضاف بخيارات ناقصة.")
+        }
+    }
+
+    private suspend fun setHungerQuery(text: String) {
+        for (attempt in 0 until 4) {
+            val search = await { HungerStationCatalog.screen(it) == CatalogScreen.SEARCH }
+            val input = HungerStationCatalog.searchInputs(search).single()
+            try {
+                act(search, CatalogAction.SET_QUERY, { it.index == input.index && it.editable }, text)
+                return
+            } catch (changed: ScreenChangedBeforeAction) {
+                // Only retry a rejected, undispatched input. Never retry an add or quantity edit.
+                if (attempt == 3) throw changed
+                delay(200)
+            }
         }
     }
 
@@ -642,9 +692,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         // Re-run the known search when reopening, rather than assuming a stale screen position.
         openHome()
         click(CatalogScreen.HOME, CatalogAction.OPEN_SEARCH) { it.id.endsWith(":id/new_search_card_view") }
-        val search = await { HungerStationCatalog.screen(it) == CatalogScreen.SEARCH }
-        val input = HungerStationCatalog.searchInputs(search).single()
-        act(search, CatalogAction.SET_QUERY, { it.index == input.index && it.editable }, restaurant.name)
+        setHungerQuery(restaurant.name)
         val suggestions = await { HungerStationCatalog.restaurantSuggestions(it).isNotEmpty() }
         val matching = HungerStationCatalog.restaurantSuggestions(suggestions).filter {
             it.label.substringBefore(',').trim() == restaurant.name }
@@ -672,25 +720,35 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         if (!PreviewEvidence.supports(desired) || desired.restaurant != details.restaurant ||
             desired.items.single().name != details.product.title) return false
         val priorMenu = graph.catalog.value.menu
-        return begin {
+        return begin(operation = CatalogOperation.BUILD_CART) {
             requestFingerprint = desired.fingerprint
-            graph.catalog.value = graph.catalog.value.copy(preparedBasket = null)
+            forgetPrepared(ProviderId.HUNGERSTATION)
             phase = "تجهيز سلة المطعم المختار"
             val restaurant = LiveRestaurant(details.restaurant, null, details.restaurant)
             check(!navigateToRestaurant(restaurant)) { "المطعم المختار غير متاح للطلب حاليًا." }
             var menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
             val hasBasket = menu.nodes.any { it.id == "FlutterMenu_goToCartButton" }
             if (!hasBasket) {
+                var item: CatalogNode? = null
+                var previousMenuBody: String? = null
+                for (page in 0 until 30) {
+                    val matches = menu.nodes.filter { node -> HungerStationCatalog.menuItem(node)?.let {
+                        it.name == details.product.title && it.selector == details.product.id } == true }
+                    check(matches.size <= 1) { "الوجبة المختارة غير فريدة؛ لم تتغير السلة." }
+                    if (matches.size == 1) { item = matches.single(); break }
+                    val body = HungerStationCatalog.menuItems(menu).toString()
+                    if (body == previousMenuBody) break
+                    previousMenuBody = body
+                    if (!act(menu, CatalogAction.SCROLL_MENU, { it.scrollable && it.className == "android.widget.ScrollView" }, allowNoOp = true)) break
+                    menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
+                }
+                val selected = item ?: error("الوجبة المختارة غير ظاهرة؛ لم تُستبدل بصنف آخر.")
                 val program = RidanCartProgram.create(details, selection, menu, System.currentTimeMillis())
                     ?: error("تعذر إثبات سلة المطعم المختار الفارغة؛ لم تتغير السلال.")
-                val item = menu.nodes.singleOrNull { HungerStationCatalog.menuItem(it)?.let { item ->
-                    item.name == details.product.title && item.selector == details.product.id } == true }
-                    ?: error("الوجبة المختارة غير ظاهرة؛ لم تُستبدل بصنف آخر.")
-                act(menu, CatalogAction.OPEN_PRODUCT, { it == item })
-                val product = await { HungerStationCatalog.screen(it) == CatalogScreen.PRODUCT }
-                val reader = HungerStationProductReader(restaurant, LiveMenuItem(details.product.title, details.product.listedPriceHalala, details.product.id))
-                reader.observe(product)
-                val current = reader.finish(System.currentTimeMillis())
+                act(menu, CatalogAction.OPEN_PRODUCT, { it == selected })
+                val read = readHungerProduct(restaurant, LiveMenuItem(details.product.title, details.product.listedPriceHalala, details.product.id))
+                val product = read.lastFrame
+                val current = read.details
                 check(RidanCartProgram.supports(current, selection, System.currentTimeMillis())) { "تغيرت خيارات الوجبة؛ توقفت الإضافة." }
                 val add = product.nodes.singleOrNull { it.id == "flutterAddButton" }
                     ?: error("لم يظهر زر إضافة واحد موثوق.")
@@ -727,6 +785,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 check(evidence.restaurant == details.restaurant && evidence.lines.singleOrNull()?.name == details.product.title &&
                     evidence.lines.single().choices.isEmpty()) { "تغيرت الوجبة؛ توقفت دون إعادة الإجراء." }
             }
+            rememberPrepared(desired, evidence, HungerStationCatalog.TESTED_VERSION)
             graph.catalog.value = graph.catalog.value.copy(menu = priorMenu,
                 message = "تم التحقق من سلة المطعم المختار: ${details.product.title}، الكمية $desiredQuantity. لم يُؤكد طلب أو دفع. سعر الأصناف ليس إجمالي التوصيل.",
                 preparedBasket = evidence)
@@ -734,13 +793,13 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     }
 
     fun openPreparedRidanBasket(): Boolean {
-        val saved = graph.catalog.value.preparedBasket ?: return false
         val draft = graph.draft.value ?: return false
+        val saved = graph.catalog.value.preparedBaskets.forRequest(draft, ProviderId.HUNGERSTATION)?.evidence ?: return false
         if (!PreviewEvidence.supports(draft) || draft.restaurant != saved.restaurant ||
             draft.items.size != 1 || draft.items.single().let { it.name != saved.lines.singleOrNull()?.name || it.quantity !in 1..99 || it.options.isNotEmpty() }) return false
-        return begin(returnOnSuccess = false) {
+        return begin(returnOnSuccess = false, operation = CatalogOperation.OPEN_PREPARED_CART) {
             requestFingerprint = draft.fingerprint
-            graph.catalog.value = graph.catalog.value.copy(preparedBasket = null)
+            forgetPrepared(ProviderId.HUNGERSTATION)
             phase = "التحقق من سلة المطعم المختار قبل التسليم"
             check(!navigateToRestaurant(LiveRestaurant(draft.restaurant, null, draft.restaurant))) {
                 "المطعم غير متاح حاليًا؛ لم يتغير طلبك."
@@ -756,12 +815,14 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             val actual = BasketEvidenceReader.hungerStation(cart, false)
             check(actual.restaurant == saved.restaurant && actual.lines == saved.lines &&
                 cart.nodes.count { it.id == "FlutterCart_cartItem" } == 1) { "تغيرت السلة منذ التجهيز؛ راجعها قبل المتابعة." }
+            rememberPrepared(draft, actual, HungerStationCatalog.TESTED_VERSION)
             graph.catalog.value = graph.catalog.value.copy(preparedBasket = actual,
                 message = "فُتحت سلة المطعم المختار وتحققت الوجبة والكمية مجددًا. التحكم الآن لك؛ لم يُؤكد طلب أو دفع.")
         }
     }
 
-    private fun begin(returnOnSuccess: Boolean = true, block: suspend () -> Unit): Boolean {
+    private fun begin(returnOnSuccess: Boolean = true, operation: CatalogOperation = CatalogOperation.BROWSE,
+        block: suspend () -> Unit): Boolean {
         if (active || graph.session.value.active) return false
         provider = ProviderId.HUNGERSTATION
         requestFingerprint = null
@@ -776,6 +837,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         if (!showStop()) return false
         val token = ++generation
         val evidence = SessionEvidenceBuffer().also { sessionEvidence = it }
+        val stopState = CatalogStopState().also { catalogStop = it }
+        this.operation = operation
+        priorRecognizedScreen = null
+        lastStats = JSONObject()
         val evidenceGeneration = graph.inspectionRecorder.generation()
         graph.catalog.value = graph.catalog.value.copy(busy = true, error = null, menu = null, product = null, message = "جارٍ قراءة البيانات من هنقرستيشن…")
         job = graph.scope.launch {
@@ -789,19 +854,24 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 }
                 throw cancelled
             } catch (failure: Exception) {
-                outcome = "FAILED"
+                outcome = if (failure is CatalogStoppedException) "FINANCIAL_STOP" else "FAILED"
                 // Only our own fixed errors are surfaced; no provider exception text or screen dump is logged.
                 graph.catalog.value = graph.catalog.value.copy(error = failure.message?.takeIf { it.any { c -> c in '\u0600'..'\u06ff' } }
                     ?: "توقفت العملية عند شاشة غير مدعومة؛ راجع السلة إن بدأ تجهيزها.")
                 returnToApp()
             } finally {
                 val frames = evidence.drain()
+                val stopped = stopState.evidence
+                // Freeze this session before suspension; another session must not replace its metadata.
+                val stats = if (stopped == null) lastStats.toString() else catalogStopObservation(stopped).toString()
                 // Capture has already stopped. Persist only bounded, redacted records, with no network operation.
                 withContext(NonCancellable + Dispatchers.IO) {
-                    runCatching { graph.inspectionRecorder.recordAutomaticEvidence(ProviderId.HUNGERSTATION, installed.version ?: "unknown", frames, outcome, evidenceGeneration) }
+                    runCatching { graph.inspectionRecorder.recordAutomaticEvidence(ProviderId.HUNGERSTATION,
+                        installed.version ?: "unknown", frames, outcome, evidenceGeneration, stopped) }
                 }
                 if (BuildConfig.DEBUG) withContext(NonCancellable + Dispatchers.IO) {
-                    service.filesDir.resolve("catalog-frame-stats.json").writeText(lastStats.toString(), Charsets.UTF_8)
+                    // Optional debug storage must never prevent releasing controls and clearing busy state.
+                    runCatching { service.filesDir.resolve("catalog-frame-stats.json").writeText(stats, Charsets.UTF_8) }
                 }
                 if (generation == token) { sessionEvidence = null; hideStop(); job = null; graph.catalog.value = graph.catalog.value.copy(busy = false) }
             }
@@ -822,7 +892,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 frame = await { HungerStationCatalog.screen(it) == CatalogScreen.BROWSE && CatalogCommands.backTarget(it) != null }
             }
             val target = CatalogCommands.backTarget(frame) ?: error("لا يوجد رجوع معروف من هذه الشاشة.")
-            act(frame, CatalogAction.RETURN_TO_CATALOG, { it.index == target.index && it == target })
+            act(frame, if (screen == CatalogScreen.SPIN_PROMO) CatalogAction.CLOSE_SPIN_PROMO else CatalogAction.RETURN_TO_CATALOG,
+                { it.index == target.index && it == target })
             frame = await {
                 HungerStationCatalog.screen(it) != screen &&
                     (HungerStationCatalog.screen(it) == CatalogScreen.HOME || CatalogCommands.backTarget(it) != null)
@@ -845,6 +916,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     delay(200); continue
                 }
                 val frame = capture(root)
+                if (provider == ProviderId.HUNGERSTATION) {
+                    val screen = HungerStationCatalog.screen(frame)
+                    if (screen != CatalogScreen.UNKNOWN) priorRecognizedScreen = provider to screen
+                }
                 val structure = if (provider == ProviderId.HUNGERSTATION) inspectionReader.read(root, traceRequest) else null
                 if (structure != null) sessionEvidence?.observe(SessionEvidence("AUTO_CATALOG_${HungerStationCatalog.screen(frame).name}",
                     structure.nodes, structure.count, structure.truncated, System.currentTimeMillis()), SystemClock.elapsedRealtime())
@@ -872,6 +947,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     }
 
     private fun checkSession() {
+        catalogStop.throwIfStopped()
         requestFingerprint?.let { check(graph.draft.value?.fingerprint == it) { "تغير طلبك؛ توقفت العملية قبل أي إجراء آخر." } }
         check(graph.settings.value.catalogConsent && provider in graph.settings.value.allowed) { "تغير السماح؛ توقفت العملية." }
         val lock = service.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
@@ -881,7 +957,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private fun capture(root: AccessibilityNodeInfo): CatalogFrame {
         val nodes = mutableListOf<CatalogNode>()
         var complete = true
-        var disabledFinancialControls = false
+        var firstDisabledFinancialControl: CatalogStopEvidence? = null
         sensitiveSkipped = 0
         fun walk(node: AccessibilityNodeInfo, parent: Int, depth: Int) {
             if (nodes.size >= 1800 || depth > 40) { complete = false; return }
@@ -891,9 +967,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             val financial = CatalogFinancialBoundary.classify(id, node.className?.toString().orEmpty(),
                 node.isClickable, node.isEditable, provider)
             if (financial == CatalogFinancialBoundary.Decision.STOP)
-                error("توقفت القراءة عند عنصر مالي غير مدعوم. إذا كنت في مراجعة الدفع، ارجع إلى قائمة المطعم قبل بدء القراءة؛ لم يُؤكد طلب أو دفع.")
+                catalogStop.stop(stopEvidence(node, CatalogStopReason.FINANCIAL_ELEMENT))
             val disabledFinancial = financial == CatalogFinancialBoundary.Decision.DISABLED_CONTROL
-            disabledFinancialControls = disabledFinancialControls || disabledFinancial
+            if (disabledFinancial && firstDisabledFinancialControl == null)
+                firstDisabledFinancialControl = stopEvidence(node, CatalogStopReason.FINANCIAL_CONTROL_ON_UNKNOWN_SCREEN)
             val private = privateId(id)
             if (node.isPassword) error("ظهرت شاشة كلمة مرور؛ توقفت القراءة.")
             if (android.os.Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive && !private) { sensitiveSkipped++; complete = false; return }
@@ -918,11 +995,29 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         }
         walk(root, -1, 0)
         val frame = CatalogFrame(nodes, complete)
-        check(!disabledFinancialControls || CatalogFinancialBoundary.permitsDisabledControls(frame, provider)) {
-            "زر مالي في شاشة غير معروفة؛ توقفت القراءة. ارجع إلى قائمة المطعم قبل بدء العملية."
+        firstDisabledFinancialControl?.let {
+            if (!CatalogFinancialBoundary.permitsDisabledControls(frame, provider)) catalogStop.stop(it)
         }
         return frame
     }
+
+    /** Structural metadata only. Never inspect text, content descriptions, values or descendants here. */
+    private fun stopEvidence(node: AccessibilityNodeInfo, reason: CatalogStopReason) = CatalogStopEvidence.create(
+        provider = provider,
+        providerVersion = graph.installations.value.singleOrNull { it.provider == provider }?.version,
+        capturedAtMillis = System.currentTimeMillis(),
+        priorRecognizedScreen = priorRecognizedScreen?.takeIf { it.first == provider }?.second,
+        reason = reason, resourceId = node.viewIdResourceName, className = node.className?.toString(),
+        clickable = node.isClickable, editable = node.isEditable, password = node.isPassword,
+        dataSensitive = android.os.Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive,
+        appVersion = BuildConfig.VERSION_NAME, appVersionCode = BuildConfig.VERSION_CODE.toLong(),
+        operation = operation, requestFingerprint = requestFingerprint,
+    )
+
+    private suspend fun readHungerProduct(restaurant: LiveRestaurant, item: LiveMenuItem): ProductReadResult =
+        HungerStationProductReadSession().read(restaurant, item,
+            frame = { await { HungerStationCatalog.screen(it) == CatalogScreen.PRODUCT } },
+            scroll = { scrollProduct(it) })
 
     private suspend fun scrollProduct(frame: CatalogFrame): Boolean {
         require(HungerStationCatalog.screen(frame) == CatalogScreen.PRODUCT)
@@ -943,12 +1038,15 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         try {
             check(root.packageName?.toString() == provider.packageName) { "غادرت المنصة؛ توقفت العملية." }
             val fresh = capture(root)
-            require(fresh == previous) { "تغيرت الشاشة؛ أوقفت الإجراء بدل النقر على عنصر قديم." }
+            if (fresh != previous) throw ScreenChangedBeforeAction()
             val selected = fresh.nodes.filter(selector)
             require(selected.size == 1) { "تعذر تحديد عنصر فريد؛ توقفت العملية." }
             val node = selected.single()
             check(node.enabled) { "العنصر غير متاح؛ توقفت العملية." }
             val allowed = when (action) {
+                CatalogAction.CLOSE_SPIN_PROMO -> SafetyGuard().allowsSpinPromoClose(fresh, node,
+                    root.packageName?.toString(), graph.installations.value.singleOrNull { it.provider == provider }?.version,
+                    graph.settings.value.catalogConsent, currentCoroutineContext().isActive)
                 CatalogAction.ADD_RIDAN -> graph.settings.value.catalogConsent &&
                     ridanProgram?.consumeAdd(fresh, node, System.currentTimeMillis()) == true
                 CatalogAction.ADJUST_RIDAN_QUANTITY -> graph.settings.value.catalogConsent &&

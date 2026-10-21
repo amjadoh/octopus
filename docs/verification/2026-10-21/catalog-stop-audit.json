@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-21",
+  "baselineCommit": "f50098335693473cf98155e81c5038564afc6571",
+  "reportedRelease": "1.3.2",
+  "userReportedFinancialStopPersists": true,
+  "actualBlockingResourceIdKnown": false,
+  "previousRealUiXmlReproducesFinancialStop": false,
+  "actualProviderRetestPerformed": true,
+  "newReleasePublished": false,
+  "localChanges": [
+    "Capture bounded structural stop metadata before throwing, without text, descriptions, values or screenshots",
+    "Record the actual stopped provider and installed version independently of the initial provider",
+    "Store a stop without requiring stable screen observations; preceding frames are not failure snapshots",
+    "Latch financial stops for the session and propagate them through both Keeta fallback catches",
+    "Keep stop records within the existing local retention and deletion-generation boundary",
+    "Do not let optional debug-file write failure prevent control release"
+  ],
+  "financialBoundaryRelaxed": false,
+  "fullComparisonConnectedToApp": false,
+  "bothFinalReviewTotalsVerified": false,
+  "remainingProductWork": [
+    "Android implementations of ComparisonProviderPort and connection to ComparisonCoordinator",
+    "Per-provider branch and delivery-address verification",
+    "Verified review readers and transitions for both providers",
+    "Prepare both carts before ranking final quotes and revalidate selected cart at handoff",
+    "Expand supported item options and multi-item carts with provider evidence"
+  ],
+  "validation": {
+    "status": "local_checks_passed",
+    "tasks": [
+      ":app:testDiagnosticDebugUnitTest",
+      ":app:lintDiagnosticDebug"
+    ],
+    "buildSucceeded": true,
+    "unitTests": 217,
+    "unitFailures": 0,
+    "unitErrors": 0,
+    "unitSkipped": 0,
+    "newStopEvidenceAndLatchTests": 8,
+    "lintErrors": 0,
+    "realProviderJourneyVerified": false,
+    "liveFinancialStopFixVerified": false,
+    "newApkPublished": false,
+    "liveAndroidPrivacyTestsPassed": 4,
+    "currentSourceBuildSucceeded": true
+  },
+  "limitedLiveEvidence": "HungerStation search returned 2 restaurants; selected restaurant menu returned 31 items. Original financial stop not reproduced. Two-cart final comparison not tested."
+}

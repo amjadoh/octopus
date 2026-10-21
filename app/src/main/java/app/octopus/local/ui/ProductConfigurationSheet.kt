@@ -44,13 +44,19 @@ fun ProductConfigurationSheet(graph: AppGraph, details: ConfiguredProduct, onDis
             if (!details.product.available) item { Text("الوجبة غير متاحة في القراءة الحالية.", color = MaterialTheme.colorScheme.error) }
             details.product.groups.forEach { group ->
                 item(key = "group:${group.id}") {
-                    Text("${group.title} — اختيار إلزامي", fontWeight = FontWeight.Bold)
+                    Text("${group.title} — " + if (group.minimum == 0) "اختياري، اختيار واحد كحد أقصى" else "اختيار إلزامي", fontWeight = FontWeight.Bold)
                     group.choices.forEach { choice ->
+                        val selected = choice.id in choices[group.id].orEmpty()
+                        fun choose() {
+                            choices = choices + (group.id to if (group.minimum == 0 && selected) emptySet() else setOf(choice.id))
+                            error = null
+                        }
                         Row(Modifier.fillMaxWidth().clickable(enabled = !saving && choice.available) {
-                            choices = choices + (group.id to setOf(choice.id)); error = null
+                            choose()
                         }) {
-                            RadioButton(selected = choice.id in choices[group.id].orEmpty(), enabled = !saving && choice.available,
-                                onClick = { choices = choices + (group.id to setOf(choice.id)); error = null })
+                            if (group.minimum == 0) Checkbox(checked = selected, enabled = !saving && choice.available,
+                                onCheckedChange = { choose() })
+                            else RadioButton(selected = selected, enabled = !saving && choice.available, onClick = { choose() })
                             Text(choice.title + if (!choice.available) " (غير متاح)" else "", Modifier.padding(top = 13.dp))
                         }
                     }

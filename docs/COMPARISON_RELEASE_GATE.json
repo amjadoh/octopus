@@ -5,6 +5,10 @@
   "realTwoProviderComparisonVerified": false,
   "realSelectedCartHandoffVerified": false,
   "providersVerified": [],
-  "note": "Live Ridan menu components, quantities, basket creation and handoff verified on Honor; see componentEvidence. Full final-review totals and equal delivery context remain unverified. Review navigation awaits explicit user clarification after automatic approval review rejected HungerStation Go to payment. No complete-comparison release is claimed.",
-  "componentEvidence": ["verification/2026-10-19/honor-menu-offers.json", "verification/2026-10-19/honor-basket-validation.json", "verification/2026-10-20/honor-final-device.json"]
+  "note": "Earlier component evidence covers individual menu and basket steps, not full comparison. Review-only navigation is authorized by the user; order confirmation and payment remain prohibited. Missing runtime comparison ports, verified equal delivery context, both final-review readers and current Keeta version coverage prevent complete-journey verification. Oct 21 live search read 2 restaurants and 31 menu items on HungerStation.",
+  "componentEvidence": [
+    "verification/2026-10-19/honor-menu-offers.json",
+    "verification/2026-10-19/honor-basket-validation.json",
+    "verification/2026-10-20/honor-final-device.json"
+  ]
 }

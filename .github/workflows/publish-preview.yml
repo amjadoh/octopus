@@ -2,7 +2,7 @@ name: Publish experimental APKs
 on:
   workflow_dispatch:
   push:
-    branches: [codex/preview-1-3-2]
+    branches: [codex/preview-1-3-3]
 permissions:
   contents: read
 concurrency:
@@ -26,7 +26,7 @@ jobs:
           if plan.get('scope') == 'preview_current_work':
               assert plan.get('userRequestedPreview') is True and plan.get('prerelease') is True
               assert plan.get('realComparisonComplete') is False
-              assert plan.get('tag') == 'v1.3.2-alpha' and plan.get('version') == '1.3.2' and plan.get('versionCode') == 10
+              assert plan.get('tag') == 'v1.3.3-alpha' and plan.get('version') == '1.3.3' and plan.get('versionCode') == 11
               notes = Path('docs/PREVIEW_RELEASE.md').read_text(encoding='utf-8')
               assert 'المقارنة الفعلية وتجهيز سلتَي كيتا وهنقرستيشن غير مكتملين' in notes
           else:
@@ -80,7 +80,7 @@ jobs:
       - name: Verify APKs and prepare release files
         run: |
           python3 .github/scripts/prepare_preview.py
-          git archive --format=zip --prefix=octopus-android/ HEAD -o release/octopus-source-1.3.2.zip
+          git archive --format=zip --prefix=octopus-android/ HEAD -o release/octopus-source-1.3.3.zip
           cp docs/TEST_ON_PHONE.md release/TEST_ON_PHONE.md
           cp docs/PREVIEW_RELEASE.md release/release-notes.md
           cd release
@@ -100,7 +100,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      RELEASE_TAG: v1.3.2-alpha
+      RELEASE_TAG: v1.3.3-alpha
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -112,12 +112,12 @@ jobs:
           if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > draft-state.txt; then
             test "$(cat draft-state.txt)" = true
           else
-            gh release create "$RELEASE_TAG" --draft --prerelease --target "$GITHUB_SHA" --title 'الأخطبوط 1.3.2 — إصلاح توقف قراءة السلة (تجريبي)' --notes-file release/release-notes.md
+            gh release create "$RELEASE_TAG" --draft --prerelease --target "$GITHUB_SHA" --title 'الأخطبوط 1.3.3 — تحديث قراءة الوجبات والسلال (تجريبي)' --notes-file release/release-notes.md
           fi
           gh release edit "$RELEASE_TAG" --draft --prerelease --target "$GITHUB_SHA" --notes-file release/release-notes.md
-          gh release upload "$RELEASE_TAG" release/octopus-1.3.2.apk release/octopus-source-1.3.2.zip release/validation-summary-ci.json release/SHA256SUMS.txt release/TEST_ON_PHONE.md
+          gh release upload "$RELEASE_TAG" release/octopus-1.3.3.apk release/octopus-source-1.3.3.zip release/validation-summary-ci.json release/SHA256SUMS.txt release/TEST_ON_PHONE.md
           gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' > asset-names.txt
-          grep -Fx 'octopus-1.3.2.apk' asset-names.txt
+          grep -Fx 'octopus-1.3.3.apk' asset-names.txt
       - name: Publish prerelease after successful upload
         run: |
           gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false

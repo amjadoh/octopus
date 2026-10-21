@@ -23,10 +23,10 @@ open class KeetaBasketReader(private val catalog: KeetaMenuReader) {
     fun addTarget(f: CatalogFrame, expectedUnit: Long): CatalogNode? {
         if (!catalog.product(f) || catalog.price(f) != expectedUnit ||
             catalog.unitPrice(f) != expectedUnit) return null
-        val notes = f.nodes.singleOrNull { it.label == "طلب خاص" } ?: return null
-        val body = ancestors(f, notes).firstOrNull { it.className == "android.widget.ScrollView" } ?: return null
+        val body = catalog.productBody(f) ?: return null
         val content = f.descendants(body.index)
-        if (body.scrollable || content.filter { it.editable }.size != 1 || content.any { it.editable && it.enteredText }) return null
+        val expectedEditors = if (catalog.VERSION == "3.13.203") 0 else 1
+        if (body.scrollable || content.filter { it.editable }.size != expectedEditors || content.any { it.editable && it.enteredText }) return null
         val add = f.nodes.singleOrNull { it.label == "إضافة إلى السلة" } ?: return null
         for (group in ancestors(f, add)) {
             val children = f.nodes.filter { it.parent == group.index }
