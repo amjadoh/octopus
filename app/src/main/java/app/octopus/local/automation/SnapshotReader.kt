@@ -43,6 +43,9 @@ class SnapshotReader {
             // Skip before reading text or contentDescription.
             val editable = node.isEditable || node.className?.toString()?.contains("EditText") == true
             if (node.isPassword) { sensitive = true; return }
+            // Read-only card/address fields can still expose private values. Exclude their entire
+            // subtree before fetching text or descriptions, just as the structural inspector does.
+            if (app.octopus.local.diagnostics.InspectionRedactor.privateSubtree(node.viewIdResourceName.orEmpty())) return
             if (android.os.Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive) {
                 sensitive = true
                 return

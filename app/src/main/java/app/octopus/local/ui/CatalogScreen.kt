@@ -173,11 +173,13 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                         }, enabled = !state.busy && !changing, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                             Icon(Icons.Outlined.CompareArrows, null); Spacer(Modifier.width(8.dp)); Text("قارن قبل اختيار التطبيق")
                         }
-                        if (state.preparedBasket?.restaurant == cart.restaurant) TextButton(onClick = {
-                            val opened = if (state.preparedBasket?.provider == ProviderId.KEETA) LiveCatalogBridge.prepareComparedKeeta(true)
-                                else LiveCatalogBridge.openPreparedRidanBasket()
-                            if (!opened) localError = "أعد التحقق من السلة قبل فتحها."
-                        }, enabled = !state.busy) { Text("افتح سلة ${state.preparedBasket?.provider?.title} المتحققة") }
+                        ProviderId.entries.forEach { id ->
+                            if (state.preparedBaskets.forRequest(cart, id) != null) TextButton(onClick = {
+                                val opened = if (id == ProviderId.KEETA) LiveCatalogBridge.prepareComparedKeeta(true)
+                                    else LiveCatalogBridge.openPreparedRidanBasket()
+                                if (!opened) localError = "تعذر بدء إعادة التحقق من السلة."
+                            }, enabled = !state.busy) { Text("افتح وأعد فحص سلة ${id.title}") }
+                        }
                     }
                 }
             }

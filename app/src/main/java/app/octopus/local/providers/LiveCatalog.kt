@@ -8,7 +8,7 @@ import java.util.Locale
 data class CatalogNode(val index: Int, val parent: Int, val id: String, val label: String, val className: String,
     val clickable: Boolean, val editable: Boolean, val scrollable: Boolean, val enabled: Boolean = true,
     val omittedText: Boolean = false, val enteredText: Boolean = false)
-enum class CatalogScreen { HOME, BROWSE, BROWSE_PROMO, SEARCH, RESULTS, RESTAURANT_NOTICE, MENU, PRODUCT, CART, UNKNOWN }
+enum class CatalogScreen { HOME, BROWSE, BROWSE_PROMO, SPIN_PROMO, SEARCH, RESULTS, RESTAURANT_NOTICE, MENU, PRODUCT, CART, UNKNOWN }
 data class CatalogFrame(val nodes: List<CatalogNode>, val complete: Boolean) {
     fun hasId(suffix: String) = nodes.any { it.id == suffix || it.id.endsWith(":id/$suffix") }
     fun descendants(index: Int): List<CatalogNode> {
@@ -31,6 +31,7 @@ data class LiveCatalogState(
     val error: String? = null,
     val product: ConfiguredProduct? = null,
     val preparedBasket: BasketEvidence? = null,
+    val preparedBaskets: PreparedBasketLedger = PreparedBasketLedger(),
 )
 
 /** Selectors recorded on Honor / HS 8.0.302. Unknown screens never authorize an action. */
@@ -38,6 +39,7 @@ object HungerStationCatalog {
     const val TESTED_VERSION = "8.0.303"
     fun screen(frame: CatalogFrame): CatalogScreen = when {
         !frame.complete -> CatalogScreen.UNKNOWN
+        HungerStationSpinPromo.closeTarget(frame) != null -> CatalogScreen.SPIN_PROMO
         frame.hasId("pdpCloseButton") -> CatalogScreen.PRODUCT
         frame.hasId("FlutterCart_title") -> CatalogScreen.CART
         frame.hasId("menuBackButton") && frame.hasId("menuSearchButton") -> CatalogScreen.MENU

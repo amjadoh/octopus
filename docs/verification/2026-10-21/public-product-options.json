@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-21",
+  "provider": "HUNGERSTATION",
+  "version": "8.0.303",
+  "device": "Honor MBH-N49",
+  "restaurant": "مدور",
+  "product": "فطيرة جبن فيتا",
+  "observation": "Read-only live product inspection. No cart additions or payment.",
+  "labels": [
+    "تمويه",
+    "تنبيهات",
+    "يمكنك اضافة",
+    "اختيار واحد",
+    "بطاطس",
+    "غالبًا ما يتم طلبه مع"
+  ],
+  "optionalSectionMinimum": 0,
+  "optionalSectionMaximum": 1,
+  "optionalChoice": "بطاطس",
+  "optionalChoicePriceHalala": 600,
+  "listedProductPriceHalala": 700,
+  "theseAreFinalOrderTotals": false,
+  "source": "Visible product page and accessibility content descriptions; no login/payment screen captured."
+}
