@@ -37,6 +37,18 @@ data class LiveCatalogState(
     val preparedBaskets: PreparedBasketLedger = PreparedBasketLedger(),
 )
 
+/** An edited order cannot inherit either provider's quote, progress or ready-cart badge. */
+fun LiveCatalogState.forChangedDraft(cart: app.octopus.local.domain.CanonicalCart?) = copy(
+    selectedRestaurant = cart?.restaurant,
+    previews = emptyList(),
+    comparisonProgress = emptyMap(),
+    preparedBasket = null,
+    preparedBaskets = PreparedBasketLedger(),
+    message = if (cart == null) "اختر مطعمك ووجباتك لبدء طلب جديد."
+        else "تغير طلبك؛ أعد المقارنة للتحقق من الأسعار والعروض والسلة.",
+    error = null,
+)
+
 /** Selectors recorded on Honor / HS 8.0.302. Unknown screens never authorize an action. */
 object HungerStationCatalog {
     const val TESTED_VERSION = "8.0.303"

@@ -19,10 +19,27 @@ class DiagnosticUiTest {
                 listOf(app.octopus.local.domain.CanonicalItem("فطيرة جبن فيتا", null, emptyList(), 3)))
             graph.catalog.value = graph.catalog.value.copy(selectedRestaurant = "مطعم آخر")
         }
+        compose.onNodeWithText("راجع الطلب وقارن").assertDoesNotExist()
+        compose.onNodeWithText("المقارنة").performClick()
         scrollToText("المطعم المختار: مطعم آخر")
         compose.onNodeWithText("المطعم المختار: مطعم آخر").assertIsDisplayed()
         compose.onNodeWithText("قارن أسعار الوجبات").assertDoesNotExist()
         compose.onNodeWithText("جهّز السلتين لمقارنة الإجمالي").assertDoesNotExist()
+    }
+    @Test fun restaurantMenuKeepsTheSelectedOrderInAFooterAndOpensItsComparison() {
+        compose.waitUntil(5_000) { (compose.activity.application as OctopusApplication).graph.draftReady.value }
+        compose.runOnIdle {
+            val graph = (compose.activity.application as OctopusApplication).graph
+            val cart = app.octopus.local.domain.CanonicalCart("مطعم جديد", null,
+                listOf(app.octopus.local.domain.CanonicalItem("وجبة جديدة", null, emptyList(), 2)))
+            graph.draft.value = cart
+            graph.catalog.value = graph.catalog.value.copy(selectedRestaurant = cart.restaurant)
+        }
+        compose.onNodeWithText("راجع الطلب وقارن").assertIsDisplayed().performClick()
+        scrollToText("طلبك • مطعم جديد")
+        compose.onNodeWithText("طلبك • مطعم جديد").assertIsDisplayed()
+        scrollToText("قارن أسعار الوجبات")
+        compose.onNodeWithText("قارن أسعار الوجبات").assertIsDisplayed()
     }
     @Test fun startsWithRestaurantSearchAndNoInventedPrices() {
         compose.onNodeWithText("المطاعم").assertIsDisplayed()

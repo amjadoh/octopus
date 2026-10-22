@@ -68,6 +68,12 @@ class KeetaCurrentProductTest {
         val changed = frame.copy(nodes = frame.nodes + CatalogNode(1000, body.index, "", "اختيار إلزامي", "android.widget.TextView", false, false, false))
         assertFalse(reader.product(changed))
         assertFalse(KeetaMenuReader("مطعم آخر", reader.title, reader.VERSION).product(frame))
+        val basket = KeetaBasketReader(reader)
+        assertNull(basket.addTarget(changed, 700))
+        assertNull(basket.addTarget(frame.copy(nodes = frame.nodes.map {
+            if (it.index == body.index) it.copy(scrollable = true) else it
+        }), 700))
+        assertNull(basket.addTarget(frame.copy(complete = false), 700))
     }
     @Test fun currentRecordedProductProducesOnlyItsBasePriceWithoutInventingDeliveryOrDiscounts() {
         val cart = CanonicalCart(reader.restaurant, null, listOf(CanonicalItem(reader.title, null, emptyList(), 2)), null)

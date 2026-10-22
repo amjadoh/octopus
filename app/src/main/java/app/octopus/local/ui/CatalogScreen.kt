@@ -46,6 +46,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
     val ready by graph.draftReady.collectAsStateWithLifecycle()
     val storageError by graph.draftStorageError.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf("") }
+    var menuQuery by rememberSaveable(state.menu?.restaurant?.name) { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf("الكل") }
     var browsing by remember { mutableStateOf(false) }
     var consent by remember { mutableStateOf(false) }
@@ -68,7 +69,8 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
             else -> search()
         }
     }
-    LazyColumn(contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(Modifier.fillMaxSize()) {
+    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         if (comparisonOnly) {
             item {
                 Text("قارن طلبك", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
@@ -136,7 +138,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
         }
         }
         storageError?.let { item { Text(it, color = MaterialTheme.colorScheme.error) } }
-        draft?.let { cart ->
+        if (comparisonOnly) draft?.let { cart ->
             if (!ComparisonRequestSelection.matches(state.selectedRestaurant, cart)) {
                 item {
                     Card(colors = CardDefaults.cardColors(containerColor = OctopusPalette.Soft)) {
@@ -155,7 +157,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                             Icon(Icons.Outlined.ShoppingBag, null, tint = OctopusPalette.Petrol)
                             Spacer(Modifier.width(8.dp)); Text("طلبك • ${cart.restaurant}", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                         }
-                        Text("اختر وجباتك هنا أولًا. سلة التطبيق تُجهّز بعد اختيارك من المقارنة.", color = OctopusPalette.Muted, fontSize = 12.sp)
+                        Text("راجع الكميات، ثم اقرأ أسعار الوجبات أو جهّز سلال المقارنة.", color = OctopusPalette.Muted, fontSize = 12.sp)
                         cart.items.forEach { line ->
                             Text(listOfNotNull(line.name, line.size).joinToString(" • "), fontWeight = FontWeight.Medium)
                             if (line.options.isNotEmpty()) Text(line.options.joinToString("، ") { "${it.group}: ${it.value}" }, fontSize = 12.sp)
@@ -269,9 +271,16 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                     TextButton(onClick = { graph.catalog.value = state.copy(menu = null, product = null) }, enabled = !state.busy) { Text("العودة للمطاعم") }
                     Text(menu.restaurant.name, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
                     Text("اختر وجباتك وخصصها داخل الأخطبوط", color = OctopusPalette.Muted, fontSize = 13.sp)
+                    Text("${menu.items.size} صنف مقروء • ${menu.restaurant.source.title}", color = OctopusPalette.Petrol, fontSize = 12.sp)
+                    OutlinedTextField(value = menuQuery, onValueChange = { menuQuery = it.take(100) },
+                        modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(18.dp),
+                        placeholder = { Text("ابحث في الوجبات المقروءة") },
+                        leadingIcon = { Icon(Icons.Outlined.Search, null) })
                 }
             }
-            items(menu.items, key = { it.selector }) { item ->
+            val visibleMeals = menu.items.filter { menuQuery.isBlank() || it.name.contains(menuQuery.trim(), ignoreCase = true) }
+            if (visibleMeals.isEmpty()) item { Text("لم تظهر وجبة بهذا الاسم في القائمة المقروءة.", fontSize = 13.sp) }
+            items(visibleMeals, key = { it.selector }) { item ->
                 Card(onClick = {
                     showProduct = true
                     if (!LiveCatalogBridge.openProduct(menu.restaurant, item)) localError = "تعذرت قراءة خيارات الوجبة."
@@ -281,6 +290,10 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                             Text(item.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                             Text(item.listedPrice?.let(::money) ?: "السعر غير مقروء", color = OctopusPalette.Petrol, fontWeight = FontWeight.Bold)
                             Text("عرض الخيارات", color = OctopusPalette.Muted, fontSize = 11.sp)
+                            draft?.takeIf { it.restaurant == menu.restaurant.name }?.items
+                                ?.filter { it.name == item.name }?.sumOf { it.quantity }?.takeIf { it > 0 }?.let {
+                                    Text("في طلبك: $it", color = OctopusPalette.Petrol, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
                         }
                         Icon(Icons.Outlined.AddCircleOutline, null, Modifier.size(29.dp), tint = OctopusPalette.Petrol)
                     }
@@ -289,7 +302,21 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
         }
         item { Text("اختر المطعم والوجبة. تُقبل الخيارات عند اكتمال قراءتها؛ المقارنة وتجهيز السلة التلقائي حاليًا لصنف واحد دون خيارات أو ملاحظة. الأصناف والتوصيل لا يمثلان الإجمالي النهائي مع الرسوم.", fontSize = 11.sp, color = OctopusPalette.Muted) }
     }
-    state.product?.takeIf { showProduct && !state.busy }?.let { details ->
+    if (!comparisonOnly) draft?.takeIf { ComparisonRequestSelection.matches(state.selectedRestaurant, it) }?.let { cart ->
+        Surface(shadowElevation = 6.dp, color = Color.White) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.weight(1f)) {
+                    Text(cart.restaurant, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("${cart.items.sumOf { it.quantity }} وجبة في طلبك", color = OctopusPalette.Muted, fontSize = 12.sp)
+                }
+                Button(onClick = onOpenComparison, enabled = !state.busy && !changing,
+                    shape = RoundedCornerShape(16.dp)) { Text("راجع الطلب وقارن") }
+            }
+        }
+    }
+    }
+    state.product?.takeIf { showProduct && !state.busy && !comparisonOnly }?.let { details ->
         ProductConfigurationSheet(graph, details, onDismiss = { showProduct = false }, onSaved = {
             localError = null
             graph.catalog.value = graph.catalog.value.copy(product = null)
