@@ -88,6 +88,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
 
     fun compareAndPrepare(): Boolean {
         val desired = graph.draft.value ?: return false
+        if (!matchesSelectedRestaurant()) return false
         if (active || comparisonJob?.isActive == true || graph.session.value.active || !PreviewEvidence.supports(desired)) return false
         graph.catalog.value = graph.catalog.value.copy(comparisonRunning = true, comparisonProgress = emptyMap(), error = null)
         comparisonJob = graph.scope.launch {
@@ -124,6 +125,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
 
     fun compareDraft(): Boolean {
         val desired = graph.draft.value ?: return false
+        if (!matchesSelectedRestaurant()) return false
         if (!PreviewEvidence.supports(desired)) {
             graph.catalog.value = graph.catalog.value.copy(error = "المقارنة الحالية تحتاج صنفًا واحدًا دون خيارات أو ملاحظات؛ احتُفظ بطلبك دون حساب سعر ناقص.")
             return false
@@ -258,6 +260,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     }
 
     fun prepareComparedHungerStation(): Boolean {
+        if (!matchesSelectedRestaurant()) return false
         val desired = graph.draft.value ?: return false
         val details = comparedProduct ?: return false
         val now = System.currentTimeMillis()
@@ -268,6 +271,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
 
     /** Only changes the fully visible, single fixed-meal Ridan basket after explicit provider selection. */
     fun prepareComparedKeeta(handoff: Boolean = false): Boolean {
+        if (!matchesSelectedRestaurant()) return false
         val desired = graph.draft.value ?: return false
         if (!PreviewEvidence.supports(desired)) return false
         if (handoff) {
@@ -670,7 +674,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         }
     }
 
-    fun openMenu(restaurant: LiveRestaurant): Boolean = begin {
+    fun openMenu(restaurant: LiveRestaurant): Boolean {
+        val started = begin {
         val viewOnlyNotice = navigateToRestaurant(restaurant)
         val items = linkedMapOf<String, LiveMenuItem>()
         var reachedEnd = false
@@ -689,6 +694,16 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         graph.catalog.value = graph.catalog.value.copy(menu = LiveMenu(restaurant, items.values.toList(), System.currentTimeMillis(), reachedEnd),
             message = if (viewOnlyNotice) "عرضت المنصة تنبيه توفر؛ هذه قائمة للعرض فقط ولا تثبت إمكانية الطلب. قد تكون جزئية."
                 else if (reachedEnd) "قائمة مقروءة من هنقرستيشن. الخيارات تؤخذ من صفحة كل وجبة." else "قائمة جزئية؛ لم نثبت الوصول إلى نهايتها.")
+        }
+        if (started) graph.catalog.value = graph.catalog.value.copy(selectedRestaurant = restaurant.name,
+            previews = emptyList(), comparisonProgress = emptyMap(), preparedBasket = null)
+        return started
+    }
+
+    private fun matchesSelectedRestaurant(): Boolean {
+        if (ComparisonRequestSelection.matches(graph.catalog.value.selectedRestaurant, graph.draft.value)) return true
+        graph.catalog.value = graph.catalog.value.copy(error = "اختر وجبة من المطعم المحدد وأضفها إلى طلبك أولًا؛ لم أشغّل مقارنة الطلب السابق.")
+        return false
     }
 
     /** Opens and reads choices only. In particular it never presses flutterAddButton. */
@@ -849,6 +864,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     }
 
     fun openPreparedRidanBasket(): Boolean {
+        if (!matchesSelectedRestaurant()) return false
         val draft = graph.draft.value ?: return false
         val saved = graph.catalog.value.preparedBaskets.forRequest(draft, ProviderId.HUNGERSTATION)?.evidence ?: return false
         if (!PreviewEvidence.supports(draft) || draft.restaurant != saved.restaurant ||
