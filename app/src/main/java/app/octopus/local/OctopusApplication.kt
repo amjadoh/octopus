@@ -9,6 +9,7 @@ import app.octopus.local.domain.*
 import app.octopus.local.diagnostics.DiagnosticRecorder
 import app.octopus.local.diagnostics.InspectionRecorder
 import app.octopus.local.providers.LiveCatalogState
+import app.octopus.local.providers.forChangedDraft
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
@@ -78,9 +79,8 @@ class AppGraph(private val app: Application) {
     }
     private suspend fun commitDraft(change: DraftChange): DraftChange {
         if (change is DraftChange.Changed) {
-            if (change.cart != draft.value) catalog.value = catalog.value.copy(preparedBasket = null, previews = emptyList(),
-                message = "تغير طلبك؛ أعد المقارنة للتحقق من الأسعار والعروض والسلة.", error = null)
             withContext(Dispatchers.IO) { if (change.cart == null) orders.delete(activeOrderId) else orders.save(change.cart, activeOrderId) }
+            if (change.cart != draft.value) catalog.value = catalog.value.forChangedDraft(change.cart)
             draft.value = change.cart
             catalog.value = catalog.value.copy(selectedRestaurant = change.cart?.restaurant,
                 comparisonProgress = emptyMap())
@@ -90,7 +90,7 @@ class AppGraph(private val app: Application) {
     suspend fun clearOrders() = draftLock.withLock {
         withContext(Dispatchers.IO) { orders.clear() }
         draft.value = null
-        catalog.value = catalog.value.copy(preparedBasket = null, previews = emptyList())
+        catalog.value = catalog.value.forChangedDraft(null)
         draftReady.value = true
         draftStorageError.value = null
     }

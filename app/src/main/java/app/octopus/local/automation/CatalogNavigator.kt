@@ -34,6 +34,7 @@ import org.json.JSONArray
 /** Evidenced HS catalog navigation plus an explicit, bounded Ridan basket preparation request. */
 class CatalogNavigator(private val service: AccessibilityService, private val graph: AppGraph) {
     private class ScreenChangedBeforeAction : IllegalArgumentException("تغيرت الشاشة؛ أوقفت الإجراء بدل النقر على عنصر قديم.")
+    private class UserInterrupted(message: String) : IllegalStateException(message)
     private var provider = ProviderId.HUNGERSTATION
     private var comparedProduct: ConfiguredProduct? = null
     private var requestFingerprint: String? = null
@@ -98,7 +99,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                         check(compareDraft()) { "تعذر بدء قراءة أسعار الوجبات." }
                         job?.join()
                     },
-                    available = { id -> graph.catalog.value.previews.any { it.provider == id && it.fresh(desired, System.currentTimeMillis()) } },
+                    available = { id -> graph.catalog.value.previews.any { it.provider == id && it.itemSubtotal != null && it.fresh(desired, System.currentTimeMillis()) } },
                     prepare = { id ->
                         val started = if (id == ProviderId.HUNGERSTATION) prepareComparedHungerStation() else prepareComparedKeeta()
                         if (!started) "تعذر بدء تجهيز السلة من القراءة الحالية." else {
@@ -131,93 +132,84 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             return false
         }
         return begin(operation = CatalogOperation.COMPARE_MENU) {
-            bindKeetaRequest(desired)
+            requestFingerprint = desired.fingerprint
             comparedProduct = null
             graph.catalog.value = graph.catalog.value.copy(previews = emptyList())
-            phase = "قراءة سعر هنقرستيشن وعروضه"
-            val restaurant = LiveRestaurant(desired.restaurant, null, desired.restaurant)
-            check(!navigateToRestaurant(restaurant)) { "المطعم غير متاح للطلب في القراءة الحالية." }
-            phase = "قراءة الوجبة في هنقرستيشن"
-            var menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
-            val offerLabels = PreviewEvidence.offers(menu)
-            var previousItems: String? = null
-            for (page in 0 until 30) {
-                if (HungerStationCatalog.menuItems(menu).any { it.name == desired.items.single().name }) break
-                val visible = HungerStationCatalog.menuItems(menu).toString()
-                if (visible == previousItems) break
-                previousItems = visible
-                if (!act(menu, CatalogAction.SCROLL_MENU,
-                        { it.scrollable && it.className == "android.widget.ScrollView" }, allowNoOp = true)) break
-                menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
+            val hunger = try {
+                phase = "قراءة سعر هنقرستيشن وعروضه"
+                val restaurant = LiveRestaurant(desired.restaurant, null, desired.restaurant)
+                check(!navigateToRestaurant(restaurant)) { "المطعم غير متاح للطلب في القراءة الحالية." }
+                phase = "قراءة الوجبة في هنقرستيشن"
+                var menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
+                val offerLabels = PreviewEvidence.offers(menu)
+                var previousItems: String? = null
+                for (page in 0 until 30) {
+                    if (HungerStationCatalog.menuItems(menu).any { it.name == desired.items.single().name }) break
+                    val visible = HungerStationCatalog.menuItems(menu).toString()
+                    if (visible == previousItems) break
+                    previousItems = visible
+                    if (!act(menu, CatalogAction.SCROLL_MENU,
+                            { it.scrollable && it.className == "android.widget.ScrollView" }, allowNoOp = true)) break
+                    menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
+                }
+                val item = HungerStationCatalog.menuItems(menu).singleOrNull { it.name == desired.items.single().name }
+                    ?: error("لم تظهر الوجبة المطابقة في هنقرستيشن؛ لم أستبدلها بوجبة أخرى.")
+                act(menu, CatalogAction.OPEN_PRODUCT, { HungerStationCatalog.menuItem(it) == item })
+                phase = "قراءة خيارات هنقرستيشن"
+                val details = readHungerProduct(restaurant, item).details
+                graph.catalog.value = graph.catalog.value.copy(product = details)
+                check(details.optionsComplete && details.product.available && details.product.listedPriceHalala != null) {
+                    "لم يكتمل التحقق من الوجبة في هنقرستيشن؛ لا توجد مقارنة مؤكدة."
+                }
+                check(MenuSelectionValidator().selectConfigured(details,
+                    ProductSelection(details.product.id, emptyMap(), 1), System.currentTimeMillis()) is SelectionResult.Accepted) {
+                    "تحتاج الوجبة خيارات إلزامية؛ لم أستخدم سعرًا لطلب ناقص."
+                }
+                comparedProduct = details
+                MenuCostPreview(ProviderId.HUNGERSTATION, desired.fingerprint,
+                    Math.multiplyExact(details.product.listedPriceHalala!!, desired.items.single().quantity.toLong()), offerLabels, System.currentTimeMillis(), HungerStationCatalog.TESTED_VERSION,
+                    deliveryBeforeOffers = PreviewEvidence.hungerComponent(menu, "رسوم التوصيل"),
+                    minimumOrder = PreviewEvidence.hungerComponent(menu, "الحد الأدنى للطلب"),
+                    rules = MenuOfferRules.fromFrame(ProviderId.HUNGERSTATION, menu))
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (stopped: CatalogStoppedException) { throw stopped }
+            catch (interrupted: UserInterrupted) { throw interrupted }
+            catch (changed: ScreenChangedBeforeAction) { throw changed }
+            catch (_: Exception) {
+                failedMenuPreview(ProviderId.HUNGERSTATION, desired,
+                    "تعذرت قراءة الوجبة وخياراتها في هنقرستيشن؛ سأكمل قراءة كيتا.")
             }
-            val item = HungerStationCatalog.menuItems(menu).singleOrNull { it.name == desired.items.single().name }
-                ?: error("لم تظهر الوجبة المطابقة في هنقرستيشن؛ لم أستبدلها بوجبة أخرى.")
-            act(menu, CatalogAction.OPEN_PRODUCT, { HungerStationCatalog.menuItem(it) == item })
-            phase = "قراءة خيارات هنقرستيشن"
-            val details = readHungerProduct(restaurant, item).details
-            graph.catalog.value = graph.catalog.value.copy(product = details)
-            check(details.optionsComplete && details.product.available && details.product.listedPriceHalala != null) {
-                "لم يكتمل التحقق من الوجبة في هنقرستيشن؛ لا توجد مقارنة مؤكدة."
-            }
-            comparedProduct = details
-            val hunger = MenuCostPreview(ProviderId.HUNGERSTATION, desired.fingerprint,
-                Math.multiplyExact(details.product.listedPriceHalala!!, desired.items.single().quantity.toLong()), offerLabels, System.currentTimeMillis(), HungerStationCatalog.TESTED_VERSION,
-                deliveryBeforeOffers = PreviewEvidence.hungerComponent(menu, "رسوم التوصيل"),
-                minimumOrder = PreviewEvidence.hungerComponent(menu, "الحد الأدنى للطلب"),
-                rules = MenuOfferRules.fromFrame(ProviderId.HUNGERSTATION, menu))
-            graph.catalog.value = graph.catalog.value.copy(previews = listOf(hunger), message = "قرأت هنقرستيشن؛ جارٍ قراءة كيتا دون تغيير السلال…")
-            // An unsupported installation is a preflight failure, never a coupon-read fallback.
-            provider = ProviderId.KEETA
-            checkSession()
-            check(graph.installations.value.any { it.provider == provider && it.version == keetaMenu.VERSION }) {
-                "إصدار كيتا يحتاج تحققًا قبل قراءة المقارنة."
-            }
-            val keeta = if (keetaMenu.VERSION == "3.13.203") readCurrentKeetaProduct(desired) else try {
-                targetSeen = false
-                phase = "قراءة سعر كيتا وعروضه"
-                val launch = service.packageManager.getLaunchIntentForPackage(provider.packageName) ?: error("كيتا غير مثبت.")
-                service.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                var frame = openKeetaRequest()
-                if (keetaMenu.searchCandidate(frame) != null) {
-                    keetaBasketAction { keetaMenu.searchCandidate(it) }
-                    frame = await { keetaMenu.menu(it) }
+            graph.catalog.value = graph.catalog.value.copy(previews = listOf(hunger), message = "انتهت محاولة هنقرستيشن؛ جارٍ قراءة كيتا دون تغيير السلال…")
+            val keeta = try {
+                bindKeetaRequest(desired)
+                // An unsupported installation is a preflight failure, never a coupon-read fallback.
+                provider = ProviderId.KEETA
+                checkSession()
+                check(graph.installations.value.any { it.provider == provider && it.version == keetaMenu.VERSION }) {
+                    "إصدار كيتا يحتاج تحققًا قبل قراءة المقارنة."
                 }
-                if (keetaMenu.basketDrawer(frame) || keetaMenu.product(frame)) {
-                    closeKeetaReadSheet(frame)
-                    frame = await { keetaReadable(it) && !keetaMenu.basketDrawer(it) && !keetaMenu.product(it) }
-                }
-                var owned: app.octopus.local.pricing.OfferRule? = null
-                if (KeetaPromotionEvidence.terms(frame)) {
-                    owned = KeetaPromotionEvidence.ownedRule(frame, System.currentTimeMillis())
-                    closeKeetaReadSheet(frame)
-                    frame = await { KeetaPromotionEvidence.couponSheet(it) || keetaMenu.menu(it) }
-                }
-                if (KeetaPromotionEvidence.couponSheet(frame)) {
-                    if (owned == null && KeetaPromotionEvidence.termsTarget(frame) != null) {
-                        val termsSeenAt = System.currentTimeMillis()
-                        openKeetaCoupon(frame, true)
-                        frame = await { KeetaPromotionEvidence.terms(it) }
-                        owned = KeetaPromotionEvidence.ownedRule(frame, termsSeenAt, true)
-                        closeKeetaReadSheet(frame)
-                        frame = await { KeetaPromotionEvidence.couponSheet(it) }
-                    }
-                    closeKeetaReadSheet(frame)
-                    frame = await { keetaMenu.menu(it) }
-                }
-                if (keetaMenu.menu(frame)) {
-                    frame = restoreKeetaHeader(frame)
-                    var previous = ""
-                    for (step in 0 until 12) {
-                        val body = frame.nodes.joinToString { it.label + it.className }
-                        if (body == previous) break
-                        previous = body
-                        if (!scrollKeetaHeader(frame)) break
+                if (keetaMenu.VERSION == "3.13.203") readCurrentKeetaProduct(desired) else try {
+                    targetSeen = false
+                    phase = "قراءة سعر كيتا وعروضه"
+                    val launch = service.packageManager.getLaunchIntentForPackage(provider.packageName) ?: error("كيتا غير مثبت.")
+                    service.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    var frame = openKeetaRequest()
+                    if (keetaMenu.searchCandidate(frame) != null) {
+                        keetaBasketAction { keetaMenu.searchCandidate(it) }
                         frame = await { keetaMenu.menu(it) }
                     }
-                    if (owned == null && KeetaPromotionEvidence.couponTarget(frame, keetaMenu) != null) {
-                        openKeetaCoupon(frame, false)
-                        frame = await { KeetaPromotionEvidence.couponSheet(it) }
-                        if (KeetaPromotionEvidence.termsTarget(frame) != null) {
+                    if (keetaMenu.basketDrawer(frame) || keetaMenu.product(frame)) {
+                        closeKeetaReadSheet(frame)
+                        frame = await { keetaReadable(it) && !keetaMenu.basketDrawer(it) && !keetaMenu.product(it) }
+                    }
+                    var owned: app.octopus.local.pricing.OfferRule? = null
+                    if (KeetaPromotionEvidence.terms(frame)) {
+                        owned = KeetaPromotionEvidence.ownedRule(frame, System.currentTimeMillis())
+                        closeKeetaReadSheet(frame)
+                        frame = await { KeetaPromotionEvidence.couponSheet(it) || keetaMenu.menu(it) }
+                    }
+                    if (KeetaPromotionEvidence.couponSheet(frame)) {
+                        if (owned == null && KeetaPromotionEvidence.termsTarget(frame) != null) {
                             val termsSeenAt = System.currentTimeMillis()
                             openKeetaCoupon(frame, true)
                             frame = await { KeetaPromotionEvidence.terms(it) }
@@ -228,36 +220,78 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                         closeKeetaReadSheet(frame)
                         frame = await { keetaMenu.menu(it) }
                     }
+                    if (keetaMenu.menu(frame)) {
+                        frame = restoreKeetaHeader(frame)
+                        var previous = ""
+                        for (step in 0 until 12) {
+                            val body = frame.nodes.joinToString { it.label + it.className }
+                            if (body == previous) break
+                            previous = body
+                            if (!scrollKeetaHeader(frame)) break
+                            frame = await { keetaMenu.menu(it) }
+                        }
+                        if (owned == null && KeetaPromotionEvidence.couponTarget(frame, keetaMenu) != null) {
+                            openKeetaCoupon(frame, false)
+                            frame = await { KeetaPromotionEvidence.couponSheet(it) }
+                            if (KeetaPromotionEvidence.termsTarget(frame) != null) {
+                                val termsSeenAt = System.currentTimeMillis()
+                                openKeetaCoupon(frame, true)
+                                frame = await { KeetaPromotionEvidence.terms(it) }
+                                owned = KeetaPromotionEvidence.ownedRule(frame, termsSeenAt, true)
+                                closeKeetaReadSheet(frame)
+                                frame = await { KeetaPromotionEvidence.couponSheet(it) }
+                            }
+                            closeKeetaReadSheet(frame)
+                            frame = await { keetaMenu.menu(it) }
+                        }
+                    }
+                    var rules = MenuOfferRules.fromFrame(provider, frame)
+                    owned?.let { coupon ->
+                        rules = rules.filterNot { it.target == app.octopus.local.pricing.OfferTarget.ITEMS &&
+                            it.percentBasisPoints == coupon.percentBasisPoints && it.minimum == coupon.minimum } + coupon
+                        if (coupon.termsComplete && KeetaPromotionEvidence.simultaneous(frame, coupon, keetaMenu))
+                            rules = rules.map { rule -> if (rule.id == coupon.id || rule.target == app.octopus.local.pricing.OfferTarget.DELIVERY)
+                                rule.copy(stackGroup="observed-${coupon.id}") else rule }
+                    }
+                    val offers = PreviewEvidence.offers(frame)
+                    if (!keetaMenu.product(frame)) {
+                        openKeetaPreviewProduct(frame)
+                        frame = await { keetaMenu.product(it) }
+                    }
+                    val price = keetaMenu.unitPrice(frame) ?: error("تعذر ربط سعر كيتا بالوجبة المطلوبة.")
+                    MenuCostPreview(provider, desired.fingerprint, Math.multiplyExact(price, desired.items.single().quantity.toLong()), offers,
+                        System.currentTimeMillis(), keetaMenu.VERSION, rules = rules)
+                } catch (cancelled: CancellationException) {
+                    if (cancelled !is TimeoutCancellationException) throw cancelled
+                    keetaPriceWithoutCoupon(desired)
+                } catch (stopped: CatalogStoppedException) {
+                    throw stopped
+                } catch (interrupted: UserInterrupted) {
+                    throw interrupted
+                } catch (changed: ScreenChangedBeforeAction) {
+                    throw changed
+                } catch (_: Exception) {
+                    keetaPriceWithoutCoupon(desired)
                 }
-                var rules = MenuOfferRules.fromFrame(provider, frame)
-                owned?.let { coupon ->
-                    rules = rules.filterNot { it.target == app.octopus.local.pricing.OfferTarget.ITEMS &&
-                        it.percentBasisPoints == coupon.percentBasisPoints && it.minimum == coupon.minimum } + coupon
-                    if (coupon.termsComplete && KeetaPromotionEvidence.simultaneous(frame, coupon, keetaMenu))
-                        rules = rules.map { rule -> if (rule.id == coupon.id || rule.target == app.octopus.local.pricing.OfferTarget.DELIVERY)
-                            rule.copy(stackGroup="observed-${coupon.id}") else rule }
-                }
-                val offers = PreviewEvidence.offers(frame)
-                if (!keetaMenu.product(frame)) {
-                    openKeetaPreviewProduct(frame)
-                    frame = await { keetaMenu.product(it) }
-                }
-                val price = keetaMenu.unitPrice(frame) ?: error("تعذر ربط سعر كيتا بالوجبة المطلوبة.")
-                MenuCostPreview(provider, desired.fingerprint, Math.multiplyExact(price, desired.items.single().quantity.toLong()), offers,
-                    System.currentTimeMillis(), keetaMenu.VERSION, rules = rules)
-            } catch (cancelled: CancellationException) {
-                if (cancelled !is TimeoutCancellationException) throw cancelled
-                keetaPriceWithoutCoupon(desired)
-            } catch (stopped: CatalogStoppedException) {
-                throw stopped
-            } catch (_: Exception) {
-                keetaPriceWithoutCoupon(desired)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (stopped: CatalogStoppedException) { throw stopped }
+            catch (interrupted: UserInterrupted) { throw interrupted }
+            catch (changed: ScreenChangedBeforeAction) { throw changed }
+            catch (_: Exception) {
+                failedMenuPreview(ProviderId.KEETA, desired,
+                    "تعذرت قراءة الوجبة المطابقة في كيتا؛ احتُفظ بنتيجة هنقرستيشن المتاحة.")
             }
             check(graph.draft.value?.fingerprint == desired.fingerprint) { "تغير طلبك؛ أعد المقارنة." }
             graph.catalog.value = graph.catalog.value.copy(previews = listOf(hunger, keeta),
-                message = "مقارنة قبل تجهيز السلة. الأسعار والعروض مقروءة؛ الإجماليات والرسوم المشروطة لم تُتحقق، لذلك لم أحدد الأرخص.")
+                message = if (listOf(hunger, keeta).all { it.itemSubtotal != null })
+                    "قرأت أسعار الوجبات في التطبيقين. الإجماليات والرسوم المشروطة لم تُتحقق بعد."
+                else "انتهت محاولة القراءة؛ تظهر نتيجة كل منصة وسبب تعذرها. لا يوجد إجمالي نهائي مؤكد.")
         }
     }
+
+    private fun failedMenuPreview(id: ProviderId, desired: CanonicalCart, reason: String) =
+        MenuCostPreview(id, desired.fingerprint, null, emptyList(), System.currentTimeMillis(),
+            graph.installations.value.singleOrNull { it.provider == id }?.version.orEmpty(), error = reason)
 
     fun prepareComparedHungerStation(): Boolean {
         if (!matchesSelectedRestaurant()) return false
@@ -305,7 +339,6 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 if (keetaMenu.menu(frame) && keetaBasket.footerBag(frame) == null)
                     frame = restoreKeetaHeader(frame)
                 if (keetaBasket.emptyMenu(frame)) {
-                    check(keetaMenu.VERSION == "3.12.501") { "إضافة خيارات كيتا الحالية تحتاج التحقق؛ لم تتغير السلة." }
                     check(!handoff) { "سلة كيتا أصبحت فارغة؛ أعد تجهيزها." }
                     val preview = graph.catalog.value.previews.single { it.provider == ProviderId.KEETA }
                     val expectedUnit = preview.itemSubtotal!! / desired.items.single().quantity
@@ -418,12 +451,18 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             val line = basket.lines.singleOrNull()
                 ?: error("سلة كيتا الحالية لا تطابق الصنف المطلوب.")
             check(basket.complete && line.name == desired.items.single().name && line.choices.isEmpty() &&
-                line.quantity == desired.items.single().quantity && line.lineAmount != null) {
-                "سلة كيتا الحالية مختلفة عن طلبك؛ لم أستخدم سعرها للمقارنة."
+                line.lineAmount != null) {
+                "سلة كيتا الحالية مختلفة عن الوجبة المطلوبة؛ لم أستخدمها للمقارنة."
             }
-            return MenuCostPreview(ProviderId.KEETA, desired.fingerprint, line.lineAmount, emptyList(),
-                System.currentTimeMillis(), keetaMenu.VERSION,
-                "مجموع الصنف من السلة المطابقة؛ إجمالي التوصيل لم يُقرأ بعد.")
+            if (line.quantity == desired.items.single().quantity) {
+                return MenuCostPreview(ProviderId.KEETA, desired.fingerprint, line.lineAmount, emptyList(),
+                    System.currentTimeMillis(), keetaMenu.VERSION,
+                    "مجموع الصنف من السلة المطابقة؛ إجمالي التوصيل لم يُقرأ بعد.")
+            }
+            // A cart amount may include quantity-dependent offers. Read the product again rather
+            // than scaling a different cart's price, and leave its quantity untouched at this stage.
+            closeKeetaReadSheet(frame)
+            frame = await { keetaMenu.menu(it) }
         }
         if (keetaMenu.searchCandidate(frame) != null) {
             keetaBasketAction { keetaMenu.searchCandidate(it) }
@@ -984,7 +1023,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             if (root == null) { delay(200); continue }
             try {
                 if (root.packageName?.toString() != provider.packageName) {
-                    if (targetSeen) error("غادرت المنصة؛ توقفت العملية.")
+                    if (targetSeen) throw UserInterrupted("غادرت المنصة؛ توقفت العملية.")
                     delay(200); continue
                 }
                 val frame = capture(root)
@@ -1020,10 +1059,12 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
 
     private fun checkSession() {
         catalogStop.throwIfStopped()
-        requestFingerprint?.let { check(graph.draft.value?.fingerprint == it) { "تغير طلبك؛ توقفت العملية قبل أي إجراء آخر." } }
-        check(graph.settings.value.catalogConsent && provider in graph.settings.value.allowed) { "تغير السماح؛ توقفت العملية." }
+        requestFingerprint?.let { if (graph.draft.value?.fingerprint != it)
+            throw UserInterrupted("تغير طلبك؛ توقفت العملية قبل أي إجراء آخر.") }
+        if (!graph.settings.value.catalogConsent || provider !in graph.settings.value.allowed)
+            throw UserInterrupted("تغير السماح؛ توقفت العملية.")
         val lock = service.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-        check(!lock.isKeyguardLocked) { "قُفل الجهاز؛ توقفت العملية." }
+        if (lock.isKeyguardLocked) throw UserInterrupted("قُفل الجهاز؛ توقفت العملية.")
     }
 
     private fun capture(root: AccessibilityNodeInfo): CatalogFrame {
