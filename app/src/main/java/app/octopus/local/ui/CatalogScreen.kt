@@ -40,7 +40,7 @@ private fun money(value: Long) = BigDecimal.valueOf(value, 2).stripTrailingZeros
 
 @Composable
 fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit, comparisonOnly: Boolean = false,
-    onRestaurants: () -> Unit = {}, onOpenComparison: () -> Unit = {}) {
+    onRestaurants: () -> Unit = {}, onOpenComparison: () -> Unit = {}, onSettings: () -> Unit = {}) {
     val observedState by graph.catalog.collectAsStateWithLifecycle()
     val state = observedState.copy(busy = observedState.busy || observedState.comparisonRunning)
     val settings by graph.settings.collectAsStateWithLifecycle()
@@ -76,7 +76,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
     if (!comparisonOnly && state.menu == null) MosabHomeHeader(query,
         onQuery = { query = it.take(100) }, enabled = !state.busy,
         onSearch = { start(false) }, onBrowse = { start(true) }, onProviders = onProviders,
-        onCart = onOpenComparison, allowed = settings.allowed.size)
+        onCart = onOpenComparison, onSettings = onSettings, allowed = settings.allowed.size)
     LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         if (comparisonOnly) {
             item {
@@ -351,7 +351,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
 
 @Composable
 private fun MosabHomeHeader(query: String, onQuery: (String) -> Unit, enabled: Boolean,
-    onSearch: () -> Unit, onBrowse: () -> Unit, onProviders: () -> Unit, onCart: () -> Unit, allowed: Int) {
+    onSearch: () -> Unit, onBrowse: () -> Unit, onProviders: () -> Unit, onCart: () -> Unit, onSettings: () -> Unit, allowed: Int) {
     Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(
         OctopusPalette.Ink, OctopusPalette.Petrol, OctopusPalette.SeaMid)),
         RoundedCornerShape(bottomStart = 36.dp, bottomEnd = 36.dp)).statusBarsPadding()
@@ -363,6 +363,7 @@ private fun MosabHomeHeader(query: String, onQuery: (String) -> Unit, enabled: B
                 Text("التوصيل إلى", color = Color.White.copy(alpha = .65f), fontSize = 11.sp)
                 Text("عنوانك النشط في هنقرستيشن", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             }
+            IconButton(onClick = onSettings) { Icon(Icons.Outlined.Settings, "الإعدادات", tint = Color.White) }
             Surface(color = Color.White.copy(alpha = .12f), shape = CircleShape) {
                 IconButton(onClick = onCart) { Icon(Icons.Outlined.ShoppingBag, "طلبك", tint = Color.White) }
             }

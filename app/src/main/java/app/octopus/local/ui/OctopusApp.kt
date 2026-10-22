@@ -133,7 +133,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
                 NavigationBar(containerColor = Color.White, tonalElevation = 0.dp) {
                     listOf(Page.HOME, Page.COMPARE, Page.PROVIDERS, Page.SETTINGS).forEach { item ->
                         NavigationBarItem(selected = page == item, onClick = { page = item },
-                            icon = { Icon(item.icon, if (item == Page.SETTINGS) "الإعدادات" else null, Modifier.size(23.dp)) },
+                            icon = { Icon(item.icon, null, Modifier.size(23.dp)) },
                             label = { Text(item.title, fontSize = 11.sp) },
                             colors = NavigationBarItemDefaults.colors(indicatorColor = OctopusPalette.CoralSoft,
                                 selectedIconColor = Ink, selectedTextColor = Ink, unselectedIconColor = Muted, unselectedTextColor = Muted))
@@ -145,7 +145,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
                 when (page) {
                     Page.HOME, Page.COMPARE -> CatalogScreen(graph, comparisonOnly = page == Page.COMPARE,
                         onRestaurants = { page = Page.HOME }, onOpenComparison = { page = Page.COMPARE },
-                        onProviders = { page = Page.PROVIDERS },
+                        onProviders = { page = Page.PROVIDERS }, onSettings = { page = Page.SETTINGS },
                         onSetup = { if (!settings.consent) disclosure = true else openAccessibilitySettings() })
                     Page.PROVIDERS -> ProvidersScreen(installations, settings, onAllowed = { provider, allowed ->
                         ReadOnlyServiceBridge.stop()
