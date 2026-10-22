@@ -30,7 +30,7 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
             if (text == "غالبًا ما يتم طلبه مع") { bottomSeen = true; break }
             // Honor / HS 8.0.303, Madwar feta product: an unchecked optional checkbox,
             // headed by these two exact labels. Do not infer optionality for other grammars.
-            if (text == "يمكنك اضافة" && !node.clickable && i + 1 < nodes.size &&
+            if (text in setOf("يمكنك اضافة", "اضافات فطاير") && !node.clickable && i + 1 < nodes.size &&
                 clean(nodes[i + 1].label) == "اختيار واحد" && !nodes[i + 1].clickable) {
                 if (!headersInFrame.add(text)) unsupported = true
                 group = groups.getOrPut(text) { Group(text, 0) }
@@ -49,7 +49,8 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
             // They are read-only metadata here and never become actionable choices.
             // The same fixed scrim/nutrition controls can reappear on each scrolled capture.
             // Their role depends on their position in this frame, not accumulated option groups.
-            if (group == null && node.clickable && text in setOf("تمويه", "تنبيهات")) { i++; continue }
+            if (group == null && node.clickable && (text in setOf("تمويه", "تنبيهات") ||
+                    (text == "الحقائق الغذائية" && node.className == "android.widget.ImageView"))) { i++; continue }
             if (node.clickable && node.id != "flutterAddButton" && node.id != "pdpCloseButton" && node.id != "pdpZoomButton") {
                 val value = text.lineSequence().first().trim()
                 // Recorded choice rows are merged names with order-count/price suffixes; recommendation rows are excluded above.

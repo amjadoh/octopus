@@ -46,7 +46,8 @@ internal object HungerStationBasketControls {
         val children = frame.nodes.filter { it.parent == anchor.index }
         val target = children.singleOrNull { it.clickable } ?: return null
         if (!target.enabled || target.editable || target.id.isNotEmpty() || target.className != "android.widget.Button") return null
-        val lines = target.label.lineSequence().map(String::trim).toList()
+        val lines = target.label.replace(Regex("[\\u200e\\u200f\\u061c\\u202a-\\u202e\\u2066-\\u2069]"), "")
+            .lineSequence().map(String::trim).toList()
         if (lines.size != 3 || lines[0] != "عرض السلة" || lines[2] != "§" ||
             MoneyParser.parse(lines[1])?.let { it >= 0 } != true) return null
         val counter = frame.nodes.filter { it.parent == target.index && it.id == "FlutterMenu_goToCartQuantity" }.singleOrNull() ?: return null

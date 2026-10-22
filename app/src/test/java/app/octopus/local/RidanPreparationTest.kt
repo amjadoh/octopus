@@ -39,6 +39,14 @@ class RidanPreparationTest {
         assertTrue(program.consumeAdd(product,add,now))
         assertFalse(program.consumeAdd(product,add,now))
     }
+    @Test fun providerBidiFormattingDoesNotChangeTheValidatedAddAmount() {
+        val formatted = product.copy(nodes=product.nodes.map {
+            if(it.id=="flutterAddButton") it.copy(label="إضافة\n\u202a§\n30\u202c") else it
+        })
+        val program=checkNotNull(RidanCartProgram.create(details(formatted),selection,emptyMenu,now))
+        assertTrue(program.consumeAdd(formatted,formatted.nodes.last(),now))
+        assertNull(app.octopus.local.pricing.MoneyParser.parse("7\u202c 6"))
+    }
     private fun optionalProduct(extraPrice: String = "6", total: String = "30"): CatalogFrame {
         val changedAdd = add.copy(label = "إضافة\n§\n$total")
         return product.copy(nodes = listOf(product.nodes[0], product.nodes[1],
@@ -59,6 +67,22 @@ class RidanPreparationTest {
             val program = checkNotNull(RidanCartProgram.create(details(frame),selection,emptyMenu,now))
             assertFalse(program.consumeAdd(frame,frame.nodes.last(),now))
         }
+    }
+    @Test fun recordedPastryExtrasAndNutritionMetadataAllowOnlyUnselectedPaidExtras() {
+        val frame = optionalProduct().let { original -> original.copy(nodes =
+            listOf(node(20, text="الحقائق الغذائية", click=true, cls="android.widget.ImageView")) +
+                original.nodes.map { if(it.label == "يمكنك اضافة") it.copy(label="اضافات فطاير") else it }) }
+        val parsed = details(frame)
+        assertTrue(parsed.optionsComplete)
+        assertEquals(0, parsed.product.groups.single().minimum)
+        val permit = checkNotNull(RidanCartProgram.create(parsed,selection,emptyMenu,now))
+        assertTrue(permit.consumeAdd(frame,frame.nodes.last(),now))
+        val required = frame.copy(nodes=frame.nodes.flatMap {
+            if(it.label=="اضافات فطاير") listOf(it,node(21,text="مطلوب")) else listOf(it)
+        })
+        assertFalse(RidanCartProgram.supports(details(required),selection,now))
+        val unknown = frame.copy(nodes=frame.nodes.map { if(it.label=="اضافات فطاير") it.copy(label="خيارات غير معروفة") else it })
+        assertFalse(details(unknown).optionsComplete)
     }
     @Test fun existingCartAndUnknownContextAreNotReplaced() {
         assertNull(RidanCartProgram.create(details(),selection,emptyMenu.copy(nodes=emptyMenu.nodes+node(8,"FlutterMenu_goToCartButton")),now))
@@ -82,6 +106,17 @@ class RidanPreparationTest {
         assertTrue(result.lines.single().choices.isEmpty())
         assertFalse(result.complete)
         assertFalse(result.recognizedOrderReview)
+    }
+    @Test fun actualNoModificationsLabelIsNotAnAddedChoice() {
+        val cart=CatalogFrame(listOf(node(0,"FlutterCart_title","السلة\nمدور"),
+            node(1,"FlutterCart_cartItem","فطيرة جبن فيتا\nلايوجد تعديلات أو إضافات\nتعديل\n7\n§"),
+            node(2,"menuItemActionDualButtonValue","1",parent=1)),true)
+        val actual=BasketEvidenceReader.hungerStation(cart,true)
+        assertTrue(actual.complete)
+        assertTrue(actual.lines.single().choices.isEmpty())
+        assertEquals(700L,actual.lines.single().lineAmount)
+        val changed=cart.copy(nodes=cart.nodes.map { if(it.index==1)it.copy(label=it.label.replace("لايوجد تعديلات أو إضافات","شيبس")) else it })
+        assertEquals("شيبس",BasketEvidenceReader.hungerStation(changed,true).lines.single().choices.single().value)
     }
     @Test fun otherRestaurantAndMealUseOwnOneShotPermit() {
         val name="مدور"; val title="فطيرة شكشوكة بالجبن"

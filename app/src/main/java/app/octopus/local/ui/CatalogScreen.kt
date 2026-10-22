@@ -38,7 +38,8 @@ private fun money(value: Long) = BigDecimal.valueOf(value, 2).stripTrailingZeros
 @Composable
 fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit, comparisonOnly: Boolean = false,
     onRestaurants: () -> Unit = {}, onOpenComparison: () -> Unit = {}) {
-    val state by graph.catalog.collectAsStateWithLifecycle()
+    val observedState by graph.catalog.collectAsStateWithLifecycle()
+    val state = observedState.copy(busy = observedState.busy || observedState.comparisonRunning)
     val settings by graph.settings.collectAsStateWithLifecycle()
     val connected by graph.serviceConnected.collectAsStateWithLifecycle()
     val draft by graph.draft.collectAsStateWithLifecycle()
@@ -171,7 +172,18 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                             localError = null
                             if (!LiveCatalogBridge.compareDraft() && graph.catalog.value.error == null) localError = "تعذر بدء المقارنة؛ تحقق من اتصال الخدمة."
                         }, enabled = !state.busy && !changing, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                            Icon(Icons.Outlined.CompareArrows, null); Spacer(Modifier.width(8.dp)); Text("قارن قبل اختيار التطبيق")
+                            Icon(Icons.Outlined.CompareArrows, null); Spacer(Modifier.width(8.dp)); Text("قارن أسعار الوجبات")
+                        }
+                        Text("أسعار الوجبات فقط؛ التوصيل والخدمة والخصومات المشروطة غير متحققة.", fontSize = 12.sp, color = OctopusPalette.Muted)
+                        OutlinedButton(onClick = {
+                            localError = null
+                            if (!LiveCatalogBridge.compareAndPrepare()) localError = "تعذر بدء تجهيز السلتين؛ تحقق من الخدمة والطلب."
+                        }, enabled = !state.busy && !changing, modifier = Modifier.fillMaxWidth()) {
+                            Text("جهّز السلتين لمقارنة الإجمالي")
+                        }
+                        Text("يعدّل سلال المقارنة المطابقة دون تأكيد طلب أو دفع. قراءة الإجماليين النهائيين لم تكتمل بعد؛ ستظهر حالة كل منصة دون تقدير سعر نهائي.", fontSize = 12.sp, color = OctopusPalette.Muted)
+                        state.comparisonProgress.values.forEach { result ->
+                            Text("${result.provider.title}: ${result.detail ?: "جارٍ تجهيز السلة والتحقق منها…"}", fontSize = 12.sp)
                         }
                         ProviderId.entries.forEach { id ->
                             if (state.preparedBaskets.forRequest(cart, id) != null) TextButton(onClick = {
@@ -184,7 +196,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                 }
             }
             if (state.previews.isNotEmpty()) {
-                item { Text("مقارنة طلبك", fontSize = 22.sp, fontWeight = FontWeight.Bold) }
+                item { Text("مقارنة أسعار الوجبات", fontSize = 22.sp, fontWeight = FontWeight.Bold) }
                 item { Text("قراءة قبل تجهيز السلة. الإجمالي النهائي ومطابقة العنوان والفرع بين التطبيقين غير متحققة؛ لم أحدد الأرخص.", fontSize = 12.sp, color = OctopusPalette.Muted) }
                 item { ComparisonSummary(state.previews, cart, currentQuoteTime) }
                 items(state.previews, key = { it.provider }) { preview ->

@@ -64,6 +64,12 @@ class HungerStationBasketNavigationTest {
     private suspend fun run(port: Port, stop: StopSignal = StopSignal()) =
         HungerStationBasketNavigation(clock = { 2000 }).read(restaurant, port, stop)
     private fun blocked(reason: BasketNavigationFailure) = BasketNavigationResult.Blocked(reason)
+    @Test fun bidiWrappedBasketAmountKeepsTheSameKnownControl() {
+        val changed = change(menu, { it == button }) { it.copy(label="عرض السلة\n\u202a7\n§\u202c") }
+        assertNotNull(HungerStationBasketControls.openTarget(changed))
+        val payment = change(changed, { it.index == button.index }) { it.copy(label="تأكيد الطلب\n7\n§") }
+        assertNull(HungerStationBasketControls.openTarget(payment))
+    }
 
     @Test fun recordedPostAddOpensExactlyOnceAndReturnsOnlyVisibleBasketEvidence() = runBlocking {
         val port = Port()

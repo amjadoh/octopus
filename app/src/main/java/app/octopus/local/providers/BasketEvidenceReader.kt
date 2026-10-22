@@ -27,7 +27,9 @@ object BasketEvidenceReader {
             val edit = parts.indexOf("تعديل")
             val plain = parts.size == 3 && parts.last() == "§" && MoneyParser.parse(parts[1]) != null
             if (!plain && (edit < 1 || parts.size != edit + 3 || parts.last() != "§")) return@mapNotNull null
-            val choices = if (plain) emptyList() else parts.subList(1, edit).flatMap(::choices)
+            val optionLines = if (plain) emptyList() else parts.subList(1, edit)
+            val choices = if (optionLines == listOf("لايوجد تعديلات أو إضافات")) emptyList()
+                else optionLines.flatMap(::choices)
             val quantities = frame.descendants(card.index).filter { it.id == "menuItemActionDualButtonValue" }
             val quantity = quantities.singleOrNull()?.label?.let(::quantity)
             BasketLineEvidence(parts.first(), choices, quantity, MoneyParser.parse(parts[if (plain) 1 else edit+1]))

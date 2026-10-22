@@ -23,6 +23,8 @@ data class LiveMenuItem(val name: String, val listedPrice: Long?, val selector: 
 data class LiveMenu(val restaurant: LiveRestaurant, val items: List<LiveMenuItem>, val capturedAtMillis: Long,
     val reachedEnd: Boolean)
 data class LiveCatalogState(
+    val comparisonRunning: Boolean = false,
+    val comparisonProgress: Map<ProviderId, app.octopus.local.automation.CartComparisonProgress> = emptyMap(),
     val previews: List<MenuCostPreview> = emptyList(),
     val busy: Boolean = false,
     val message: String = "ابحث لقراءة المطاعم المتاحة من هنقرستيشن.",

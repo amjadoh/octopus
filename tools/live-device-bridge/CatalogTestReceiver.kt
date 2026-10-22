@@ -66,6 +66,9 @@ class CatalogTestReceiver : BroadcastReceiver() {
                 .put("draftItems", graph.draft.value?.items?.size ?: 0)
                 .put("preparedBasketPresent", state.preparedBasket != null)
                 .put("productOptionsComplete", state.product?.optionsComplete ?: JSONObject.NULL)
+                .put("productAvailable", state.product?.product?.available ?: JSONObject.NULL)
+                .put("productListedPriceHalala", state.product?.product?.listedPriceHalala ?: JSONObject.NULL)
+                .put("productGroupCount", state.product?.product?.groups?.size ?: JSONObject.NULL)
                 .put("menuPricePreviews", JSONArray(state.previews.map { preview ->
                     JSONObject().put("provider", preview.provider.name)
                         .put("itemSubtotalHalala", preview.itemSubtotal ?: JSONObject.NULL)

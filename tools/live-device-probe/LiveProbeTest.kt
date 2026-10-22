@@ -55,10 +55,43 @@ class LiveProbeTest {
             "لف" to "SPIN", "لف واربح" to "SPIN_PROMO", "spin" to "SPIN", "عجلة الحظ" to "SPIN_PROMO",
             "حاول مرة أخرى" to "RETRY", "إعادة المحاولة" to "RETRY", "retry" to "RETRY", "موافق" to "OK")
         var visited = 0
-        fun inspectControls(node: android.view.accessibility.AccessibilityNodeInfo) {
+        val publicCartControls = JSONArray()
+        val pricingOnly = JSONArray()
+        val pricingLabels = setOf("الإجمالي", "المجموع", "المجموع الفرعي", "إجمالي الطلب", "المبلغ الإجمالي", "رسوم التوصيل", "رسوم الخدمة", "رسوم الطلب الصغير", "الخصم", "ضريبة القيمة المضافة", "Total", "Subtotal", "Delivery fee", "Service fee")
+        val amountPattern = "[0-9٠-٩]{1,5}(?:[.,٫][0-9٠-٩]{1,2})?"
+        val currencyPattern = "(?:[§﷼]|SAR|ر\\.س)"
+        val publicMoney = Regex("(?:$currencyPattern\\s*$amountPattern|$amountPattern\\s*$currencyPattern)")
+        fun inspectControls(node: android.view.accessibility.AccessibilityNodeInfo, publicCart: Boolean = false) {
             if (visited++ >= 400 || !node.isVisibleToUser || node.isPassword || node.isEditable ||
                 app.octopus.local.diagnostics.InspectionRedactor.privateSubtree(node.viewIdResourceName.orEmpty()) ||
                 (android.os.Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive)) return
+            val cart = publicCart || (expected == "com.hungerstation.android.web" && node.viewIdResourceName in
+                setOf("FlutterMenu_goToCartButton", "FlutterMenu_goToCartQuantity", "FlutterCart_title", "FlutterCart_cartItem"))
+            // Exact public pricing labels/amounts only; never persist arbitrary review text.
+            listOfNotNull(node.text, node.contentDescription).map {
+                it.toString().replace(Regex("[\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]"), "").trim()
+            }.filter { it in pricingLabels || publicMoney.matches(it) }.distinct().forEach {
+                pricingOnly.put(JSONObject().put("value", it).put("id", node.viewIdResourceName.orEmpty()))
+            }
+            listOfNotNull(node.text, node.contentDescription).forEach { raw ->
+                val lines = raw.toString().replace(Regex("[\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]"), "")
+                    .lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+                lines.forEachIndexed { i, label ->
+                    if (label in pricingLabels) {
+                        val following = lines.drop(i + 1).take(2)
+                        val amount = following.firstOrNull()?.takeIf { publicMoney.matches(it) }
+                            ?: following.joinToString(" ").takeIf { publicMoney.matches(it) }
+                        if (amount != null) pricingOnly.put(JSONObject().put("label", label).put("value", amount))
+                    }
+                }
+            }
+            if (cart) {
+                val bounds = android.graphics.Rect().also(node::getBoundsInScreen)
+                publicCartControls.put(JSONObject().put("id",node.viewIdResourceName.orEmpty())
+                    .put("label",(node.text ?: node.contentDescription)?.toString().orEmpty())
+                    .put("class",node.className?.toString()).put("clickable",node.isClickable)
+                    .put("bounds",JSONArray(listOf(bounds.left,bounds.top,bounds.right,bounds.bottom))))
+            }
             listOfNotNull(node.text, node.contentDescription).map { it.toString().trim().lowercase() }
                 .mapNotNull { known[it] }.distinct().forEach { tag ->
                     val bounds = android.graphics.Rect().also(node::getBoundsInScreen)
@@ -67,7 +100,7 @@ class LiveProbeTest {
                 }
             for (i in 0 until node.childCount.coerceAtMost(100)) {
                 val child = node.getChild(i) ?: continue
-                try { inspectControls(child) } finally { @Suppress("DEPRECATION") child.recycle() }
+                try { inspectControls(child, cart) } finally { @Suppress("DEPRECATION") child.recycle() }
             }
         }
         windows.filter { it.isActive }.forEach { window ->
@@ -76,6 +109,8 @@ class LiveProbeTest {
             finally { @Suppress("DEPRECATION") root?.recycle() }
         }
         result.put("functionalControls", controls)
+        result.put("publicCartControls", publicCartControls)
+        result.put("pricingOnly", pricingOnly)
         instrumentation.targetContext.filesDir.resolve("live-structure.json").writeText(result.toString(), Charsets.UTF_8)
         instrumentation.sendStatus(0, Bundle().apply { putString("liveCapture", result.toString()) })
         check(captured != null) { "Expected provider foreground window unavailable" }

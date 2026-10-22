@@ -9,14 +9,35 @@ import java.util.Base64
 /** Actual Honor 3.13.203 read-only capture, with only whitelisted food/control labels. */
 class KeetaCurrentProductTest {
     private val reader = KeetaMenuReader("مدور", "فطيرة جبن فيتا", "3.13.203")
-    private fun recorded(): CatalogFrame {
-        val stream = checkNotNull(javaClass.getResourceAsStream("/recorded-keeta/keeta-3.13.203-feta-product.tsv"))
+    private fun recorded(kind: String = "product"): CatalogFrame {
+        val stream = checkNotNull(javaClass.getResourceAsStream("/recorded-keeta/keeta-3.13.203-feta-$kind.tsv"))
         val nodes = stream.bufferedReader(Charsets.UTF_8).use { input -> input.readLines().filter { it.isNotBlank() && !it.startsWith("#") }.map {
             val p = it.split('\t')
             CatalogNode(p[0].toInt(), p[1].toInt(), p[2], String(Base64.getDecoder().decode(p[9]), Charsets.UTF_8),
                 p[3], p[4] == "1", p[5] == "1", p[6] == "1", p[7] == "1", p[8] == "1")
         } }
         return CatalogFrame(nodes, true)
+    }
+    @Test fun currentActualCartContainsExactlyOnePlainFetaAndNoFinalQuote() {
+        val frame = recorded("cart")
+        val evidence = checkNotNull(KeetaBasketReader(reader).evidence(frame))
+        assertTrue(evidence.complete)
+        assertEquals(1, evidence.lines.size)
+        assertEquals(reader.title, evidence.lines.single().name)
+        assertEquals(1, evidence.lines.single().quantity)
+        assertTrue(evidence.lines.single().choices.isEmpty())
+        assertEquals(700L, evidence.lines.single().lineAmount)
+        assertFalse(evidence.recognizedOrderReview)
+        assertNull(KeetaBasketReader(reader).evidence(frame.copy(complete=false)))
+    }
+    @Test fun currentRecordedCartHasQuantityControlsAndCannotRemoveLastItem() {
+        val frame = recorded("cart")
+        val basket = KeetaBasketReader(reader)
+        val increase = checkNotNull(basket.quantityTarget(frame, true))
+        assertTrue(increase.clickable)
+        assertTrue(increase.label.isEmpty())
+        assertNull(basket.quantityTarget(frame, false))
+        assertNull(basket.quantityTarget(frame.copy(complete = false), true))
     }
     @Test fun recordedCurrentProductHasAnUnambiguousUnitPriceAndBoundedCloseAndAddTargets() {
         val frame = recorded()
