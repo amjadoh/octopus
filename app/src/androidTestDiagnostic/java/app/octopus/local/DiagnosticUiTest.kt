@@ -11,6 +11,19 @@ class DiagnosticUiTest {
     private fun scrollToText(text: String) {
         compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(text))
     }
+    @Test fun choosingDifferentRestaurantHidesOldDraftComparison() {
+        compose.waitUntil(5_000) { (compose.activity.application as OctopusApplication).graph.draftReady.value }
+        compose.runOnIdle {
+            val graph = (compose.activity.application as OctopusApplication).graph
+            graph.draft.value = app.octopus.local.domain.CanonicalCart("مدور", null,
+                listOf(app.octopus.local.domain.CanonicalItem("فطيرة جبن فيتا", null, emptyList(), 3)))
+            graph.catalog.value = graph.catalog.value.copy(selectedRestaurant = "مطعم آخر")
+        }
+        scrollToText("المطعم المختار: مطعم آخر")
+        compose.onNodeWithText("المطعم المختار: مطعم آخر").assertIsDisplayed()
+        compose.onNodeWithText("قارن أسعار الوجبات").assertDoesNotExist()
+        compose.onNodeWithText("جهّز السلتين لمقارنة الإجمالي").assertDoesNotExist()
+    }
     @Test fun startsWithRestaurantSearchAndNoInventedPrices() {
         compose.onNodeWithText("المطاعم").assertIsDisplayed()
         compose.onNode(hasSetTextAction()).performScrollTo().assertIsDisplayed().performTextInput("مدور")

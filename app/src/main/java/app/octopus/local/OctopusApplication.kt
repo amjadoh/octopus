@@ -82,6 +82,8 @@ class AppGraph(private val app: Application) {
                 message = "تغير طلبك؛ أعد المقارنة للتحقق من الأسعار والعروض والسلة.", error = null)
             withContext(Dispatchers.IO) { if (change.cart == null) orders.delete(activeOrderId) else orders.save(change.cart, activeOrderId) }
             draft.value = change.cart
+            catalog.value = catalog.value.copy(selectedRestaurant = change.cart?.restaurant,
+                comparisonProgress = emptyMap())
         }
         return change
     }

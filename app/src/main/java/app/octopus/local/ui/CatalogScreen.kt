@@ -137,6 +137,17 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
         }
         storageError?.let { item { Text(it, color = MaterialTheme.colorScheme.error) } }
         draft?.let { cart ->
+            if (!ComparisonRequestSelection.matches(state.selectedRestaurant, cart)) {
+                item {
+                    Card(colors = CardDefaults.cardColors(containerColor = OctopusPalette.Soft)) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("المطعم المختار: ${state.selectedRestaurant}", fontWeight = FontWeight.Bold)
+                            Text("اختر وجبة من هذا المطعم وأضفها إلى طلبك لبدء المقارنة.")
+                            Text("الطلب السابق من ${cart.restaurant} محفوظ؛ لن يُستخدم للمقارنة مع اختيارك الجديد.", fontSize = 12.sp)
+                        }
+                    }
+                }
+            } else {
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(24.dp)) {
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -207,6 +218,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                         if (!started) localError = "انتهت صلاحية القراءة أو تغير الطلب؛ أعد المقارنة."
                     })
                 }
+            }
             }
         }
         if (state.busy) item {
