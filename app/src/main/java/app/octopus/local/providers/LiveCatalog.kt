@@ -23,6 +23,7 @@ data class LiveMenuItem(val name: String, val listedPrice: Long?, val selector: 
 data class LiveMenu(val restaurant: LiveRestaurant, val items: List<LiveMenuItem>, val capturedAtMillis: Long,
     val reachedEnd: Boolean)
 data class LiveCatalogState(
+    val finalTotals: Map<ProviderId, FinalTotalReading> = emptyMap(),
     val selectedRestaurant: String? = null,
     val comparisonRunning: Boolean = false,
     val comparisonProgress: Map<ProviderId, app.octopus.local.automation.CartComparisonProgress> = emptyMap(),
@@ -39,6 +40,7 @@ data class LiveCatalogState(
 
 /** An edited order cannot inherit either provider's quote, progress or ready-cart badge. */
 fun LiveCatalogState.forChangedDraft(cart: app.octopus.local.domain.CanonicalCart?) = copy(
+    finalTotals = emptyMap(),
     selectedRestaurant = cart?.restaurant,
     previews = emptyList(),
     comparisonProgress = emptyMap(),
@@ -69,12 +71,12 @@ object HungerStationCatalog {
         else -> CatalogScreen.UNKNOWN
     }
 
-    /** Honor / 8.0.303: category captions are baked into images. Admit only the observed seven-card grid. */
+    /** Honor / 8.0.303: observed seven/eight-card grids; first card is Restaurants. */
     fun browseEntry(frame: CatalogFrame): CatalogNode? {
         if (screen(frame) != CatalogScreen.HOME) return null
         val groups = frame.nodes.filter { it.id.endsWith(":id/home_modules_parent") }.mapNotNull { group ->
             val cards = frame.nodes.filter { it.parent == group.index }
-            if (cards.size != 7 || cards.any { !it.clickable || !it.enabled || it.id.isNotEmpty() ||
+            if (cards.size !in setOf(7, 8) || cards.any { !it.clickable || !it.enabled || it.id.isNotEmpty() ||
                     it.className != "android.view.ViewGroup" || frame.descendants(it.index).none { child ->
                         child.parent == it.index && child.id.endsWith(":id/banner_image") } }) null
             else cards.first()

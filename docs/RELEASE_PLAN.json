@@ -1,7 +1,7 @@
 {
-  "version": "1.3.6",
-  "versionCode": 14,
-  "tag": "v1.3.6-alpha",
+  "version": "1.3.7",
+  "versionCode": 15,
+  "tag": "v1.3.7-alpha",
   "scope": "preview_current_work",
   "userRequestedPreview": true,
   "realComparisonComplete": false,

@@ -1,6 +1,7 @@
 package app.octopus.local.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -17,6 +18,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import app.octopus.local.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
@@ -70,11 +73,14 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
         }
     }
     Column(Modifier.fillMaxSize()) {
+    if (!comparisonOnly && state.menu == null) MosabHomeHeader(query,
+        onQuery = { query = it.take(100) }, enabled = !state.busy,
+        onSearch = { start(false) }, onBrowse = { start(true) }, onProviders = onProviders,
+        onCart = onOpenComparison, allowed = settings.allowed.size)
     LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         if (comparisonOnly) {
             item {
-                Text("قارن طلبك", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
-                Text("كل تطبيق بسعره وعروضه. اختار بعد ما تشوف التفاصيل.", color = OctopusPalette.Muted, fontSize = 13.sp)
+                MosabJourneyHero("قارن طلبك", "كل التفاصيل قدامك. اختر المنصة بعد مراجعة سعرها.", 3)
             }
             if (draft == null) item {
                 Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(24.dp)) {
@@ -86,33 +92,11 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                     }
                 }
             }
-        } else {
+        } else if (state.menu != null) {
         item {
-            if (state.restaurants.isNotEmpty() || state.menu != null || draft != null) {
-                Surface(color = OctopusPalette.Soft, shape = RoundedCornerShape(22.dp)) {
-                    Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween) {
-                        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Text("اختار. قارن. وقرّر.", fontWeight = FontWeight.ExtraBold, fontSize = 21.sp, color = OctopusPalette.Petrol)
-                            Text("مطعمك ← وجباتك ← المقارنة", fontSize = 12.sp, color = OctopusPalette.Muted)
-                        }
-                        Icon(Icons.Outlined.Restaurant, null, Modifier.size(30.dp), tint = OctopusPalette.Petrol)
-                    }
-                }
-            } else Box(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF063C44), Color(0xFF127D80))), RoundedCornerShape(28.dp)).padding(22.dp)) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("اختيارك يبدأ هنا", color = Color(0xFFAEEAE0), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    Text("وش ودّك اليوم؟", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("اختار وجباتك، شوف المقارنة، وبعدين قرّر.", color = Color(0xFFE1F4EF), fontSize = 14.sp)
-                    Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("١ المطعم", "٢ طلبك", "٣ المقارنة").forEach { step ->
-                            Surface(color = Color.White.copy(alpha = .12f), shape = RoundedCornerShape(20.dp)) {
-                                Text(step, Modifier.padding(horizontal = 12.dp, vertical = 7.dp), color = Color.White, fontSize = 11.sp)
-                            }
-                        }
-                    }
-                }
-            }
+            MosabJourneyHero(if (state.menu == null) "وش ودّك اليوم؟" else state.menu!!.restaurant.name,
+                if (state.menu == null) "طلب واحد، وخيارات أكثر. ابدأ بمطعمك." else "اختر وجباتك وخصص طلبك على مزاجك.",
+                if (state.menu == null) 1 else 2)
         }
         item {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -143,9 +127,13 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                 item {
                     Card(colors = CardDefaults.cardColors(containerColor = OctopusPalette.Soft)) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("المطعم المختار: ${state.selectedRestaurant}", fontWeight = FontWeight.Bold)
-                            Text("اختر وجبة من هذا المطعم وأضفها إلى طلبك لبدء المقارنة.")
-                            Text("الطلب السابق من ${cart.restaurant} محفوظ؛ لن يُستخدم للمقارنة مع اختيارك الجديد.", fontSize = 12.sp)
+                            Text(state.selectedRestaurant?.let { "المطعم المختار: $it" } ?: "لم تختر طلبًا جديدًا بعد", fontWeight = FontWeight.Bold)
+                            Text("اختر مطعمك ووجباتك لبدء المقارنة.")
+                            Text("يوجد طلب سابق محفوظ من ${cart.restaurant}؛ لا يدخل المقارنة تلقائيًا.", fontSize = 12.sp)
+                            if (state.selectedRestaurant == null) TextButton(onClick = {
+                                graph.catalog.value = graph.catalog.value.copy(selectedRestaurant = cart.restaurant)
+                            }) { Text("استئناف الطلب المحفوظ") }
+                            OutlinedButton(onClick = onRestaurants) { Text("اختيار مطعم جديد") }
                         }
                     }
                 }
@@ -194,7 +182,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                         }, enabled = !state.busy && !changing, modifier = Modifier.fillMaxWidth()) {
                             Text("جهّز السلتين لمقارنة الإجمالي")
                         }
-                        Text("يعدّل سلال المقارنة المطابقة دون تأكيد طلب أو دفع. قراءة الإجماليين النهائيين لم تكتمل بعد؛ ستظهر حالة كل منصة دون تقدير سعر نهائي.", fontSize = 12.sp, color = OctopusPalette.Muted)
+                        Text("يجهّز السلتين ويقرأ إجمالي المراجعة إذا تعرّف على مسارها، دون تأكيد طلب أو دفع. النتيجة غير المقروءة لا تُقدّر.", fontSize = 12.sp, color = OctopusPalette.Muted)
                         state.comparisonProgress.values.forEach { result ->
                             Text("${result.provider.title}: ${result.detail ?: "جارٍ تجهيز السلة والتحقق منها…"}", fontSize = 12.sp)
                         }
@@ -206,6 +194,28 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                             }, enabled = !state.busy) { Text("افتح وأعد فحص سلة ${id.title}") }
                         }
                     }
+                }
+            }
+            if (state.finalTotals.isNotEmpty()) {
+                item { Text("إجماليات مراجعة الطلب", fontSize = 22.sp, fontWeight = FontWeight.Bold) }
+                ProviderId.entries.forEach { id ->
+                    state.finalTotals[id]?.let { quote -> item {
+                        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(22.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text(id.title, fontWeight = FontWeight.Bold)
+                                Text(money(quote.total), fontSize = 30.sp, fontWeight = FontWeight.ExtraBold)
+                                Text(if (quote.fresh(cart, currentQuoteTime)) "إجمالي مقروء من مراجعة التطبيق وقت المقارنة" else "قراءة سابقة — يلزم تحديثها", fontSize = 12.sp)
+                                quote.fields.filterKeys { it != PriceField.ORDER_TOTAL }.forEach { (field, amount) ->
+                                    Text("${when(field) {
+                                        PriceField.SUBTOTAL -> "الأصناف"; PriceField.DELIVERY -> "التوصيل"; PriceField.SERVICE -> "الخدمة"
+                                        PriceField.SMALL_ORDER -> "رسوم الطلب الصغير"; PriceField.TAX -> "الضريبة"; PriceField.DISCOUNT -> "الخصم"
+                                        PriceField.WALLET -> "تغطية المحفظة"; PriceField.AMOUNT_DUE -> "المطلوب للدفع"; else -> "الإجمالي"
+                                    }}: ${money(amount)}", fontSize = 12.sp)
+                                }
+                                Text("السلة متحققة. تطابق العنوان والفرع بين المنصتين يحتاج تحققًا مستقلًا؛ لم يُعتمد ترتيب الأرخص.", fontSize = 11.sp, color = OctopusPalette.Muted)
+                            }
+                        }
+                    } }
                 }
             }
             if (state.previews.isNotEmpty()) {
@@ -250,7 +260,15 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
             if (visible.isEmpty()) item { Text("ما ظهر مطعم بهذا التصنيف في الجزء المقروء. جرّب «الكل» أو البحث بالاسم.", fontSize = 13.sp) }
             items(visible, key = { it.name }) { restaurant ->
                 Card(onClick = { if (!LiveCatalogBridge.openMenu(restaurant)) localError = "تعذر فتح قائمة المطعم." }, enabled = !state.busy,
+                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(22.dp)) {
+                    Box(Modifier.fillMaxWidth().height(72.dp).background(Brush.horizontalGradient(
+                        listOf(OctopusPalette.Ink, OctopusPalette.SeaMid))).padding(16.dp)) {
+                        Icon(Icons.Outlined.Restaurant, null, Modifier.align(Alignment.CenterEnd).size(34.dp), tint = Color.White.copy(alpha = .3f))
+                        Surface(color = Color.White.copy(alpha = .12f), shape = RoundedCornerShape(20.dp)) {
+                            Text("القائمة من ${restaurant.source.title}", Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = Color.White, fontSize = 11.sp)
+                        }
+                    }
                     Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         Box(Modifier.size(64.dp).background(OctopusPalette.Soft, RoundedCornerShape(18.dp)), contentAlignment = Alignment.Center) {
                             Text(restaurant.name.take(1), fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = OctopusPalette.Petrol)
@@ -268,7 +286,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
         if (!comparisonOnly) state.menu?.let { menu ->
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    TextButton(onClick = { graph.catalog.value = state.copy(menu = null, product = null) }, enabled = !state.busy) { Text("العودة للمطاعم") }
+                            TextButton(onClick = { graph.catalog.value = state.copy(menu = null, product = null) }, enabled = !state.busy) { Text("العودة للمطاعم") }
                     Text(menu.restaurant.name, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
                     Text("اختر وجباتك وخصصها داخل الأخطبوط", color = OctopusPalette.Muted, fontSize = 13.sp)
                     Text("${menu.items.size} صنف مقروء • ${menu.restaurant.source.title}", color = OctopusPalette.Petrol, fontSize = 12.sp)
@@ -329,6 +347,82 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
             consent = false
             graph.scope.launch { graph.settingsStore.acceptCatalogConsent(); graph.settings.first { it.catalogConsent }; search() }
         }) { Text("ابدأ الاستعراض") } }, dismissButton = { TextButton(onClick = { consent = false }) { Text("إلغاء") } })
+}
+
+@Composable
+private fun MosabHomeHeader(query: String, onQuery: (String) -> Unit, enabled: Boolean,
+    onSearch: () -> Unit, onBrowse: () -> Unit, onProviders: () -> Unit, onCart: () -> Unit, allowed: Int) {
+    Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(
+        OctopusPalette.Ink, OctopusPalette.Petrol, OctopusPalette.SeaMid)),
+        RoundedCornerShape(bottomStart = 36.dp, bottomEnd = 36.dp)).statusBarsPadding()
+        .padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(painterResource(R.drawable.ic_octopus_selected), "الأخطبوط", Modifier.size(32.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("التوصيل إلى", color = Color.White.copy(alpha = .65f), fontSize = 11.sp)
+                Text("عنوانك النشط في هنقرستيشن", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+            }
+            Surface(color = Color.White.copy(alpha = .12f), shape = CircleShape) {
+                IconButton(onClick = onCart) { Icon(Icons.Outlined.ShoppingBag, "طلبك", tint = Color.White) }
+            }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("اطلب مرة، قارن الكل.", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Text("اختياراتك من كيتا وهنقرستيشن، في مكان واحد", color = Color.White.copy(alpha = .75f), fontSize = 12.sp)
+        }
+        OutlinedTextField(value = query, onValueChange = onQuery, enabled = enabled,
+            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(16.dp),
+            placeholder = { Text("ابحث عن مطعم…", fontSize = 14.sp) }, leadingIcon = { Icon(Icons.Outlined.Search, null) },
+            trailingIcon = { IconButton(onClick = onSearch, enabled = enabled && query.isNotBlank()) {
+                Icon(Icons.AutoMirrored.Outlined.ArrowForward, "ابحث")
+            } }, colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = Color.White,
+                focusedContainerColor = Color.White, unfocusedBorderColor = Color.Transparent))
+        Surface(onClick = onProviders, color = Color.White.copy(alpha = .09f), shape = RoundedCornerShape(18.dp)) {
+            Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Surface(color = Color(0xFFFFE500), shape = RoundedCornerShape(10.dp)) {
+                    Text("كيتا", Modifier.padding(7.dp), color = OctopusPalette.Ink, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+                Surface(color = Color(0xFFFFCC00), shape = RoundedCornerShape(10.dp)) {
+                    Text("هنقر", Modifier.padding(7.dp), color = OctopusPalette.Ink, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+                Column(Modifier.weight(1f)) {
+                    Text("$allowed تطبيق مسموح", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text("تُقرأ الأسعار عند المقارنة", color = Color.White.copy(alpha = .65f), fontSize = 10.sp)
+                }
+                Icon(Icons.Outlined.Tune, "إدارة التطبيقات", tint = Color.White, modifier = Modifier.size(19.dp))
+            }
+        }
+        Button(onClick = onBrowse, enabled = enabled, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+            Text("استعرض المطاعم", fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun MosabJourneyHero(title: String, subtitle: String, active: Int) {
+    Box(Modifier.fillMaxWidth().background(Brush.linearGradient(
+        listOf(OctopusPalette.Ink, OctopusPalette.Petrol, OctopusPalette.SeaMid)), RoundedCornerShape(28.dp)).padding(24.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                Box(Modifier.size(7.dp).background(OctopusPalette.Coral, CircleShape))
+                Text("الأخطبوط • اختياراتك أوضح", color = Color(0xFFBED4E0), fontSize = 12.sp)
+            }
+            Text(title, color = Color.White, fontSize = 29.sp, fontWeight = FontWeight.ExtraBold)
+            Text(subtitle, color = Color(0xFFD8E6EE), fontSize = 14.sp)
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                listOf("المطعم", "طلبك", "المقارنة").forEachIndexed { index, label ->
+                    val selected = active == index + 1
+                    Surface(Modifier.weight(1f), color = if (selected) OctopusPalette.Coral else Color.White.copy(alpha = .09f),
+                        shape = RoundedCornerShape(14.dp)) {
+                        Text("${index + 1} $label", Modifier.padding(vertical = 10.dp), textAlign = TextAlign.Center,
+                            color = if (selected) OctopusPalette.Ink else Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable

@@ -11,8 +11,11 @@ android {
         applicationId = "app.octopus.local"
         minSdk = 28
         targetSdk = 35
-        versionCode = 14
-        versionName = "1.3.6"
+        // Test-only older identity exercises a real upgrade to the currently published signed APK.
+        // Release validation rejects this identity; no fixture flag is used by CI publishing.
+        val updateFixture = providers.gradleProperty("octopusUpdateFixture").orNull == "true"
+        versionCode = if (updateFixture) 13 else 15
+        versionName = if (updateFixture) "1.3.5" else "1.3.7"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     val previewStoreFile = System.getenv("OCTOPUS_SIGNING_STORE_FILE")

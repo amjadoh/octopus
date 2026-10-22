@@ -13,8 +13,8 @@ class ComparisonRequestSelectionTest {
         assertTrue(ComparisonRequestSelection.matches("مطعم آخر", changed))
         assertFalse(ComparisonRequestSelection.matches("مدور", changed))
     }
-    @Test fun restoredDraftIsUsableButNoDraftIsNeverUsable() {
-        assertTrue(ComparisonRequestSelection.matches(null, old))
+    @Test fun restoredDraftRequiresExplicitSelection() {
+        assertFalse(ComparisonRequestSelection.matches(null, old))
         assertFalse(ComparisonRequestSelection.matches("مدور", null))
     }
 }

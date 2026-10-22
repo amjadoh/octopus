@@ -119,7 +119,7 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
         val card = frame.nodes.firstOrNull { it.id.endsWith(":id/dl_item_root") } ?: return null
         return frame.descendants(card.index).singleOrNull {
             it.label == "feed shopcard" && it.clickable && it.enabled &&
-                it.className == if (VERSION == "3.13.203") "android.view.ViewGroup" else "android.widget.Button"
+                it.className in (if (VERSION == "3.13.203") setOf("android.view.ViewGroup", "android.widget.Button") else setOf("android.widget.Button"))
         }
     }
 

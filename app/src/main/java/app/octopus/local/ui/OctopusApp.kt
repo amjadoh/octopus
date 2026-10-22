@@ -58,7 +58,7 @@ private val PaleGreen = OctopusPalette.Soft
 private val Amber = OctopusPalette.Amber
 private val PaleAmber = OctopusPalette.SoftAmber
 private val Red = OctopusPalette.Error
-private val Scheme = lightColorScheme(primary = Green, onPrimary = Color.White, secondary = Green,
+private val Scheme = lightColorScheme(primary = OctopusPalette.Coral, onPrimary = Ink, secondary = Green,
     background = Background, surface = Color.White, onSurface = Ink, onBackground = Ink,
     surfaceVariant = PaleGreen, outline = Line, outlineVariant = Line,
     primaryContainer = PaleGreen, onPrimaryContainer = Ink, secondaryContainer = PaleGreen, onSecondaryContainer = Green,
@@ -74,7 +74,7 @@ private enum class Page(val title: String, val icon: ImageVector) {
 @Composable
 fun OctopusTheme(content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-        MaterialTheme(colorScheme = Scheme, typography = Typography(), content = content)
+        MaterialTheme(colorScheme = Scheme, typography = mosabTypography(), content = content)
     }
 }
 
@@ -112,29 +112,31 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
         }
     }
     OctopusTheme {
-        Scaffold(containerColor = Background,
+        Scaffold(containerColor = Background, contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
-                Column(Modifier.statusBarsPadding()) {
+                if (page != Page.HOME) {
+                Column(Modifier.background(Ink).statusBarsPadding()) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Image(painterResource(R.drawable.ic_octopus_selected), "شعار الأخطبوط", Modifier.size(36.dp))
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("الأخطبوط", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
-                            Text("طلبك واحد. خياراتك أوضح.", fontSize = 11.sp, color = Muted)
+                            Text("الأخطبوط", fontSize = 23.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                            Text("طلبك واحد. خياراتك أوضح.", fontSize = 11.sp, color = Color(0xFFB8CDD9))
                         }
-                        IconButton(onClick = { page = Page.SETTINGS }) { Icon(Icons.Outlined.Settings, "الإعدادات", tint = Ink) }
+                        IconButton(onClick = { page = Page.SETTINGS }) { Icon(Icons.Outlined.Settings, "الإعدادات", tint = Color.White) }
                     }
-                    HorizontalDivider(color = Line)
+                    HorizontalDivider(color = OctopusPalette.SeaMid)
+                }
                 }
             },
             bottomBar = {
                 NavigationBar(containerColor = Color.White, tonalElevation = 0.dp) {
                     listOf(Page.HOME, Page.COMPARE, Page.PROVIDERS, Page.SETTINGS).forEach { item ->
                         NavigationBarItem(selected = page == item, onClick = { page = item },
-                            icon = { Icon(item.icon, null, Modifier.size(23.dp)) },
+                            icon = { Icon(item.icon, if (item == Page.SETTINGS) "الإعدادات" else null, Modifier.size(23.dp)) },
                             label = { Text(item.title, fontSize = 11.sp) },
-                            colors = NavigationBarItemDefaults.colors(indicatorColor = PaleGreen,
-                                selectedIconColor = Green, selectedTextColor = Green, unselectedIconColor = Muted, unselectedTextColor = Muted))
+                            colors = NavigationBarItemDefaults.colors(indicatorColor = OctopusPalette.CoralSoft,
+                                selectedIconColor = Ink, selectedTextColor = Ink, unselectedIconColor = Muted, unselectedTextColor = Muted))
                     }
                 }
             }
@@ -403,7 +405,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
         item { Panel {
             SectionTitle("تحديث التطبيق")
             InfoRow("الإصدار الحالي", BuildConfig.VERSION_NAME)
-            Text("افتح أحدث الإصدارات من حسابك على GitHub، ثم أكمل التثبيت بإذن Android.", fontSize = 13.sp, color = Muted)
+            Text("يتحقق الأخطبوط من التحديث وينزّله ويفحصه تلقائيًا، ثم يعرض تأكيد التثبيت في Android. سجّل دخول GitHub عند الحاجة للوصول إلى الإصدار الخاص.", fontSize = 13.sp, color = Muted)
             PrimaryButton("تحديث التطبيق", onClick = onUpdate)
         } }
         item { Panel {

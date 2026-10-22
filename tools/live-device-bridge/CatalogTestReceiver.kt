@@ -16,7 +16,7 @@ class CatalogTestReceiver : BroadcastReceiver() {
         if (!BuildConfig.DEBUG || intent.action != "app.octopus.local.TEST_CATALOG") return
         val mode = intent.getStringExtra("mode") ?: "snapshot"
         if (mode !in setOf("snapshot", "stop", "search", "browse", "open_menu", "open_product",
-                "compare_menu", "prepare_hs", "prepare_keeta", "handoff_hs", "handoff_keeta")) return
+                "compare_menu", "compare_total", "resume_draft", "prepare_hs", "prepare_keeta", "handoff_hs", "handoff_keeta")) return
         val query = intent.getStringExtra("query")?.takeIf { it.isNotBlank() && it.length <= 100 }
         val item = intent.getStringExtra("item")?.takeIf { it.isNotBlank() && it.length <= 100 }
         val graph = (context.applicationContext as OctopusApplication).graph
@@ -32,6 +32,10 @@ class CatalogTestReceiver : BroadcastReceiver() {
                     withTimeout(7000) { graph.serviceConnected.first { it } }
                     check(graph.settings.value.catalogConsent)
                     started = when (mode) {
+                        "resume_draft" -> graph.draft.value?.let { cart ->
+                            graph.catalog.value = graph.catalog.value.copy(selectedRestaurant = cart.restaurant); true
+                        } ?: false
+                        "compare_total" -> LiveCatalogBridge.compareAndPrepare()
                         "search" -> query?.let(LiveCatalogBridge::search) ?: false
                         "browse" -> LiveCatalogBridge.browseRestaurants()
                         "open_menu" -> graph.catalog.value.restaurants.singleOrNull { it.name == query }
@@ -52,7 +56,9 @@ class CatalogTestReceiver : BroadcastReceiver() {
             } catch (_: Exception) { reportError = "RUNTIME_SETUP_FAILED"; pending.resultCode = 1 }
             finally { pending.finish() }
             try {
-                if (started && mode !in setOf("snapshot", "stop")) withTimeout(170_000) { graph.catalog.first { !it.busy } }
+                if (started && mode !in setOf("snapshot", "stop", "resume_draft")) withTimeout(350_000) {
+                    graph.catalog.first { !it.busy && !it.comparisonRunning }
+                }
             } catch (_: TimeoutCancellationException) { reportError = "RUNTIME_TIMEOUT" }
             val state = graph.catalog.value
             val report = JSONObject().put("mode", mode).put("started", started)
@@ -64,6 +70,10 @@ class CatalogTestReceiver : BroadcastReceiver() {
                 .put("menuReachedEnd", state.menu?.reachedEnd ?: false)
                 .put("draftRestaurant", graph.draft.value?.restaurant ?: JSONObject.NULL)
                 .put("draftItems", graph.draft.value?.items?.size ?: 0)
+                .put("finalTotalReadings", JSONArray(state.finalTotals.values.map { reading ->
+                    JSONObject().put("provider",reading.provider.name).put("totalHalala",reading.total)
+                        .put("capturedAt",reading.capturedAt)
+                }))
                 .put("preparedBasketPresent", state.preparedBasket != null)
                 .put("productOptionsComplete", state.product?.optionsComplete ?: JSONObject.NULL)
                 .put("productAvailable", state.product?.product?.available ?: JSONObject.NULL)

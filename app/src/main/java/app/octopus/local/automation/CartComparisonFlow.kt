@@ -4,7 +4,7 @@ import app.octopus.local.domain.ProviderId
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 
-enum class CartComparisonStep { READING_MENU, PREPARING_CART, REVIEW_UNAVAILABLE, PREPARATION_FAILED }
+enum class CartComparisonStep { READING_MENU, PREPARING_CART, TOTAL_READ, REVIEW_UNAVAILABLE, PREPARATION_FAILED }
 data class CartComparisonProgress(val provider: ProviderId, val step: CartComparisonStep, val detail: String? = null)
 
 /** Runs existing guarded adapters sequentially. A prepared basket is never a final quote. */
@@ -15,6 +15,7 @@ class CartComparisonFlow {
         prepare: suspend (ProviderId) -> String?,
         unchanged: () -> Boolean,
         progress: (CartComparisonProgress) -> Unit,
+        totalAvailable: (ProviderId) -> Boolean = { false },
     ) {
         suspend fun checkRequest() {
             currentCoroutineContext().ensureActive()
@@ -33,8 +34,8 @@ class CartComparisonFlow {
             val error = prepare(provider)
             checkRequest()
             progress(CartComparisonProgress(provider,
-                if (error == null) CartComparisonStep.REVIEW_UNAVAILABLE else CartComparisonStep.PREPARATION_FAILED,
-                error ?: "السلة متحققة؛ قراءة الإجمالي النهائي لهذه المنصة لم تكتمل بعد. لا يوجد سعر نهائي مؤكد."))
+                if (totalAvailable(provider)) CartComparisonStep.TOTAL_READ else if (error == null) CartComparisonStep.REVIEW_UNAVAILABLE else CartComparisonStep.PREPARATION_FAILED,
+                if (totalAvailable(provider)) "قُرئ إجمالي مراجعة الطلب؛ راجع تطابق العنوان والفرع قبل اعتماد المقارنة." else error ?: "السلة متحققة؛ لم تُقرأ مراجعة الإجمالي بعد."))
         }
     }
 }
