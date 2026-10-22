@@ -11,6 +11,23 @@ class DiagnosticUiTest {
     private fun scrollToText(text: String) {
         compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(text))
     }
+    @Test fun savedOrderDoesNotBecomeANewSelectionOnStartup() {
+        compose.waitUntil(5_000) { (compose.activity.application as OctopusApplication).graph.draftReady.value }
+        compose.runOnIdle {
+            val graph = (compose.activity.application as OctopusApplication).graph
+            graph.draft.value = app.octopus.local.domain.CanonicalCart("مدور", null,
+                listOf(app.octopus.local.domain.CanonicalItem("وجبة محفوظة", null, emptyList(), 1)))
+            graph.catalog.value = graph.catalog.value.copy(selectedRestaurant = null)
+        }
+        compose.onNodeWithText("مدور").assertDoesNotExist()
+        compose.onNodeWithText("راجع الطلب وقارن").assertDoesNotExist()
+        compose.onNodeWithText("المقارنة").performClick()
+        scrollToText("استئناف الطلب المحفوظ")
+        compose.onNodeWithText("قارن أسعار الوجبات").assertDoesNotExist()
+        compose.onNodeWithText("استئناف الطلب المحفوظ").performClick()
+        scrollToText("طلبك • مدور")
+        compose.onNodeWithText("طلبك • مدور").assertIsDisplayed()
+    }
     @Test fun choosingDifferentRestaurantHidesOldDraftComparison() {
         compose.waitUntil(5_000) { (compose.activity.application as OctopusApplication).graph.draftReady.value }
         compose.runOnIdle {
@@ -43,7 +60,7 @@ class DiagnosticUiTest {
     }
     @Test fun startsWithRestaurantSearchAndNoInventedPrices() {
         compose.onNodeWithText("المطاعم").assertIsDisplayed()
-        compose.onNode(hasSetTextAction()).performScrollTo().assertIsDisplayed().performTextInput("مدور")
+        compose.onNode(hasSetTextAction()).assertIsDisplayed().performTextInput("مدور")
         compose.onNode(hasSetTextAction()).assertTextContains("مدور")
         compose.onNodeWithText("0.00 ر.س").assertDoesNotExist()
     }

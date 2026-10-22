@@ -26,6 +26,7 @@ import app.octopus.local.safety.SafetyGuard
 import app.octopus.local.safety.ProviderAccessRestrictions
 import app.octopus.local.safety.CatalogFinancialBoundary
 import app.octopus.local.safety.CatalogTargetGuard
+import app.octopus.local.safety.ReviewNavigationGuard
 import kotlinx.coroutines.*
 import kotlin.coroutines.resume
 import org.json.JSONObject
@@ -91,7 +92,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         val desired = graph.draft.value ?: return false
         if (!matchesSelectedRestaurant()) return false
         if (active || comparisonJob?.isActive == true || graph.session.value.active || !PreviewEvidence.supports(desired)) return false
-        graph.catalog.value = graph.catalog.value.copy(comparisonRunning = true, comparisonProgress = emptyMap(), error = null)
+        graph.catalog.value = graph.catalog.value.copy(comparisonRunning = true, comparisonProgress = emptyMap(), finalTotals = emptyMap(), error = null)
         comparisonJob = graph.scope.launch {
             try {
                 CartComparisonFlow().run(
@@ -111,8 +112,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     unchanged = { graph.draft.value?.fingerprint == desired.fingerprint },
                     progress = { value -> graph.catalog.value = graph.catalog.value.copy(
                         comparisonProgress = graph.catalog.value.comparisonProgress + (value.provider to value)) },
+                    totalAvailable = { id -> graph.catalog.value.finalTotals[id]?.fresh(desired, System.currentTimeMillis()) == true },
                 )
-                graph.catalog.value = graph.catalog.value.copy(message = "انتهت محاولة تجهيز السلتين. الإجمالي النهائي غير متحقق؛ لا توجد نتيجة أرخص مؤكدة.")
+                val count = graph.catalog.value.finalTotals.values.count { it.fresh(desired, System.currentTimeMillis()) }
+                graph.catalog.value = graph.catalog.value.copy(message = "انتهت محاولة تجهيز السلتين؛ عدد إجماليات المراجعة المقروءة حاليًا: $count. راجع حالة كل منصة وتطابق العنوان والفرع.")
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: IllegalStateException) {
                 graph.catalog.value = graph.catalog.value.copy(error = failure.message)
@@ -374,6 +377,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             rememberPrepared(desired, evidence, keetaMenu.VERSION)
             graph.catalog.value = graph.catalog.value.copy(preparedBasket = evidence,
                 message = "تحققت سلة كيتا: ${desired.items.single().name}، الكمية $quantity. لم يُفتح الدفع ولم يُؤكد طلب.")
+            if (!handoff && comparisonJob?.isActive == true) readFinalTotal(desired)
         }
     }
 
@@ -670,7 +674,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         }
         val restaurants = linkedMapOf<String, LiveRestaurant>()
         var previous = ""
-        for (page in 0 until 10) {
+        for (page in 0 until 3) {
             phase = "قراءة المطاعم المتاحة"
             val visible = HungerStationCatalog.browsedRestaurants(listing)
             visible.forEach { restaurants.putIfAbsent(it.name, it) }
@@ -869,7 +873,18 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             val count = menu.nodes.singleOrNull { it.id == "FlutterMenu_goToCartQuantity" }?.label?.trim()
             val menuCount = count?.let { app.octopus.local.pricing.MoneyParser.parse(it)?.div(100)?.toInt() }
             check(menuCount in 1..99) { "تعذرت قراءة كمية السلة؛ لم أعدلها أو أكرر الإضافة." }
-            val target = HungerStationBasketControls.openTarget(menu) ?: error("تعذر تحديد زر السلة الموثوق.")
+            val target = HungerStationBasketControls.openTarget(menu) ?: run {
+                if (BuildConfig.VERSION_NAME.endsWith("-device-tools")) {
+                    val anchor = menu.nodes.singleOrNull { it.id == "FlutterMenu_goToCartButton" }
+                    val data = anchor?.let { menu.descendants(it.index) }.orEmpty()
+                    service.filesDir.resolve("live-hs-basket-anchor.json").writeText(JSONArray(data.map { n ->
+                        JSONObject().put("index",n.index).put("parent",n.parent).put("id",n.id)
+                            .put("label",n.label).put("className",n.className).put("clickable",n.clickable)
+                            .put("editable",n.editable).put("enabled",n.enabled)
+                    }).toString(), Charsets.UTF_8)
+                }
+                error("تعذر تحديد زر السلة الموثوق.")
+            }
             val command = BasketOpenCommand(menu, target, System.currentTimeMillis())
             act(menu, CatalogAction.OPEN_BASKET, { it == target }, basketCommand = command)
             var cart = await { HungerStationCatalog.screen(it) == CatalogScreen.CART }
@@ -899,7 +914,115 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             graph.catalog.value = graph.catalog.value.copy(menu = priorMenu,
                 message = "تم التحقق من سلة المطعم المختار: ${details.product.title}، الكمية $desiredQuantity. لم يُؤكد طلب أو دفع. سعر الأصناف ليس إجمالي التوصيل.",
                 preparedBasket = evidence)
+            if (comparisonJob?.isActive == true) readFinalTotal(desired)
         }
+    }
+
+    /** No actions on the review except scrolling. All order/payment confirmations remain unreachable. */
+    private fun isRecognizedReview(root: AccessibilityNodeInfo): Boolean {
+        val bounds = Rect().also(root::getBoundsInScreen)
+        var recognized = false
+        var excluded = false
+        var count = 0
+        fun walk(node: AccessibilityNodeInfo, depth: Int) {
+            if (depth > 35 || count++ > 2000 || !node.isVisibleToUser || node.isPassword || node.isEditable ||
+                privateId(node.viewIdResourceName.orEmpty()) ||
+                (android.os.Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive)) return
+            val id = node.viewIdResourceName.orEmpty()
+            if (id in setOf("FlutterCart_title", "menuBackButton", "pdpCloseButton")) excluded = true
+            val rect = Rect().also(node::getBoundsInScreen)
+            if (rect.top < bounds.top + bounds.height()/4) {
+                val value = (node.text ?: node.contentDescription)?.toString()?.trim()
+                if (value in setOf("الدفع", "مراجعة الطلب", "تأكيد الطلب", "Checkout", "Order review")) recognized = true
+            }
+            for (i in 0 until node.childCount.coerceAtMost(200)) {
+                val child = node.getChild(i) ?: continue
+                try { walk(child, depth + 1) } finally { @Suppress("DEPRECATION") child.recycle() }
+            }
+        }
+        walk(root,0)
+        return recognized && !excluded
+    }
+
+    private suspend fun readFinalTotal(desired: CanonicalCart) {
+        val saved = graph.catalog.value.preparedBaskets.forRequest(desired, provider) ?: error("لم تُتحقق السلة قبل قراءة الإجمالي.")
+        val version = graph.installations.value.single { it.provider == provider }.version ?: error("إصدار المنصة غير معروف.")
+        if (provider == ProviderId.KEETA) {
+            val drawer = await { keetaMenu.basketDrawer(it) || keetaMenu.menu(it) }
+            if (keetaMenu.basketDrawer(drawer)) closeKeetaReadSheet(drawer)
+            await { keetaMenu.menu(it) }
+        }
+        check(saved.evidence.restaurant == desired.restaurant)
+        checkSession()
+        val root = service.rootInActiveWindow ?: error("اختفت السلة.")
+        try {
+            check(root.packageName?.toString() == provider.packageName)
+            val frame = capture(root)
+            val target = ReviewNavigationGuard.target(provider, frame, desired, version)
+                ?: error("لم أتعرف على انتقال مراجعة معروف من السلة؛ لم أنقر أي زر دفع.")
+            val node = locateKeetaNode(root, target) ?: error("اختفى زر المراجعة.")
+            try {
+                check(node.refresh() && node.isVisibleToUser && node.isEnabled && node.isClickable && !node.isPassword && !node.isEditable &&
+                    (android.os.Build.VERSION.SDK_INT < 34 || !node.isAccessibilityDataSensitive))
+                checkSession()
+                check(capture(root) == frame && ReviewNavigationGuard.target(provider, frame, desired, version) == target)
+                check(node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) { "لم تفتح مراجعة الطلب." }
+            } finally { @Suppress("DEPRECATION") node.recycle() }
+        } finally { @Suppress("DEPRECATION") root.recycle() }
+        phase = "قراءة إجمالي مراجعة الطلب في ${provider.title}"
+        val reader = SnapshotReader()
+        val extractor = app.octopus.local.pricing.QuoteExtractor()
+        var stable: QuoteCandidate? = null
+        var stableSince = 0L
+        val start = SystemClock.elapsedRealtime()
+        var lastScroll = start
+        var scrolls = 0
+        while (SystemClock.elapsedRealtime() - start < 20_000) {
+            currentCoroutineContext().ensureActive(); checkSession()
+            val review = service.rootInActiveWindow
+            if (review != null) try {
+                check(review.packageName?.toString() == provider.packageName) { "غادرت المنصة قبل اكتمال قراءة الإجمالي." }
+                val snapshot = reader.read(review)
+                check(!snapshot.sensitiveScreen && snapshot.accessRestriction == null) { "ظهرت بيانات محمية؛ توقفت قراءة المراجعة." }
+                val quote = extractor.extract(snapshot)
+                val recognized = isRecognizedReview(review)
+                if (quote.total != null && !snapshot.truncated && recognized) {
+                    if (stable?.fingerprint != quote.fingerprint) { stable = quote; stableSince = SystemClock.elapsedRealtime() }
+                    else if (SystemClock.elapsedRealtime() - stableSince >= 1_000) {
+                        graph.catalog.value = graph.catalog.value.copy(finalTotals = graph.catalog.value.finalTotals +
+                            (provider to FinalTotalReading(provider, version, desired.fingerprint, quote.fields, System.currentTimeMillis())))
+                        return
+                    }
+                } else {
+                    stable = null
+                    if (recognized && scrolls < 5 && SystemClock.elapsedRealtime() - lastScroll >= 2_000) {
+                        val candidates = mutableListOf<AccessibilityNodeInfo>()
+                        fun find(node: AccessibilityNodeInfo, depth: Int) {
+                            if (depth > 30 || !node.isVisibleToUser || node.isEditable || node.isPassword ||
+                                privateId(node.viewIdResourceName.orEmpty()) ||
+                                (android.os.Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive)) return
+                            if (node.isScrollable && node.className?.toString() in setOf("android.view.View", "android.widget.ScrollView"))
+                                candidates += AccessibilityNodeInfo.obtain(node)
+                            for (i in 0 until node.childCount.coerceAtMost(200)) {
+                                val child = node.getChild(i) ?: continue
+                                try { find(child,depth+1) } finally { @Suppress("DEPRECATION") child.recycle() }
+                            }
+                        }
+                        try {
+                            find(review,0)
+                            if (candidates.size == 1) {
+                                checkSession()
+                                candidates.single().performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+                                scrolls++
+                            }
+                        } finally { candidates.forEach { @Suppress("DEPRECATION") it.recycle() } }
+                        lastScroll = SystemClock.elapsedRealtime()
+                    }
+                }
+            } finally { @Suppress("DEPRECATION") review.recycle() }
+            delay(250)
+        }
+        error("السلة متحققة، لكن الإجمالي الصريح لم يظهر مستقرًا في المراجعة؛ لم أقدّر سعرًا ولم أؤكد طلبًا.")
     }
 
     fun openPreparedRidanBasket(): Boolean {
@@ -960,8 +1083,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             catch (cancelled: CancellationException) {
                 outcome = if (cancelled is TimeoutCancellationException) "TIMEOUT" else "STOPPED"
                 if (cancelled is TimeoutCancellationException) {
-                    graph.catalog.value = graph.catalog.value.copy(error = "انتهت مهلة $phase. توقفت الإجراءات؛ راجع السلة إن بدأ تجهيزها.")
-                    returnToApp()
+                    val note = if (operation in setOf(CatalogOperation.BUILD_CART, CatalogOperation.OPEN_PREPARED_CART))
+                        "توقفت الإجراءات؛ راجع السلة إن بدأ تجهيزها." else "توقفت القراءة دون إضافة وجبات أو تعديل السلة."
+                    graph.catalog.value = graph.catalog.value.copy(error = "انتهت مهلة $phase. $note")
+                    if (!BuildConfig.VERSION_NAME.endsWith("-device-tools")) returnToApp()
                 }
                 throw cancelled
             } catch (failure: Exception) {
@@ -969,7 +1094,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 // Only our own fixed errors are surfaced; no provider exception text or screen dump is logged.
                 graph.catalog.value = graph.catalog.value.copy(error = failure.message?.takeIf { it.any { c -> c in '\u0600'..'\u06ff' } }
                     ?: "توقفت العملية عند شاشة غير مدعومة؛ راجع السلة إن بدأ تجهيزها.")
-                returnToApp()
+                if (!BuildConfig.VERSION_NAME.endsWith("-device-tools")) returnToApp()
             } finally {
                 val frames = evidence.drain()
                 val stopped = stopState.evidence
@@ -1047,7 +1172,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     .put("scrollables", JSONArray(frame.nodes.filter { it.scrollable }.map { it.className + ":" + it.id }))
                     .put("ids", JSONArray(frame.nodes.map { it.id }.filter { it.isNotBlank() }.distinct()))
                 if (predicate(frame)) {
-                    val value = frame.nodes.joinToString { it.id + it.label + it.parent }
+                    val value = if (provider == ProviderId.HUNGERSTATION) CatalogStability.fingerprint(frame)
+                        else frame.nodes.joinToString { it.id + it.label + it.parent }
                     if (value != fingerprint) { fingerprint = value; since = SystemClock.elapsedRealtime() }
                     if (SystemClock.elapsedRealtime() - since >= 650) { targetSeen = true; return@withTimeout frame }
                 } else { fingerprint = null }

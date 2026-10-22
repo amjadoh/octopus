@@ -7,6 +7,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CartComparisonFlowTest {
+    @Test fun preparationDoesNotBecomeAReadTotalWithoutTheExplicitReadingSignal() = runBlocking {
+        val results = mutableListOf<CartComparisonProgress>()
+        CartComparisonFlow().run({}, { true }, { null }, { true }, results::add,
+            totalAvailable = { it == ProviderId.HUNGERSTATION })
+        assertEquals(1,results.count { it.step == CartComparisonStep.TOTAL_READ })
+        assertEquals(1,results.count { it.step == CartComparisonStep.REVIEW_UNAVAILABLE })
+    }
     @Test fun preparesSequentiallyAndNeverClaimsAQuoteFromPreparation() = runBlocking {
         val calls = mutableListOf<String>()
         val results = mutableListOf<CartComparisonProgress>()
