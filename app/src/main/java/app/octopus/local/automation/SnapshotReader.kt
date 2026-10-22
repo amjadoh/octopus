@@ -54,6 +54,9 @@ class SnapshotReader {
                 val rect = Rect().also { node.getBoundsInScreen(it) }
                 listOfNotNull(node.text, node.contentDescription).distinct().forEach { sequence ->
                     ProviderAccessRestrictions.detect(sequence)?.let { restriction = it }
+                    app.octopus.local.pricing.GroupedReviewFields.read(sequence).forEach { (field, amount) ->
+                        tokens += SafeToken(field, amount, rect.top, rect.bottom, rect.left, rect.right, parent)
+                    }
                     if (sequence.length > 120) return@forEach
                     val text = normalize(sequence.toString())
                     if (blocked.any { text == it || text.startsWith("$it ") }) sensitive = true

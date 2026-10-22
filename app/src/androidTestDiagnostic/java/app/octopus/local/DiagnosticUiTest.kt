@@ -39,7 +39,9 @@ class DiagnosticUiTest {
     @Test fun updateStartsFromSettingsWithExplicitBrowserHandoff() {
         compose.onNodeWithContentDescription("الإعدادات").performClick()
         compose.onNode(hasText("تحديث التطبيق") and hasClickAction()).performScrollTo().performClick()
-        compose.onNodeWithText("فتح صفحة التحديث").assertIsDisplayed()
+        compose.onNodeWithText("تنزيل التحديث من GitHub").assertIsDisplayed()
+        compose.onNodeWithText("اختيار ملف التحديث وفحصه").assertIsDisplayed()
+        compose.onNodeWithText("تثبيت التحديث").assertIsNotEnabled()
         compose.onNodeWithText("الإصدار الحالي: ${BuildConfig.VERSION_NAME}").assertIsDisplayed()
     }
 }

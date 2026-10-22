@@ -40,6 +40,7 @@ object LiveCatalogBridge {
     private var navigator = WeakReference<CatalogNavigator>(null)
     fun attach(value: CatalogNavigator?) { navigator = WeakReference(value) }
     fun compareDraft(): Boolean = navigator.get()?.compareDraft() ?: false
+    fun compareAndPrepare(): Boolean = navigator.get()?.compareAndPrepare() ?: false
     fun prepareComparedHungerStation(): Boolean = navigator.get()?.prepareComparedHungerStation() ?: false
     fun prepareComparedKeeta(handoff: Boolean = false): Boolean = navigator.get()?.prepareComparedKeeta(handoff) ?: false
     fun browseRestaurants(): Boolean = navigator.get()?.browseRestaurants() ?: false

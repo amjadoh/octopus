@@ -91,13 +91,16 @@ class KeetaReadProbeTest {
         val frameNodes = org.json.JSONArray()
         val reader = app.octopus.local.providers.KeetaMenuReader(restaurant, item, "3.13.203")
         var complete = true
-        fun capture(node: AccessibilityNodeInfo, parent: Int, depth: Int) {
+        fun capture(node: AccessibilityNodeInfo, parent: Int, depth: Int, publicProduct: Boolean = false) {
             if (depth > 35 || frameNodes.length() >= 1800) { complete = false; return }
             if (!node.isVisibleToUser || node.isPassword || InspectionRedactor.privateSubtree(node.viewIdResourceName.orEmpty())) return
             if (android.os.Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive) { complete = false; return }
             val index = frameNodes.length()
             val raw = if (node.isEditable) "" else (node.text ?: node.contentDescription)?.toString().orEmpty()
-            val value = reader.functionalLabel(raw)
+            val inProduct = publicProduct || (phase == "product" && node.className?.toString() == "android.widget.ScrollView" &&
+                has(node) { sameName(it, item) } && !has(node) { app.octopus.local.providers.KeetaRestaurantName.matches(restaurant, label(it)) } &&
+                !has(node) { it.isEditable })
+            val value = if (inProduct) raw else reader.functionalLabel(raw)
             frameNodes.put(JSONObject().put("index", index).put("parent", parent)
                 .put("id", InspectionRedactor.resourceId(node.viewIdResourceName).orEmpty())
                 .put("label", value).put("className", InspectionRedactor.className(node.className).orEmpty())
@@ -106,7 +109,7 @@ class KeetaReadProbeTest {
             if (node.isEditable) return
             for (i in 0 until node.childCount.coerceAtMost(100)) {
                 val child = node.getChild(i) ?: continue
-                try { capture(child, index, depth + 1) } finally { child.recycle() }
+                try { capture(child, index, depth + 1, inProduct) } finally { child.recycle() }
             }
         }
         capture(root, -1, 0)
@@ -185,6 +188,14 @@ class KeetaReadProbeTest {
         check(instrumentation.targetContext.packageManager.getPackageInfo(provider, 0).versionName == "3.13.203")
         val root = awaitRoot { has(it) { n -> sameName(n,item) } && has(it) { n -> label(n) == "إضافة إلى السلة" } }
         try { record(root, "product", restaurant, item) } finally { root.recycle() }
+    }
+    @Test fun recordOpenedCartMenu() {
+        val args = InstrumentationRegistry.getArguments()
+        val restaurant = args.getString("restaurant") ?: error("Missing restaurant")
+        val item = args.getString("item") ?: error("Missing item")
+        val root = awaitRoot { has(it) { n -> app.octopus.local.providers.KeetaRestaurantName.matches(restaurant, label(n)) } &&
+            has(it) { n -> label(n) == "إتمام الدفع" } && !has(it) { n -> label(n) == "إضافة إلى السلة" } }
+        try { record(root, "cart-menu", restaurant, item) } finally { root.recycle() }
     }
     private fun readRestaurantProduct(restaurant: String, item: String) {
         var root = awaitRoot { has(it) { n -> app.octopus.local.providers.KeetaRestaurantName.matches(restaurant, label(n)) } &&

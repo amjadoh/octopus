@@ -195,18 +195,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
                 graph.scope.launch { graph.recorder.clear(); graph.inspectionRecorder.clear(); graph.clearOrders(); graph.settingsStore.clear(); graph.catalog.value = app.octopus.local.providers.LiveCatalogState(); deleteConfirmation = false }
             }) { Text("حذف البيانات", color = Red) } },
             dismissButton = { TextButton(onClick = { deleteConfirmation = false }) { Text("إلغاء") } })
-        if (updateDialog) AlertDialog(onDismissRequest = { updateDialog = false },
-            title = { Text("تحديث التطبيق") },
-            text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("الإصدار الحالي: ${BuildConfig.VERSION_NAME}")
-                Text("تُعرض الإصدارات على GitHub. المستودع خاص؛ افتح الصفحة في المتصفح المسجل بحسابك ثم حمّل أحدث APK وأكمل تأكيد التثبيت من Android.")
-                Text("لم يُفحص توفر إصدار أحدث تلقائيًا. لا يطلب الأخطبوط حساب GitHub أو كلمة المرور داخله، ولا يثبت تحديثًا صامتًا.")
-            } },
-            confirmButton = { TextButton(onClick = {
-                updateDialog = false
-                runCatching { openUpdatePage() }.onFailure { errorMessage = "تعذر فتح صفحة التحديث. افتح github.com/amjadoh/octopus/releases في متصفحك." }
-            }) { Text("فتح صفحة التحديث") } },
-            dismissButton = { TextButton(onClick = { updateDialog = false }) { Text("إلغاء") } })
+        if (updateDialog) PrivateUpdateDialog(onDismiss = { updateDialog = false }, openGitHub = openUpdatePage)
         errorMessage?.let { message -> AlertDialog(onDismissRequest = { errorMessage = null },
             title = { Text("الأخطبوط") }, text = { Text(message) },
             confirmButton = { TextButton(onClick = { errorMessage = null }) { Text("حسنًا") } }) }
