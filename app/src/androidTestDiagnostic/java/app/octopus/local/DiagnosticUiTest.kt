@@ -69,9 +69,18 @@ class DiagnosticUiTest {
     @Test fun updateStartsFromSettingsWithExplicitBrowserHandoff() {
         compose.onNodeWithContentDescription("الإعدادات").performClick()
         compose.onNode(hasText("تحديث التطبيق") and hasClickAction()).performScrollTo().performClick()
-        compose.onNodeWithText("تنزيل التحديث من GitHub").assertIsDisplayed()
-        compose.onNodeWithText("اختيار ملف التحديث وفحصه").assertIsDisplayed()
+        compose.onNodeWithText("التحقق من التحديث وتنزيله").assertIsDisplayed()
+        compose.onNodeWithText("اختيار ملف التحديث وفحصه").assertDoesNotExist()
         compose.onNodeWithText("تثبيت التحديث").assertIsNotEnabled()
         compose.onNodeWithText("الإصدار الحالي: ${BuildConfig.VERSION_NAME}").assertIsDisplayed()
+    }
+    @Test fun privateUpdateBrowserOpensInsideTheAppAndCanBeClosed() {
+        compose.onNodeWithContentDescription("الإعدادات").performClick()
+        compose.onNode(hasText("تحديث التطبيق") and hasClickAction()).performScrollTo().performClick()
+        compose.onNodeWithText("التحقق من التحديث وتنزيله").performClick()
+        compose.onNodeWithText("تسجيل الخروج").assertIsDisplayed()
+        compose.onNodeWithText("إعادة المحاولة").assertIsDisplayed()
+        compose.onAllNodesWithText("إغلاق").onLast().performClick()
+        compose.onNodeWithText("التحقق من التحديث وتنزيله").assertIsDisplayed()
     }
 }
