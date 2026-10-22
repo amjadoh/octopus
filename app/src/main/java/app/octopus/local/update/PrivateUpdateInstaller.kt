@@ -8,8 +8,6 @@ import android.provider.Settings
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import java.io.File
 import java.security.MessageDigest
 
@@ -20,29 +18,16 @@ object UpdatePackagePolicy {
             installedSigners.isNotEmpty() && installedSigners == candidateSigners
 }
 
-/** Imports only the user-selected APK. No tokens, credentials, or public distribution endpoints. */
+/** Downloads into app-private cache and accepts only a newer APK with the installed signing identity. */
 class PrivateUpdateInstaller(private val context: Context) {
     private val directory get() = File(context.cacheDir, "verified-updates").apply { mkdirs() }
     private val target get() = File(directory, "update.apk")
-    suspend fun importApk(uri: Uri): String = withContext(Dispatchers.IO) {
-        val temporary = File(directory, "import.part")
+    suspend fun downloadApk(source: String, githubSession: String?, agent: String?,
+        progress: suspend (Long, Long?) -> Unit): String = withContext(Dispatchers.IO) {
+        val temporary = File(directory, "download.part")
         target.delete()
         try {
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                temporary.outputStream().use { output ->
-                    val buffer = ByteArray(64 * 1024)
-                    var count = 0L
-                    while (true) {
-                        currentCoroutineContext().ensureActive()
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        count += read
-                        check(count <= 100L * 1024 * 1024) { "ملف التحديث أكبر من الحد المسموح." }
-                        output.write(buffer, 0, read)
-                    }
-                    check(count > 0) { "ملف التحديث فارغ." }
-                }
-            } ?: error("تعذر فتح ملف التحديث.")
+            PrivateApkDownloader().download(source, githubSession, agent, temporary, progress)
             val version = verify(temporary)
             check(temporary.renameTo(target)) { "تعذر حفظ ملف التحديث." }
             version
@@ -66,7 +51,7 @@ class PrivateUpdateInstaller(private val context: Context) {
     }
     /** Returns false when Android needs the user to grant this app installation permission first. */
     fun install(): Boolean {
-        check(target.isFile) { "اختر ملف التحديث أولًا." }
+        check(target.isFile) { "نزّل التحديث أولًا." }
         verify(target)
         if (!context.packageManager.canRequestPackageInstalls()) {
             context.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,

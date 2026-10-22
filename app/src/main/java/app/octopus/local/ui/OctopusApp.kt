@@ -195,7 +195,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
                 graph.scope.launch { graph.recorder.clear(); graph.inspectionRecorder.clear(); graph.clearOrders(); graph.settingsStore.clear(); graph.catalog.value = app.octopus.local.providers.LiveCatalogState(); deleteConfirmation = false }
             }) { Text("حذف البيانات", color = Red) } },
             dismissButton = { TextButton(onClick = { deleteConfirmation = false }) { Text("إلغاء") } })
-        if (updateDialog) PrivateUpdateDialog(onDismiss = { updateDialog = false }, openGitHub = openUpdatePage)
+        if (updateDialog) PrivateUpdateDialog(onDismiss = { updateDialog = false })
         errorMessage?.let { message -> AlertDialog(onDismissRequest = { errorMessage = null },
             title = { Text("الأخطبوط") }, text = { Text(message) },
             confirmButton = { TextButton(onClick = { errorMessage = null }) { Text("حسنًا") } }) }
