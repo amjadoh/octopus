@@ -40,16 +40,17 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private class UserInterrupted(message: String) : IllegalStateException(message)
     private var provider = ProviderId.HUNGERSTATION
     private var comparedProduct: ConfiguredProduct? = null
+    private var multiReadStage = "IDLE"
     private var requestFingerprint: String? = null
     private var keetaContext: KeetaMenuReader? = null
     private val keetaMenu get() = checkNotNull(keetaContext) { "لا يوجد طلب محدد لقراءة كيتا." }
     private val keetaBasket get() = KeetaBasketReader(keetaMenu)
-    private fun bindKeetaRequest(cart: CanonicalCart) {
-        require(PreviewEvidence.supports(cart))
+    private fun bindKeetaRequest(cart: CanonicalCart, line: CanonicalItem = cart.items.single()) {
+        require(PlainMenuReadPlan.create(cart, ProviderId.KEETA, "admission")?.lines?.contains(line) == true)
         requestFingerprint = cart.fingerprint
         val version = graph.installations.value.singleOrNull { it.provider == ProviderId.KEETA }?.version
         check(version in setOf("3.12.501", "3.13.203")) { "إصدار كيتا غير مدعوم في مسار القراءة الحالي." }
-        keetaContext = KeetaMenuReader(cart.restaurant, cart.items.single().name, version!!)
+        keetaContext = KeetaMenuReader(cart.restaurant, line.name, version!!)
     }
     private var job: Job? = null
     private var comparisonJob: Job? = null
@@ -72,7 +73,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private val traceRequest = InspectionRequest(InspectionStage.MENU, "", "")
     val active: Boolean get() = job?.isActive == true || manualJob?.isActive == true || comparisonJob?.isActive == true
     private val movementAllowed: Boolean get() = manualJob?.isActive != true &&
-        (comparisonJob?.isActive == true || (job?.isActive == true && operation == CatalogOperation.OPEN_PREPARED_CART))
+        (comparisonJob?.isActive == true || (job?.isActive == true && operation in setOf(CatalogOperation.OPEN_PREPARED_CART, CatalogOperation.COMPARE_MENU)))
 
     private fun requireProviderWindow(root: AccessibilityNodeInfo) {
         if (root.packageName?.toString() != provider.packageName)
@@ -274,6 +275,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         val desired = graph.draft.value ?: return false
         if (!matchesSelectedRestaurant()) return false
         if (!PreviewEvidence.supports(desired)) {
+            if (desired.items.size > 1 && PlainMenuReadPlan.create(desired, ProviderId.HUNGERSTATION, "admission") != null)
+                return compareMultiplePlainMenuPrices(desired)
             graph.catalog.value = graph.catalog.value.copy(error = "المقارنة الحالية تحتاج صنفًا واحدًا دون خيارات أو ملاحظات؛ احتُفظ بطلبك دون حساب سعر ناقص.")
             return false
         }
@@ -436,6 +439,122 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         }
     }
 
+    /** Price-reading only. No add, quantity, cart-open, promotion or review action exists in this path. */
+    private fun compareMultiplePlainMenuPrices(desired: CanonicalCart): Boolean =
+        begin(operation = CatalogOperation.COMPARE_MENU,
+            timeoutMillis=(30_000L + desired.items.size * 90_000L).coerceAtMost(600_000L)) {
+            requestFingerprint = desired.fingerprint
+            comparedProduct = null
+            graph.catalog.value = graph.catalog.value.copy(previews=emptyList(),finalTotals=emptyMap(),preparedBasket=null)
+            val previews = mutableListOf<MenuCostPreview>()
+            for (id in ProviderId.entries) {
+                provider = id
+                targetSeen = false
+                val version = graph.installations.value.singleOrNull { it.provider == id }?.version.orEmpty()
+                val preview = try {
+                    checkSession()
+                    check((id == ProviderId.HUNGERSTATION && version == HungerStationCatalog.TESTED_VERSION) ||
+                        (id == ProviderId.KEETA && version == "3.13.203")) { "إصدار المنصة يحتاج تحققًا لقراءة جميع الأصناف." }
+                    val plan = PlainMenuReadPlan.create(desired,id,version) ?: error("الطلب يحتاج مسار قراءة غير مدعوم.")
+                    for (line in plan.lines) {
+                        phase = "قراءة جميع أصناف الطلب في ${id.title}"
+                        val unit = if (id == ProviderId.HUNGERSTATION) readHungerPlainLine(desired,line)
+                            else readKeetaPlainLine(desired,line)
+                        @Suppress("DEPRECATION")
+                        val observedVersion=service.packageManager.getPackageInfo(id.packageName,0).versionName.orEmpty()
+                        check(plan.record(graph.draft.value ?: error("اختفى الطلب."),line,unit,System.currentTimeMillis(),observedVersion)) {
+                            "تغير الطلب أو قراءة الصنف؛ لم أحتسب مجموعًا ناقصًا."
+                        }
+                    }
+                    plan.preview(graph.draft.value ?: error("اختفى الطلب."),System.currentTimeMillis())
+                        ?: error("لم تكتمل قراءة كل الأصناف؛ لم أحتسب مجموعًا ناقصًا.")
+                } catch (cancelled: CancellationException) { throw cancelled }
+                catch (stopped: CatalogStoppedException) { throw stopped }
+                catch (interrupted: UserInterrupted) { throw interrupted }
+                catch (changed: ScreenChangedBeforeAction) { throw changed }
+                catch (failure: Exception) {
+                    if(BuildConfig.VERSION_NAME.endsWith("-device-tools")) withContext(Dispatchers.IO) {
+                        service.filesDir.resolve("multi-menu-failure-${id.name.lowercase()}.json").writeText(
+                            JSONObject().put("provider",id.name).put("stage",multiReadStage)
+                                .put("recordedAt",System.currentTimeMillis())
+                                .put("reason",menuFailure(failure,"UNCLASSIFIED"))
+                                .put("exceptionType",failure.javaClass.name).toString(),Charsets.UTF_8)
+                    }
+                    failedMenuPreview(id,desired,"لم تكتمل قراءة جميع أصناف الطلب في ${id.title}؛ لم أحتسب مجموعًا جزئيًا ولم أغيّر السلة.")
+                }
+                previews += preview
+                graph.catalog.value = graph.catalog.value.copy(previews=previews.toList())
+            }
+            check(graph.draft.value?.fingerprint == desired.fingerprint) { "تغير طلبك؛ أعد المقارنة." }
+            graph.catalog.value = graph.catalog.value.copy(message=
+                "انتهت قراءة أسعار جميع الأصناف المتاحة. هذه قراءة قائمة فقط؛ تجهيز السلال متعددة الأصناف وإجمالياتها لم يُنفذا في هذا المسار.")
+        }
+
+    private suspend fun readHungerPlainLine(desired: CanonicalCart, line: CanonicalItem): Long {
+        multiReadStage="HS_NAVIGATE"
+        val restaurant=LiveRestaurant(desired.restaurant,null,desired.restaurant)
+        check(!navigateToRestaurant(restaurant)) { "المطعم غير متاح للطلب في القراءة الحالية." }
+        var menu=await { HungerStationCatalog.screen(it)==CatalogScreen.MENU }
+        var selected: LiveMenuItem?=null
+        multiReadStage="HS_FIND_ITEM"
+        for(page in 0 until 30) {
+            val matches=HungerStationCatalog.menuItems(menu).filter {it.name==line.name}
+            check(matches.size<=1) { "الصنف غير فريد؛ توقفت القراءة." }
+            if(matches.size==1) {selected=matches.single();break}
+            val before=HungerStationCatalog.menuItems(menu).toString()
+            if(!act(menu,CatalogAction.SCROLL_MENU,{it.scrollable && it.className=="android.widget.ScrollView"},allowNoOp=true))break
+            menu=await {HungerStationCatalog.screen(it)==CatalogScreen.MENU && HungerStationCatalog.menuItems(it).toString()!=before}
+        }
+        val item=selected ?: error("لم يظهر الصنف المطابق؛ لم أستبدله.")
+        act(menu,CatalogAction.OPEN_PRODUCT,{HungerStationCatalog.menuItem(it)==item})
+        multiReadStage="HS_READ_PRODUCT"
+        val details=readHungerProduct(restaurant,item).details
+        multiReadStage="HS_VALIDATE_PRODUCT"
+        check(details.product.title==line.name && details.optionsComplete && details.product.available &&
+            MenuSelectionValidator().selectConfigured(details,ProductSelection(details.product.id,emptyMap(),1),System.currentTimeMillis()) is SelectionResult.Accepted) {
+            "خيارات الصنف غير مكتملة؛ لم أستخدم سعرًا ناقصًا."
+        }
+        return details.product.listedPriceHalala ?: error("سعر الصنف غير مقروء.")
+    }
+
+    private suspend fun readKeetaPlainLine(desired: CanonicalCart, line: CanonicalItem): Long {
+        bindKeetaRequest(desired,line)
+        targetSeen=false
+        val launch=service.packageManager.getLaunchIntentForPackage(provider.packageName) ?: error("كيتا غير مثبت.")
+        service.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        multiReadStage="KEETA_OPEN_REQUEST"
+        var frame=openKeetaRequest()
+        if(keetaMenu.basketDrawer(frame)) {closeKeetaReadSheet(frame);frame=await {keetaMenu.menu(it)}}
+        if(keetaMenu.searchCandidate(frame)!=null) {
+            keetaBasketAction { keetaMenu.searchCandidate(it) }
+            frame=await {keetaMenu.menu(it)}
+        }
+        if(keetaMenu.menu(frame)) {
+            // Each next requested item may be above the previous one. Rewind only the known list.
+            multiReadStage="KEETA_REWIND_MENU"
+            var rewinds=0
+            while(keetaMenu.productTarget(frame)==null && rewinds++<60) {
+                val before=frame.nodes
+                if(!scrollKeetaHeader(frame))break
+                frame=await {keetaMenu.menu(it) && it.nodes!=before}
+            }
+            multiReadStage="KEETA_FIND_PRODUCT"
+            openKeetaPreviewProduct(frame)
+            frame=await {keetaMenu.product(it)}
+        }
+        try {
+            multiReadStage="KEETA_VALIDATE_PRODUCT"
+            check(keetaMenu.productBody(frame)!=null) { "خيارات كيتا غير مكتملة؛ لم أستخدم سعرًا ناقصًا." }
+            multiReadStage="KEETA_UNIT_PRICE"
+            return keetaMenu.unitPrice(frame) ?: error("سعر الصنف غير مقروء.")
+        } finally {
+            if(keetaMenu.product(frame)) {
+                closeKeetaReadSheet(frame)
+                await {keetaMenu.menu(it)}
+            }
+        }
+    }
+
     // Surface only our fixed messages; provider text and exception payloads stay private.
     private fun menuFailure(failure: Exception, fallback: String): String = failure.message?.takeIf { it in setOf(
         "المطعم غير متاح للطلب في القراءة الحالية.",
@@ -446,6 +565,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         "تعذرت قراءة سلة كيتا بالكامل.",
         "قراءة القائمة غير مكتملة؛ لم أفتح وجبة مختلفة.",
         "الوجبة المطابقة غير ظاهرة في قائمة كيتا.",
+        "الصنف المطابق ظاهر لكن عنصر فتحه غير مدعوم؛ لم أنقر عنصرًا آخر.",
         "وصلت إلى نهاية الجزء المقروء دون الوجبة المطلوبة.",
         "لم أجد الوجبة المطابقة ضمن مهلة التصفح؛ لم أستبدلها.",
         "سلة كيتا مختلفة عن طلب المقارنة؛ لم أعدلها.",
@@ -867,7 +987,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private suspend fun openKeetaPreviewProduct(previous: CatalogFrame) {
         var frame = previous
         var previousBody: List<CatalogNode>? = null
-        repeat(20) {
+        // Kudo's observed side dishes begin beyond the first 20 menu viewports.
+        // The finite scan still stops on an unchanged/end/unknown screen and never adds items.
+        repeat(80) {
             currentCoroutineContext().ensureActive(); checkSession()
             val root = service.rootInActiveWindow ?: throw UserInterrupted("اختفت قائمة كيتا؛ توقفت المقارنة.")
             try {
@@ -881,12 +1003,15 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     check(performKeetaReadAction(root, target, AccessibilityNodeInfo.ACTION_CLICK))
                     return
                 }
+                check(fresh.nodes.none { it.id == "com.sankuai.sailor.afooddelivery:id/product_name" && it.label == keetaMenu.title }) {
+                    "الصنف المطابق ظاهر لكن عنصر فتحه غير مدعوم؛ لم أنقر عنصرًا آخر."
+                }
                 check(keetaMenu.menu(fresh) && fresh.nodes != previousBody) { "الوجبة المطابقة غير ظاهرة في قائمة كيتا." }
                 previousBody = fresh.nodes
                 val list = fresh.nodes.single { it.scrollable && it.className == "androidx.recyclerview.widget.RecyclerView" }
                 check(performKeetaReadAction(root, list, AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) { "وصلت إلى نهاية الجزء المقروء دون الوجبة المطلوبة." }
             } finally { @Suppress("DEPRECATION") root.recycle() }
-            frame = await { keetaMenu.menu(it) }
+            frame = await { keetaMenu.menu(it) && it.nodes != previousBody }
         }
         error("لم أجد الوجبة المطابقة ضمن مهلة التصفح؛ لم أستبدلها.")
     }
@@ -1339,9 +1464,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     }
 
     private fun begin(returnOnSuccess: Boolean = true, operation: CatalogOperation = CatalogOperation.BROWSE,
-        block: suspend () -> Unit): Boolean {
+        timeoutMillis: Long = 150_000, block: suspend () -> Unit): Boolean {
+        require(timeoutMillis in 1_000..600_000 && (operation == CatalogOperation.COMPARE_MENU || timeoutMillis == 150_000L))
         if (job?.isActive == true || manualJob?.isActive == true || graph.session.value.active) { graph.catalog.value=graph.catalog.value.copy(error="توجد جلسة أخرى نشطة؛ أوقفها قبل بدء المقارنة."); return false }
-        if (comparisonJob?.isActive != true && operation != CatalogOperation.OPEN_PREPARED_CART) { graph.catalog.value=graph.catalog.value.copy(error="لم تبدأ جلسة المقارنة المصرح بها."); return false }
+        if (comparisonJob?.isActive != true && operation !in setOf(CatalogOperation.OPEN_PREPARED_CART, CatalogOperation.COMPARE_MENU)) { graph.catalog.value=graph.catalog.value.copy(error="لم تبدأ جلسة المقارنة المصرح بها."); return false }
         provider = ProviderId.HUNGERSTATION
         requestFingerprint = null
         if (!graph.settings.value.catalogConsent || provider !in graph.settings.value.allowed) { graph.catalog.value=graph.catalog.value.copy(error="هنقرستيشن غير مفعّل ضمن التطبيقات المسموح بها للمقارنة."); return false }
@@ -1364,7 +1490,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         stepInterrupted = null
         job = graph.scope.launch(start = CoroutineStart.LAZY) {
             var outcome = "COMPLETED"
-            try { withTimeout(150_000) { block() }; if (returnOnSuccess && comparisonJob?.isActive != true) returnToApp() }
+            try { withTimeout(timeoutMillis) { block() }; if (returnOnSuccess && comparisonJob?.isActive != true) returnToApp() }
             catch (cancelled: CancellationException) {
                 outcome = if (cancelled is TimeoutCancellationException) "TIMEOUT" else "STOPPED"
                 if (cancelled is TimeoutCancellationException) {
@@ -1514,7 +1640,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             val index = nodes.size
             val raw = if (private || node.isEditable || disabledFinancial) "" else (node.text ?: node.contentDescription)?.toString().orEmpty()
             if (raw.length > 1000) { complete = false; return }
-            val label = if (provider == ProviderId.KEETA) keetaMenu.functionalLabel(raw) else raw
+            val label = if (provider == ProviderId.KEETA) keetaMenu.functionalLabel(raw, id) else raw
             ProviderAccessRestrictions.detect(raw)?.let { throw UserInterrupted(it.userMessage) }
             if (!private && !node.isEditable && !disabledFinancial) {
                 ProviderAccessRestrictions.detect(node.contentDescription)?.let { throw UserInterrupted(it.userMessage) }

@@ -15,7 +15,7 @@ class CatalogTestReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (!BuildConfig.DEBUG || intent.action != "app.octopus.local.TEST_CATALOG") return
         val mode = intent.getStringExtra("mode") ?: "snapshot"
-        if (mode !in setOf("snapshot", "stop", "public_menu", "public_add", "search", "browse", "open_menu", "open_product",
+        if (mode !in setOf("snapshot", "stop", "public_menu", "public_add", "draft_quantity", "search", "browse", "open_menu", "open_product",
                 "compare_menu", "compare_total", "resume_draft", "prepare_hs", "prepare_keeta", "handoff_hs", "handoff_keeta")) return
         val query = intent.getStringExtra("query")?.takeIf { it.isNotBlank() && it.length <= 100 }
         val item = intent.getStringExtra("item")?.takeIf { it.isNotBlank() && it.length <= 100 }
@@ -33,6 +33,12 @@ class CatalogTestReceiver : BroadcastReceiver() {
                     started = graph.publicCatalog.state.value.directory.singleOrNull { it.name == query }
                         ?.let(graph.publicCatalog::openMenu) ?: false
                     if (started) withTimeout(30_000) { graph.publicCatalog.state.first { !it.loadingMenu } }
+                }
+                else if (mode == "draft_quantity") {
+                    check(!graph.catalog.value.busy && !graph.catalog.value.comparisonRunning)
+                    val line=graph.draft.value?.items?.singleOrNull {it.name==item}
+                    if(line!=null) started=graph.changeDraftQuantity(app.octopus.local.domain.CartIdentity.itemKey(line),
+                        intent.getIntExtra("quantity",-1)) is app.octopus.local.domain.DraftChange.Changed
                 }
                 else if (mode == "public_add") {
                     val menu = graph.publicCatalog.currentMenu
