@@ -64,5 +64,6 @@
     "All repetitions used the same single plain item and existing matching baskets. This does not establish support for arbitrary restaurants, multiple items, modifiers, or five handoff repetitions.",
     "Earlier development failures remain documented separately; this five-run sequence does not erase those failures."
   ],
-  "published": false
+  "published": false,
+  "apkSha256": "C385D399EB2CB887FEE70C91B4EA13E3FF34AAD0BD2180525790A88658DE1501"
 }
