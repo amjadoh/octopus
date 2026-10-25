@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-26",
+  "completedLocalMinute": "00:59",
+  "timezone": "Asia/Riyadh",
+  "apkSha256": "6EB5089682971162EBB33A876F720DC0F8C032628D3645CCE1B795912CC159F2",
+  "apk": "normal 1.3.8 without device bridge",
+  "change": "PreparedBasketRecord validates all plain lines in complete multi-row observations; provider execution gates remain single-item",
+  "unitTestsPassed": 361,
+  "lintPassed": true,
+  "actualUiCompareButtonSmokePassed": true,
+  "request": {
+    "restaurant": "كودو",
+    "item": "بطاطس وسط",
+    "quantity": 3,
+    "additions": []
+  },
+  "keetaTotalHalala": 4081,
+  "hungerStationTotalHalala": 3750,
+  "evidenceLocalIgnored": "work/device-20261025/octopus-ledger-smoke.png",
+  "multiItemAutomationVerified": false,
+  "addressBranchEquivalenceVerified": false,
+  "published": false
+}

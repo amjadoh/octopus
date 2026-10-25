@@ -12,11 +12,11 @@
     "Dawar Al Saadah visibly closed in Keeta",
     "Kudo name in Keeta decorated with coupons; matcher updated with exact observed pattern"
   ],
-  "testsPassed": 357,
+  "testsPassed": 361,
   "published": false,
   "hungerStationCartVerified": true,
-  "reviewProgress": "Repeated comparison succeeded from the actual Compare button in the normal APK without device bridge on 2026-10-26 around 00:02 Asia/Riyadh: Keeta 4081 halala, HS 3750 halala. Both carts medium fries x3, no additions. Keeta previous-review recovery and both provider handoffs verified. Address/branch equivalence remains unverified.",
-  "nextTest": "Five started normal-APK Compare runs completed both fresh totals for the same plain item on existing matching baskets. No more repeats of this case needed absent new changes. Continue address/branch verification and multiitem/options implementation. Normal APK has no test receiver; old live-device JSON is stale. No publication.",
+  "reviewProgress": "Normal-APK Compare-button smoke passed again at 00:59 Riyadh after ledger generalization: Keeta 4081 / HS 3750 halala, same Kudo plain request. 361 tests and lint pass. Multi-row ledger foundation implemented, but UI and actual provider executors remain single-item. Address/branch equivalence unverified.",
+  "nextTest": "Continue from docs/development/multi-item-runtime-status.md. Do not repeat the same plain-item five-run suite absent changed code/failure. Next implementation: full-request per-line read plan, then ownership-bound multi-item Android preparation. Keep PreviewEvidence gate closed until actual path implemented/tested. Normal APK no test receiver. No publication.",
   "keetaFinalTotalHalala": 4081,
   "hungerStationFinalTotalHalala": 3750,
   "sameRunFinalReadingsSucceeded": true,
@@ -26,8 +26,11 @@
   "normalApkCompareButtonVerified": true,
   "normalApkInstalled": true,
   "lintPassed": true,
-  "normalApkSha256": "C385D399EB2CB887FEE70C91B4EA13E3FF34AAD0BD2180525790A88658DE1501",
+  "normalApkSha256": "6EB5089682971162EBB33A876F720DC0F8C032628D3645CCE1B795912CC159F2",
   "normalCompareRunsSucceeded": 5,
   "normalCompareStartedFailures": 0,
-  "repeatabilityReport": "docs/verification/2026-10-25/normal-ui-repeatability.json"
+  "repeatabilityReport": "docs/verification/2026-10-25/normal-ui-repeatability.json",
+  "postLedgerSmokeReport": "docs/verification/2026-10-25/post-ledger-smoke.json",
+  "multiItemLedgerImplemented": true,
+  "multiItemAutomationImplemented": false
 }

@@ -14,14 +14,19 @@ data class PreparedBasketRecord private constructor(
 
     companion object {
         fun create(cart: CanonicalCart, evidence: BasketEvidence, version: String, at: Long): PreparedBasketRecord? {
-            if (version.isBlank() || at < 0 || evidence.restaurant != cart.restaurant ||
-                cart.items.size != 1 || evidence.lines.size != 1) return null
-            val wanted = cart.items.single()
-            val actual = evidence.lines.single()
-            // The current preparation adapters support only a fully read, plain single variant.
-            if (wanted.size != null || wanted.options.isNotEmpty() || !wanted.note.isNullOrBlank() ||
-                wanted.quantity !in 1..99 || actual.name != wanted.name || actual.quantity != wanted.quantity ||
-                actual.choices.isNotEmpty()) return null
+            if (version.isBlank() || at < 0 || evidence.restaurant != cart.restaurant) return null
+            // This ledger can retain a complete plain multi-item observation. It does not
+            // enable the still single-item provider executors or infer address/branch identity.
+            if (cart.items.any { it.size != null || it.options.isNotEmpty() || !it.note.isNullOrBlank() }) return null
+            val wanted = cart.items.groupBy { it.name }.mapValues { (_, lines) -> lines.sumOf { it.quantity } }
+            if (wanted.values.any { it !in 1..99 } || evidence.lines.size != wanted.size ||
+                evidence.lines.map { it.name }.distinct().size != evidence.lines.size) return null
+            // Existing single-row records preserve their visible-only completeness flag.
+            // More than one row requires an explicit full-cart observation from its reader.
+            if (wanted.size > 1 && !evidence.complete) return null
+            if (evidence.lines.any { it.name !in wanted || it.quantity == null || it.quantity != wanted[it.name] || it.choices.isNotEmpty() ||
+                    it.lineAmount?.let { amount -> amount < 0 } == true } ||
+                evidence.subtotal?.let { it < 0 } == true) return null
             return PreparedBasketRecord(evidence, cart.fingerprint, version, at)
         }
     }
