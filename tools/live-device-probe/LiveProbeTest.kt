@@ -16,6 +16,99 @@ import org.junit.runner.RunWith
 /** Shell-invoked, structure-only live probe. Standard runner initializes Application before this. */
 @RunWith(AndroidJUnit4::class)
 class LiveProbeTest {
+    @Test fun inspectHungerProductQuantity() {
+        val i=InstrumentationRegistry.getInstrumentation()
+        val a=i.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+        a.serviceInfo=a.serviceInfo.apply {flags=flags or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS}
+        val title=InstrumentationRegistry.getArguments().getString("item") ?: error("Missing selected food")
+        fun nodes(root:android.view.accessibility.AccessibilityNodeInfo):List<android.view.accessibility.AccessibilityNodeInfo> {
+            val result=mutableListOf<android.view.accessibility.AccessibilityNodeInfo>()
+            fun walk(n:android.view.accessibility.AccessibilityNodeInfo,depth:Int) {
+                if(depth>30 || result.size>=1000 || !n.isVisibleToUser || n.isEditable || n.isPassword ||
+                    app.octopus.local.diagnostics.InspectionRedactor.privateSubtree(n.viewIdResourceName.orEmpty()) ||
+                    (android.os.Build.VERSION.SDK_INT>=34 && n.isAccessibilityDataSensitive)) return
+                result+=android.view.accessibility.AccessibilityNodeInfo.obtain(n)
+                for(k in 0 until n.childCount.coerceAtMost(100)) n.getChild(k)?.let {try{walk(it,depth+1)}finally{it.recycle()}}
+            }
+            walk(root,0); return result
+        }
+        var pendingRoot=a.rootInActiveWindow
+        val rootDeadline=android.os.SystemClock.elapsedRealtime()+8000
+        while(pendingRoot==null && android.os.SystemClock.elapsedRealtime()<rootDeadline){android.os.SystemClock.sleep(200);pendingRoot=a.rootInActiveWindow}
+        val root=pendingRoot ?: error("No active window")
+        try {
+            check(root.packageName.toString()=="com.hungerstation.android.web")
+            val all=nodes(root)
+            try {
+                if(all.none {it.viewIdResourceName=="pdpCloseButton"}) {
+                    check(all.any {it.viewIdResourceName=="menuBackButton"})
+                    val selected=all.single {it.isClickable && (it.text ?: it.contentDescription)?.toString()?.lineSequence()?.first()?.trim()==title}
+                    check(selected.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK))
+                }
+            } finally {all.forEach {it.recycle()}}
+        } finally {root.recycle()}
+        val deadline=android.os.SystemClock.elapsedRealtime()+8000
+        while(android.os.SystemClock.elapsedRealtime()<deadline) {
+            val current=a.rootInActiveWindow
+            if(current!=null) try {
+                check(current.packageName.toString()=="com.hungerstation.android.web")
+                val all=nodes(current)
+                try {
+                    if(all.any {it.viewIdResourceName=="pdpCloseButton"} && all.any {it.viewIdResourceName=="flutterAddButton"} &&
+                        all.any {(it.text ?: it.contentDescription)?.toString()?.trim()==title}) {
+                        val output=JSONArray()
+                        fun record(n:android.view.accessibility.AccessibilityNodeInfo,parent:Int,depth:Int) {
+                            if(depth>30 || !n.isVisibleToUser || n.isEditable || n.isPassword ||
+                                app.octopus.local.diagnostics.InspectionRedactor.privateSubtree(n.viewIdResourceName.orEmpty()))return
+                            val index=output.length()
+                            output.put(JSONObject().put("index",index).put("parent",parent).put("id",n.viewIdResourceName.orEmpty())
+                                .put("label",(n.text ?: n.contentDescription)?.toString().orEmpty()).put("className",n.className.toString())
+                                .put("clickable",n.isClickable).put("enabled",n.isEnabled).put("editable",false).put("scrollable",n.isScrollable))
+                            for(k in 0 until n.childCount.coerceAtMost(100))n.getChild(k)?.let {try{record(it,index,depth+1)}finally{it.recycle()}}
+                        }
+                        record(current,-1,0)
+                        i.targetContext.filesDir.resolve("live-hs-product-quantity.json").writeText(JSONObject().put("complete",true).put("nodes",output).toString(),Charsets.UTF_8)
+                        return
+                    }
+                }finally{all.forEach{it.recycle()}}
+            }finally{current.recycle()}
+            android.os.SystemClock.sleep(200)
+        }
+        error("Selected product did not appear; no add performed")
+    }
+    @Test fun captureHungerMenuQuantity() {
+        val i=InstrumentationRegistry.getInstrumentation()
+        val a=i.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+        a.serviceInfo=a.serviceInfo.apply { flags=flags or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
+            AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS }
+        runCatching { a.waitForIdle(750,5000) }
+        val root=a.rootInActiveWindow ?: error("No root")
+        val item=InstrumentationRegistry.getArguments().getString("item") ?: error("Missing item")
+        try {
+            check(root.packageName?.toString()=="com.hungerstation.android.web")
+            val nodes=JSONArray()
+            fun walk(n:android.view.accessibility.AccessibilityNodeInfo,parent:Int,publicRow:Boolean=false,depth:Int=0) {
+                if(depth>35 || nodes.length()>1800 || !n.isVisibleToUser || n.isPassword || n.isEditable ||
+                    app.octopus.local.diagnostics.InspectionRedactor.privateSubtree(n.viewIdResourceName.orEmpty()) ||
+                    (android.os.Build.VERSION.SDK_INT>=34 && n.isAccessibilityDataSensitive)) return
+                val id=n.viewIdResourceName.orEmpty()
+                val raw=(n.text ?: n.contentDescription)?.toString().orEmpty()
+                val cell=app.octopus.local.providers.CatalogNode(0,-1,id,raw,n.className?.toString().orEmpty(),n.isClickable,false,n.isScrollable,n.isEnabled)
+                val keep=publicRow || app.octopus.local.providers.HungerStationCatalog.menuItem(cell)?.name==item || id=="FlutterMenu_goToCartButton"
+                val index=nodes.length()
+                nodes.put(JSONObject().put("index",index).put("parent",parent).put("id",id)
+                    .put("label",if(keep)raw else "").put("className",cell.className).put("clickable",n.isClickable)
+                    .put("enabled",n.isEnabled).put("editable",false).put("scrollable",n.isScrollable))
+                for(k in 0 until n.childCount.coerceAtMost(200)) n.getChild(k)?.let { child ->
+                    try {walk(child,index,keep,depth+1)} finally {child.recycle()}
+                }
+            }
+            walk(root,-1)
+            val report=JSONObject().put("complete",true).put("nodes",nodes)
+            i.targetContext.filesDir.resolve("live-hs-menu-quantity.json").writeText(report.toString(),Charsets.UTF_8)
+            i.sendStatus(0,Bundle().apply {putInt("publicMenuNodes",nodes.length())})
+        } finally {root.recycle()}
+    }
     @Test fun captureStructure() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val lock = instrumentation.targetContext.getSystemService(android.content.Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
@@ -57,7 +150,7 @@ class LiveProbeTest {
         var visited = 0
         val publicCartControls = JSONArray()
         val pricingOnly = JSONArray()
-        val pricingLabels = setOf("الإجمالي", "المجموع", "المجموع الفرعي", "إجمالي الطلب", "المبلغ الإجمالي", "رسوم التوصيل", "رسوم الخدمة", "رسوم الطلب الصغير", "الخصم", "ضريبة القيمة المضافة", "Total", "Subtotal", "Delivery fee", "Service fee")
+        val pricingLabels = setOf("إتمام الدفع", "تأكيد معلومات الطلب", "تفاصيل الطلب", "تأكيد معلومات التوصيل", "مراجعة الطلب", "تأكيد الطلب", "الدفع", "Checkout", "Order review","الإجمالي", "المجموع", "المجموع الفرعي", "إجمالي الطلب", "المبلغ الإجمالي", "رسوم التوصيل", "رسوم الخدمة", "رسوم الطلب الصغير", "الخصم", "ضريبة القيمة المضافة", "Total", "Subtotal", "Delivery fee", "Service fee")
         val amountPattern = "[0-9٠-٩]{1,5}(?:[.,٫][0-9٠-٩]{1,2})?"
         val currencyPattern = "(?:[§﷼]|SAR|ر\\.س)"
         val publicMoney = Regex("(?:$currencyPattern\\s*$amountPattern|$amountPattern\\s*$currencyPattern)")

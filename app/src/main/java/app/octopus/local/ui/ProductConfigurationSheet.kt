@@ -22,7 +22,7 @@ fun ProductConfigurationSheet(graph: AppGraph, details: ConfiguredProduct, onDis
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val selection = ProductSelection(details.product.id, choices, quantity)
-    val valid = MenuSelectionValidator().selectConfigured(details, selection, System.currentTimeMillis()) is SelectionResult.Accepted
+    val valid = MenuSelectionValidator().selectIntent(details, selection) is SelectionResult.Accepted
     fun save(replace: Boolean) {
         saving = true
         scope.launch {
@@ -40,6 +40,7 @@ fun ProductConfigurationSheet(graph: AppGraph, details: ConfiguredProduct, onDis
         LazyColumn(Modifier.fillMaxWidth().heightIn(max = 580.dp), contentPadding = PaddingValues(22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item { Text(details.product.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
             item { Text("${details.restaurant} • اختيار للطلب داخل الأخطبوط؛ لا تُعدّل سلة المنصة الآن.", style = MaterialTheme.typography.bodySmall) }
+            item { Text("خيارات من قائمة محفوظة؛ يُعاد التحقق من السعر والتوفر عند المقارنة.", style = MaterialTheme.typography.bodySmall) }
             if (!details.optionsComplete) item { Text("خيارات الوجبة لم تُقرأ كاملة أو قواعدها غير مدعومة. لا يمكن إضافتها بخيارات ناقصة.", color = MaterialTheme.colorScheme.error) }
             if (!details.product.available) item { Text("الوجبة غير متاحة في القراءة الحالية.", color = MaterialTheme.colorScheme.error) }
             details.product.groups.forEach { group ->
@@ -75,7 +76,7 @@ fun ProductConfigurationSheet(graph: AppGraph, details: ConfiguredProduct, onDis
                     Text(if (saving) "جارٍ الحفظ…" else "أضف إلى طلبي في الأخطبوط")
                 }
             }
-            item { Text("بعد إضافة وجباتك إلى طلب الأخطبوط، افتح المقارنة ثم اختر التطبيق لتجهيز سلته.", style = MaterialTheme.typography.bodySmall) }
+            item { Text("عند الضغط على «قارن الإجمالي وجهّز السلتين» يبدأ التنقل للتحقق من طلبك والأسعار. لا يُؤكد طلب أو دفع.", style = MaterialTheme.typography.bodySmall) }
         }
     }
     if (replacing) AlertDialog(onDismissRequest = { replacing = false }, title = { Text("تغيير مطعم الطلب المحلي؟") },

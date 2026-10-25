@@ -95,7 +95,10 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) graph.refreshInstallations() }
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) {
+            graph.refreshInstallations()
+            graph.refreshPublicRestaurants(force = false)
+        } }
         owner.lifecycle.addObserver(observer)
         onDispose { owner.lifecycle.removeObserver(observer) }
     }
@@ -194,7 +197,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
             confirmButton = { TextButton(onClick = {
                 ReadOnlyServiceBridge.stop()
                 LiveCatalogBridge.stop()
-                graph.scope.launch { graph.recorder.clear(); graph.inspectionRecorder.clear(); graph.clearOrders(); graph.settingsStore.clear(); graph.catalog.value = app.octopus.local.providers.LiveCatalogState(); deleteConfirmation = false }
+                graph.scope.launch { graph.recorder.clear(); graph.inspectionRecorder.clear(); graph.clearOrders(); graph.clearCatalog(); graph.settingsStore.clear(); graph.catalog.value = app.octopus.local.providers.LiveCatalogState(); deleteConfirmation = false }
             }) { Text("حذف البيانات", color = Red) } },
             dismissButton = { TextButton(onClick = { deleteConfirmation = false }) { Text("إلغاء") } })
         if (updateDialog) PrivateUpdateDialog(onDismiss = { updateDialog = false })

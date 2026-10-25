@@ -59,6 +59,12 @@ class MenuSelectionValidator(private val maxAgeMillis: Long = 300_000) {
     fun selectConfigured(details: ConfiguredProduct, selection: ProductSelection, now: Long): SelectionResult {
         // Product option coverage is independent of whether the restaurant's entire catalog was read.
         if (!details.source.fresh(now, maxAgeMillis)) return SelectionResult.Rejected(SelectionError.STALE_MENU)
+        return selectIntent(details, selection)
+    }
+
+    /** Local intent from a saved menu. Never proves current availability, price or a provider cart.
+     * Automation must still use selectConfigured after a fresh provider read. */
+    fun selectIntent(details: ConfiguredProduct, selection: ProductSelection): SelectionResult {
         if (!details.optionsComplete) return SelectionResult.Rejected(SelectionError.PARTIAL_MENU)
         if (details.sizeGroupId != null && details.product.size != null) return SelectionResult.Rejected(SelectionError.INVALID_METADATA)
         if (selection.productId != details.product.id) return SelectionResult.Rejected(SelectionError.PRODUCT_MISSING)

@@ -22,7 +22,21 @@ object ReviewNavigationGuard {
         val label = frame.nodes.singleOrNull { it.label == "إتمام الدفع" && it.enabled } ?: return null
         var current = label
         repeat(4) {
-            if (current.clickable && !current.editable && current.enabled) return current
+            if (current.clickable && !current.editable && current.enabled) {
+                if (version=="3.13.203") {
+                    // Current React Native footer: the labelled wrapper is clickable but its
+                    // direct empty action child owns the press handler. Never guess by position
+                    // unless the complete observed two-child label/action structure matches.
+                    val children=frame.nodes.filter {it.parent==current.index}
+                    if(children.size!=2 || children[0].className!="android.view.ViewGroup" ||
+                        !children[0].clickable || !children[0].enabled || children[0].editable ||
+                        children[0].label.isNotEmpty() || children[0].omittedText || children[0].id.isNotEmpty() ||
+                        children[1].clickable || frame.descendants(children[1].index).count {it==label}!=1)
+                        return null
+                    return children[0]
+                }
+                return current
+            }
             current = frame.nodes.singleOrNull { it.index == current.parent } ?: return null
         }
         return null

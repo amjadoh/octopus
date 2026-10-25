@@ -66,7 +66,8 @@ class KeetaCurrentProductTest {
         assertFalse(reader.product(frame.copy(complete = false)))
         val body = reader.productBody(frame)!!
         val changed = frame.copy(nodes = frame.nodes + CatalogNode(1000, body.index, "", "اختيار إلزامي", "android.widget.TextView", false, false, false))
-        assertFalse(reader.product(changed))
+        assertTrue(reader.product(changed))
+        assertNull(reader.productBody(changed))
         assertFalse(KeetaMenuReader("مطعم آخر", reader.title, reader.VERSION).product(frame))
         val basket = KeetaBasketReader(reader)
         assertNull(basket.addTarget(changed, 700))
@@ -74,6 +75,35 @@ class KeetaCurrentProductTest {
             if (it.index == body.index) it.copy(scrollable = true) else it
         }), 700))
         assertNull(basket.addTarget(frame.copy(complete = false), 700))
+    }
+    @Test fun actualOptionalChipsModalCanBeClosedButCannotBeAddedAsPlainProduct() {
+        val raw=recorded("optional-product")
+        val frame=raw.copy(nodes=raw.nodes.map { n ->
+            val value=reader.functionalLabel(n.label)
+            n.copy(label=value,omittedText=n.omittedText || (n.label.any(Char::isLetter)&&value.isBlank()))
+        })
+        assertTrue(reader.product(frame))
+        assertNotNull(reader.closeProduct(frame))
+        assertNull(reader.productBody(frame))
+        assertNull(KeetaBasketReader(reader).addTarget(frame,700))
+        val cart=CanonicalCart(reader.restaurant,null,listOf(CanonicalItem(reader.title,null,emptyList(),3)))
+        assertNull(reader.itemPreview(frame,cart,1000))
+        assertNull(reader.closeProduct(frame.copy(complete=false)))
+    }
+    @Test fun observedCurrentMenuReviewButtonUsesItsActionChildInsteadOfWrapper() {
+        val raw=recorded("optional-product")
+        val close=reader.closeProduct(raw)!!
+        val closeContainer=raw.nodes.single {it.index==close.parent}
+        val modal=raw.nodes.single {it.index==closeContainer.parent}
+        val removed=raw.descendants(modal.index).map {it.index}.toSet()
+        val menu=raw.copy(nodes=raw.nodes.filterNot {it.index in removed})
+        val cart=CanonicalCart(reader.restaurant,null,listOf(CanonicalItem(reader.title,null,emptyList(),3)))
+        assertTrue(reader.menu(menu))
+        val target=app.octopus.local.safety.ReviewNavigationGuard.target(ProviderId.KEETA,menu,cart,reader.VERSION)!!
+        assertEquals(210,target.index)
+        assertTrue(target.clickable)
+        assertNull(app.octopus.local.safety.ReviewNavigationGuard.target(ProviderId.KEETA,menu,cart.copy(
+            items=listOf(cart.items.single().copy(quantity=2))),reader.VERSION))
     }
     @Test fun currentRecordedProductProducesOnlyItsBasePriceWithoutInventingDeliveryOrDiscounts() {
         val cart = CanonicalCart(reader.restaurant, null, listOf(CanonicalItem(reader.title, null, emptyList(), 2)), null)

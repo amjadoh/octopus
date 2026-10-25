@@ -1,4 +1,27 @@
+## Release1.3.8 current-work update
+User requested saving current work and publishing an experimental update before disconnecting the phone. Latest public-only captures confirmed HS MENU row->quantityStepper controls; no completed HS quantity3/total. Live report is docs/verification/2026-10-25/physical-phone-components.json. Raw phone files remain ignored under work/. Read docs/PREVIEW_RELEASE.md for exact scope. Do not present test fixture matches or Keeta-only total as a complete two-provider comparison. Stop actions when disconnected; no order or payment was submitted.
+## Latest quantity implementation and live blocker
+See work/device-20261025/progress-product-quantity.md. Product quantity, existing plain-variant sheet commands, precise close handling, and exact network-error detection are now implemented. Latest build-provider-offline.txt passed all347 JVM tests. Physical phone still has prior variant-menu-target build; do not overwrite active quote state merely to install offline-message changes. Last runtime has Keeta final3063 halala; HS qty3/final total not verified. Phone now shows HS no-internet page. User was asked whether VPN is still off; do not disable security controls yourself. No purchase/payment, push, or publication.
+## 2026-10-25 latest physical-phone outcome
+- User disabled Cloudflare; HS recovered from its offline error. USB device stayed connected.
+- Installed current device-tools build; 342 JVM tests passed, zero failures/errors.
+- Keeta 3.13.203 review action child works; exact observed review title is إتمام الدفع. Provider-specific recognition now accepts this title only for reading.
+- Actual comparison runtime successfully stored Keeta finalTotalReading=3063 halala for مدور / 3 feta pies / no additions. This is not an equivalence-verified two-provider comparison.
+- HS still fails before basket opening. Current selected menu row has title+price but NO menuItemActionDualButtonValue subtree; disabled cart footer reads quantity1 / amount700. Do not guess inline quantity identifiers. Next implementation should inspect quantity controls on the actual PRODUCT sheet, before adding requested quantity, instead of relying on nonexistent inline menu controls.
+- ExistingQuantityConsent is request-bound and expires after five minutes; UI/bridge permission wired to bounded same-row quantity attempt. This cannot help when actual controls are absent.
+- Latest raw public-menu diagnostics are local work/device-20261025. No checkout screenshots/card fields saved.
+- Latest instrumented read-only menu probe returned14 nodes after process restart; it did not prove menu capture. Do not use it as menu evidence.
+- No order/payment confirmation occurred. No new GitHub publication or push.
 # الأخطبوط — ابدأ من هنا لاستكمال العمل
+
+## أحدث عمل محلي — 25 أكتوبر: المطاعم داخل الأخطبوط
+
+أُضيف مصدر عام فعلي من صفحات هنقرستيشن، مع قاعدة Room مستقلة وآخر قراءة محفوظة، وزر «تحديث قائمة المطاعم»، وتحديث عند الفتح ومهمة دورية تتطلب الشبكة. يحدد المستخدم المدينة والحي مرة واحدة؛ لا يوجد GPS أو حي افتراضي. تُقرأ قائمة المطعم عند اختياره، ويختار المستخدم الوجبة والكمية داخل الأخطبوط ويحفظ طلبه محليًا. تحديث المطاعم يحافظ على الطلب والقائمة المختارة، ولا يفتح تطبيقات التوصيل. يتحرك مسار الإتاحة فقط بعد «قارن» أو تسليم سلة متحققة بطلب صريح.
+
+نجح 337 اختبار وحدة وlint (0 أخطاء، 5 تحذيرات)، و17 اختبار واجهة على محاكي API 36 مستقل، واختبار حي للموقع العام، و3 اختبارات دخان على APK النهائي. نجح جلب قائمة حقيقية واختيار وجبة بكمية 3 وحفظها محليًا دون فتح منصة. انتهت الحاجة لاتصال الموقع، وأُبلغ المستخدم بإمكان تشغيل Cloudflare مجددًا. التفاصيل في docs/PUBLIC_CATALOG.md وdocs/verification/2026-10-25/public-catalog-native.json.
+
+العمل غير منشور وغير مدفوع إلى GitHub، وهو فوق إصدار 1.3.7 المحلي. لا تصف سعر القائمة بأنه إجمالي حساب. المقارنة الفعلية مع إجماليين وسلتين من الحسابين لم تُتحقق معًا؛ لم يتغير حد تجهيز صنف واحد دون خيارات. لا تعرض نجاح اختبار الموقع كنجاح اختبارات تطبيقات التوصيل، ولا تطلب من المستخدم إعادة اختباراته السابقة.
+
 
 ## استكمال دون الهاتف — 21 أكتوبر
 

@@ -1,5 +1,5 @@
 <resources>
     <string name="app_name">الأخطبوط</string>
-    <string name="service_name">الأخطبوط — قراءة تشخيصية فقط</string>
-    <string name="service_description">تقرأ الخدمة المطاعم والأسعار، وتنفذ التنقل وتمرير القائمة وتجهيز سلة ريدان بعد اختيارك. لا تؤكد طلبًا ولا تنفذ دفعًا. البيانات محلية ولا تُرسل إلى الإنترنت.</string>
+    <string name="service_name">الأخطبوط — المقارنة وتجهيز السلة</string>
+    <string name="service_description">تقرأ الخدمة واجهات التطبيقات المسموح بها، وتنفذ التنقل وتجهيز سلة المقارنة عند ضغط قارن. لا تؤكد طلبًا ولا تنفذ دفعًا. محتوى الشاشة يبقى محليًا.</string>
 </resources>

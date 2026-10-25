@@ -189,6 +189,14 @@ class KeetaReadProbeTest {
         val root = awaitRoot { has(it) { n -> sameName(n,item) } && has(it) { n -> label(n) == "إضافة إلى السلة" } }
         try { record(root, "product", restaurant, item) } finally { root.recycle() }
     }
+    @Test fun recordCurrentScreen() {
+        val args = InstrumentationRegistry.getArguments()
+        val restaurant = args.getString("restaurant") ?: error("Missing restaurant")
+        val item = args.getString("item") ?: error("Missing item")
+        require(restaurant.length in 1..100 && item.length in 1..100)
+        val root = awaitRoot { true }
+        try { record(root, "current", restaurant, item) } finally { root.recycle() }
+    }
     @Test fun recordOpenedCartMenu() {
         val args = InstrumentationRegistry.getArguments()
         val restaurant = args.getString("restaurant") ?: error("Missing restaurant")

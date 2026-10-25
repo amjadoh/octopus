@@ -65,6 +65,7 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
     fun itemPreview(frame: CatalogFrame, cart: CanonicalCart, at: Long): MenuCostPreview? {
         if (at < 0 || !PreviewEvidence.supports(cart) || cart.restaurant != restaurant ||
             cart.items.single().name != title || !product(frame)) return null
+        if (VERSION == "3.13.203" && productBody(frame) == null) return null
         val unit = unitPrice(frame) ?: return null
         val amount = runCatching { Math.multiplyExact(unit, cart.items.single().quantity.toLong()) }.getOrNull() ?: return null
         return MenuCostPreview(ProviderId.KEETA, cart.fingerprint, amount, emptyList(), at, VERSION,
@@ -138,7 +139,7 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
     }
     fun closeProduct(frame: CatalogFrame): CatalogNode? {
         if (!product(frame)) return null
-        val productContent = productBody(frame) ?: return null
+        val productContent = (if (VERSION == "3.13.203") currentReadOnlyProductBody(frame) else productBody(frame)) ?: return null
         val modal = ancestors(frame, productContent).firstOrNull { parent ->
             val children = frame.nodes.filter { it.parent == parent.index }
             children.size == 3 && children[0].className == "android.widget.FrameLayout" &&
@@ -152,7 +153,7 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
         return body.singleOrNull { it.clickable && it.enabled && it.className == "android.view.ViewGroup" }
     }
     fun product(frame: CatalogFrame): Boolean {
-        if (VERSION == "3.13.203") return currentPlainProductBody(frame) != null
+        if (VERSION == "3.13.203") return currentReadOnlyProductBody(frame) != null
         if (!frame.complete || frame.nodes.none { it.label == restaurant } ||
             frame.nodes.count { it.label == "إضافة إلى السلة" } != 1) return false
         val notes = frame.nodes.singleOrNull { it.label == "طلب خاص" } ?: return false
@@ -165,6 +166,21 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
         if (VERSION == "3.13.203") return currentPlainProductBody(frame)
         val notes = frame.nodes.singleOrNull { it.label == "طلب خاص" } ?: return null
         return ancestors(frame, notes).firstOrNull { it.className == "android.widget.ScrollView" }
+    }
+    /** Read-only recognition does not authorize adding a product with unknown modifiers. */
+    private fun currentReadOnlyProductBody(frame: CatalogFrame): CatalogNode? {
+        if (!frame.complete || frame.nodes.count { it.label == restaurant } != 1 ||
+            frame.nodes.count { it.label == "إضافة إلى السلة" } != 1) return null
+        return frame.nodes.filter { it.className == "android.widget.ScrollView" }.singleOrNull { body ->
+            val content = frame.descendants(body.index)
+            content.count { it.label == title && !it.clickable } == 1 && content.none { it.editable } &&
+                ancestors(frame,body).any { modal ->
+                    val parts = frame.nodes.filter { it.parent == modal.index }
+                    parts.size == 3 && parts[0].className == "android.widget.FrameLayout" &&
+                        frame.descendants(parts[0].index).any { it.index == body.index } &&
+                        frame.descendants(parts[2].index).count { it.label == "إضافة إلى السلة" } == 1
+                }
+        }
     }
     /** Honor / 3.13.203 plain-product modal. Only its observed description slot may omit text. */
     private fun currentPlainProductBody(frame: CatalogFrame): CatalogNode? {

@@ -10,3 +10,6 @@ local.properties
 .env
 .env.*
 *.hprof
+
+/work/
+/release/

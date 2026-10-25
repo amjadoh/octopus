@@ -42,6 +42,9 @@ private fun money(value: Long) = BigDecimal.valueOf(value, 2).stripTrailingZeros
 fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit, comparisonOnly: Boolean = false,
     onRestaurants: () -> Unit = {}, onOpenComparison: () -> Unit = {}, onSettings: () -> Unit = {}) {
     val observedState by graph.catalog.collectAsStateWithLifecycle()
+    val publicState by graph.publicCatalog.state.collectAsStateWithLifecycle()
+    val publicMeal by graph.publicMealSelection.collectAsStateWithLifecycle()
+    var areaDialog by remember { mutableStateOf(false) }
     val state = observedState.copy(busy = observedState.busy || observedState.comparisonRunning)
     val settings by graph.settings.collectAsStateWithLifecycle()
     val connected by graph.serviceConnected.collectAsStateWithLifecycle()
@@ -51,33 +54,81 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
     var query by rememberSaveable { mutableStateOf("") }
     var menuQuery by rememberSaveable(state.menu?.restaurant?.name) { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf("الكل") }
-    var browsing by remember { mutableStateOf(false) }
     var consent by remember { mutableStateOf(false) }
     var changing by remember { mutableStateOf(false) }
-    var showProduct by remember { mutableStateOf(true) }
+    var allowMatchingQuantity by remember(draft?.fingerprint) { mutableStateOf(false) }
+    var showProduct by remember(state.product?.source?.screenFingerprint) { mutableStateOf(true) }
     var localError by remember { mutableStateOf<String?>(null) }
     var quoteTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(15_000); quoteTime = System.currentTimeMillis() } }
     val currentQuoteTime = maxOf(quoteTime, System.currentTimeMillis())
-    fun search() {
-        if (!(if (browsing) LiveCatalogBridge.browseRestaurants() else LiveCatalogBridge.search(query)))
-            localError = "تعذر البدء. تحقق من اتصال خدمة الأخطبوط والسماح لهنقرستيشن."
+    fun finishManualReading() {
+        if (graph.catalog.value.manualCaptureActive) LiveCatalogBridge.endManualCatalog()
     }
-    fun start(browse: Boolean) {
-        browsing = browse; localError = null; category = "الكل"
+    fun beginManualReading() {
+        localError = null
+        if (!LiveCatalogBridge.beginManualCatalog())
+            localError = graph.catalog.value.error ?: "تعذر فتح القراءة؛ تحقق من اتصال خدمة الأخطبوط والسماح لهنقرستيشن."
+    }
+    fun requestManualReading() {
+        localError = null
         when {
             !connected -> onSetup()
             ProviderId.HUNGERSTATION !in settings.allowed -> onProviders()
             !settings.catalogConsent -> consent = true
-            else -> search()
+            else -> beginManualReading()
         }
+    }
+    fun showRestaurants(clearSearch: Boolean) {
+        finishManualReading()
+        localError = null; category = "الكل"
+        if (clearSearch) query = ""
+        graph.publicCatalog.leaveMenu()
+        graph.publicMealSelection.value = null
+        graph.catalog.value = graph.catalog.value.copy(menu = null, product = null, error = null)
+    }
+    fun browse() {
+        if (publicState.area == null) areaDialog = true else graph.refreshPublicRestaurants()
     }
     Column(Modifier.fillMaxSize()) {
     if (!comparisonOnly && state.menu == null) MosabHomeHeader(query,
         onQuery = { query = it.take(100) }, enabled = !state.busy,
-        onSearch = { start(false) }, onBrowse = { start(true) }, onProviders = onProviders,
-        onCart = onOpenComparison, onSettings = onSettings, allowed = settings.allowed.size)
+        onSearch = { showRestaurants(false) }, onBrowse = { browse() }, onProviders = onProviders,
+        onCart = onOpenComparison, onSettings = onSettings, allowed = settings.allowed.size,
+        browseEnabled = !state.busy && !state.manualCaptureActive && !publicState.refreshing,
+        browseLabel = "تحديث قائمة المطاعم")
     LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        if (!comparisonOnly) item {
+            Card(colors = CardDefaults.cardColors(containerColor = OctopusPalette.Soft), shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Text("اختر طلبك داخل الأخطبوط", fontWeight = FontWeight.Bold)
+                    Text("تتحدث المطاعم من موقع هنقرستيشن في الخلفية. اختر مطعمك ووجباتك هنا؛ تجهيز السلتين وقراءة الإجماليين يبدأ عند ضغط «قارن».",
+                        fontSize = 12.sp, color = OctopusPalette.Muted)
+                    TextButton(onClick = { areaDialog = true }, enabled = !state.busy) {
+                        Icon(Icons.Outlined.LocationOn, null)
+                        Text(publicState.area?.title ?: "حدد المدينة والحي لتحديث المطاعم")
+                    }
+                    if (publicState.refreshing) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                        Text("جارٍ تحديث قائمة المطاعم…", fontSize = 12.sp)
+                    }
+                    if (publicState.loadingMenu) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                        Text("جارٍ قراءة قائمة ${state.selectedRestaurant.orEmpty()} داخل الأخطبوط…", fontSize = 12.sp)
+                    }
+                    publicState.updatedAt?.let { time -> Text("آخر تحديث: " +
+                        java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale("ar")).format(java.util.Date(time)), fontSize = 12.sp) }
+                    publicState.error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
+                    Text("المطاعم بحسب المدينة والحي المختارين. السعر والتوفر وعنوان التوصيل يتحقق منها أثناء المقارنة.", fontSize = 12.sp, color = OctopusPalette.Muted)
+                    if (state.manualCaptureActive) {
+                        Text("القراءة اليدوية نشطة؛ يمكنك إنهاؤها والاختيار من البيانات المحفوظة.", fontSize = 12.sp)
+                        TextButton(onClick = { finishManualReading() }) { Text("إنهاء القراءة اليدوية") }
+                    } else if (state.restaurants.isNotEmpty() || state.menu != null) {
+                        TextButton(onClick = { requestManualReading() }, enabled = !state.busy) { Text("قراءة يدوية اختيارية من هنقرستيشن") }
+                    }
+                }
+            }
+        }
         if (comparisonOnly) {
             item {
                 MosabJourneyHero("قارن طلبك", "كل التفاصيل قدامك. اختر المنصة بعد مراجعة سعرها.", 3)
@@ -94,28 +145,26 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
             }
         } else if (state.menu != null) {
         item {
-            MosabJourneyHero(if (state.menu == null) "وش ودّك اليوم؟" else state.menu!!.restaurant.name,
-                if (state.menu == null) "طلب واحد، وخيارات أكثر. ابدأ بمطعمك." else "اختر وجباتك وخصص طلبك على مزاجك.",
-                if (state.menu == null) 1 else 2)
+            MosabJourneyHero(state.menu!!.restaurant.name, "اختر وجباتك وخصص طلبك على مزاجك.", 2)
         }
         item {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 Icon(Icons.Outlined.LocationOn, null, Modifier.size(18.dp), tint = OctopusPalette.Petrol)
-                Text("حسب عنوانك النشط في هنقرستيشن", fontSize = 12.sp, color = OctopusPalette.Muted)
+                Text(publicState.area?.title ?: "من قائمة محفوظة؛ يُتحقق من العنوان عند المقارنة", fontSize = 12.sp, color = OctopusPalette.Muted)
             }
         }
         item {
-            Button(onClick = { start(true) }, enabled = !state.busy, shape = RoundedCornerShape(18.dp),
+            Button(onClick = { browse() }, enabled = !state.busy && !publicState.refreshing, shape = RoundedCornerShape(18.dp),
                 contentPadding = PaddingValues(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Outlined.Restaurant, null, Modifier.size(21.dp)); Spacer(Modifier.width(9.dp))
-                Text(if (state.restaurants.isEmpty()) "استعرض المطاعم" else "حدّث المطاعم", fontWeight = FontWeight.Bold)
+                Text("تحديث قائمة المطاعم", fontWeight = FontWeight.Bold)
             }
         }
         item {
             OutlinedTextField(value = query, onValueChange = { if (it.length <= 100) query = it }, enabled = !state.busy,
                 modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(18.dp),
-                placeholder = { Text("أو ابحث باسم مطعمك…", fontSize = 14.sp) }, leadingIcon = { Icon(Icons.Outlined.Search, null) },
-                trailingIcon = { IconButton(onClick = { start(false) }, enabled = !state.busy && query.isNotBlank()) {
+                placeholder = { Text("ابحث في المطاعم المحفوظة…", fontSize = 14.sp) }, leadingIcon = { Icon(Icons.Outlined.Search, null) },
+                trailingIcon = { IconButton(onClick = { showRestaurants(false) }, enabled = !state.busy && query.isNotBlank()) {
                     Icon(Icons.AutoMirrored.Outlined.ArrowForward, "ابحث عن المطاعم")
                 } }, colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = Color.White,
                     focusedContainerColor = Color.White, unfocusedBorderColor = OctopusPalette.Line))
@@ -131,8 +180,9 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                             Text("اختر مطعمك ووجباتك لبدء المقارنة.")
                             Text("يوجد طلب سابق محفوظ من ${cart.restaurant}؛ لا يدخل المقارنة تلقائيًا.", fontSize = 12.sp)
                             if (state.selectedRestaurant == null) TextButton(onClick = {
+                                finishManualReading()
                                 graph.catalog.value = graph.catalog.value.copy(selectedRestaurant = cart.restaurant)
-                            }) { Text("استئناف الطلب المحفوظ") }
+                            }, enabled = !state.busy) { Text("استئناف الطلب المحفوظ") }
                             OutlinedButton(onClick = onRestaurants) { Text("اختيار مطعم جديد") }
                         }
                     }
@@ -145,12 +195,13 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                             Icon(Icons.Outlined.ShoppingBag, null, tint = OctopusPalette.Petrol)
                             Spacer(Modifier.width(8.dp)); Text("طلبك • ${cart.restaurant}", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                         }
-                        Text("راجع الكميات، ثم اقرأ أسعار الوجبات أو جهّز سلال المقارنة.", color = OctopusPalette.Muted, fontSize = 12.sp)
+                        Text("راجع الأصناف والخيارات والكميات، ثم ابدأ المقارنة لتجهيز الطلب نفسه في التطبيقين وقراءة إجماليه.", color = OctopusPalette.Muted, fontSize = 12.sp)
                         cart.items.forEach { line ->
                             Text(listOfNotNull(line.name, line.size).joinToString(" • "), fontWeight = FontWeight.Medium)
                             if (line.options.isNotEmpty()) Text(line.options.joinToString("، ") { "${it.group}: ${it.value}" }, fontSize = 12.sp)
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(15.dp)) {
                                 fun change(amount: Int) {
+                                    finishManualReading()
                                     changing = true
                                     graph.scope.launch {
                                         try {
@@ -169,25 +220,27 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                                 }
                             }
                         }
+                        Row(verticalAlignment=Alignment.CenterVertically) {
+                            Checkbox(checked=allowMatchingQuantity,onCheckedChange={allowMatchingQuantity=it},enabled=!state.busy)
+                            Text("أسمح بتعديل كمية الصنف المطابق في سلة سابقة إلى الكمية التي اخترتها؛ تُفحص الإضافات بعد فتح السلة.",fontSize=11.sp,modifier=Modifier.weight(1f))
+                        }
                         Button(onClick = {
+                            finishManualReading()
                             localError = null
-                            if (!LiveCatalogBridge.compareDraft() && graph.catalog.value.error == null) localError = "تعذر بدء المقارنة؛ تحقق من اتصال الخدمة."
-                        }, enabled = !state.busy && !changing, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                            Icon(Icons.Outlined.CompareArrows, null); Spacer(Modifier.width(8.dp)); Text("قارن أسعار الوجبات")
-                        }
-                        Text("أسعار الوجبات فقط؛ التوصيل والخدمة والخصومات المشروطة غير متحققة.", fontSize = 12.sp, color = OctopusPalette.Muted)
-                        OutlinedButton(onClick = {
-                            localError = null
+                            if(allowMatchingQuantity) graph.approveExistingMatchingQuantity() else graph.existingQuantityConsent.value=null
                             if (!LiveCatalogBridge.compareAndPrepare()) localError = "تعذر بدء تجهيز السلتين؛ تحقق من الخدمة والطلب."
-                        }, enabled = !state.busy && !changing, modifier = Modifier.fillMaxWidth()) {
-                            Text("جهّز السلتين لمقارنة الإجمالي")
+                        }, enabled = !state.busy && !changing && PreviewEvidence.supports(cart),
+                            modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                            Icon(Icons.Outlined.CompareArrows, null); Spacer(Modifier.width(8.dp)); Text("قارن الإجمالي وجهّز السلتين")
                         }
+                        if (!PreviewEvidence.supports(cart)) Text("حُفظ طلبك. المسار الحالي للمقارنة يدعم صنفًا واحدًا دون خيارات أو ملاحظات؛ لن يحذف بقية اختياراتك ليكوّن طلبًا مختلفًا.", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
                         Text("يجهّز السلتين ويقرأ إجمالي المراجعة إذا تعرّف على مسارها، دون تأكيد طلب أو دفع. النتيجة غير المقروءة لا تُقدّر.", fontSize = 12.sp, color = OctopusPalette.Muted)
                         state.comparisonProgress.values.forEach { result ->
                             Text("${result.provider.title}: ${result.detail ?: "جارٍ تجهيز السلة والتحقق منها…"}", fontSize = 12.sp)
                         }
                         ProviderId.entries.forEach { id ->
                             if (state.preparedBaskets.forRequest(cart, id) != null) TextButton(onClick = {
+                                finishManualReading()
                                 val opened = if (id == ProviderId.KEETA) LiveCatalogBridge.prepareComparedKeeta(true)
                                     else LiveCatalogBridge.openPreparedRidanBasket()
                                 if (!opened) localError = "تعذر بدء إعادة التحقق من السلة."
@@ -219,16 +272,12 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                 }
             }
             if (state.previews.isNotEmpty()) {
-                item { Text("مقارنة أسعار الوجبات", fontSize = 22.sp, fontWeight = FontWeight.Bold) }
-                item { Text("قراءة قبل تجهيز السلة. الإجمالي النهائي ومطابقة العنوان والفرع بين التطبيقين غير متحققة؛ لم أحدد الأرخص.", fontSize = 12.sp, color = OctopusPalette.Muted) }
-                item { ComparisonSummary(state.previews, cart, currentQuoteTime) }
+                item { Text("أسعار الوجبات المقروءة", fontSize = 22.sp, fontWeight = FontWeight.Bold) }
+                item { Text("بيانات القائمة منفصلة عن إجمالي مراجعة الطلب. لا يدخل سعر ناقص في ترتيب النتائج، وتطابق العنوان والفرع يحتاج تحققًا.", fontSize = 12.sp, color = OctopusPalette.Muted) }
+                item { ComparisonSummary(state.previews, state.finalTotals, cart, currentQuoteTime) }
                 items(state.previews, key = { it.provider }) { preview ->
                     val fresh = preview.fresh(cart, currentQuoteTime)
-                    CostPreviewCard(preview, fresh, !state.busy, currentQuoteTime, onSelect = {
-                        val started = if (preview.provider == ProviderId.KEETA) LiveCatalogBridge.prepareComparedKeeta()
-                            else LiveCatalogBridge.prepareComparedHungerStation()
-                        if (!started) localError = "انتهت صلاحية القراءة أو تغير الطلب؛ أعد المقارنة."
-                    })
+                    CostPreviewCard(preview, fresh, currentQuoteTime)
                 }
             }
             }
@@ -256,10 +305,17 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                     }
                 }
             }
-            val visible = state.restaurants.filter { category == "الكل" || (it.name + " " + it.description.orEmpty()).contains(category) }
-            if (visible.isEmpty()) item { Text("ما ظهر مطعم بهذا التصنيف في الجزء المقروء. جرّب «الكل» أو البحث بالاسم.", fontSize = 13.sp) }
+            val visible = state.restaurants.filter {
+                (category == "الكل" || (it.name + " " + it.description.orEmpty()).contains(category)) &&
+                    (query.isBlank() || it.name.contains(query.trim(), ignoreCase = true))
+            }
+            if (visible.isEmpty()) item { Text("لا توجد مطاعم تطابق البحث في الصفحات المحمّلة. حدّث القائمة أو حمّل مطاعم إضافية.", fontSize = 13.sp) }
             items(visible, key = { it.name }) { restaurant ->
-                Card(onClick = { if (!LiveCatalogBridge.openMenu(restaurant)) localError = "تعذر فتح قائمة المطعم." }, enabled = !state.busy,
+                Card(onClick = {
+                    finishManualReading(); localError = null
+                    if (!LiveCatalogBridge.openMenu(restaurant)) localError = graph.catalog.value.error
+                        ?: "قائمة هذا المطعم غير محفوظة. افتحها في هنقرستيشن ثم اضغط «احفظ وارجع للأخطبوط»."
+                }, enabled = !state.busy,
                     elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(22.dp)) {
                     Box(Modifier.fillMaxWidth().height(72.dp).background(Brush.horizontalGradient(
@@ -276,17 +332,21 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                             Text(restaurant.name, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                             restaurant.description?.let { Text(it, color = OctopusPalette.Muted, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
-                            Text("هنقرستيشن • افتح القائمة", fontSize = 11.sp, color = OctopusPalette.Petrol)
+                            Text(if (publicState.area == null) "هنقرستيشن • القائمة المحفوظة" else "موقع هنقرستيشن • قائمة عامة", fontSize = 11.sp, color = OctopusPalette.Petrol)
                         }
                         Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, Modifier.size(18.dp), tint = OctopusPalette.Petrol)
                     }
                 }
             }
+            if (publicState.page < publicState.pages && publicState.directory.size < 500) item {
+                OutlinedButton(onClick = { graph.publicCatalog.refresh(nextPage = true) },
+                    enabled = !state.busy && !publicState.refreshing, modifier = Modifier.fillMaxWidth()) { Text("تحميل مطاعم إضافية") }
+            }
         }
         if (!comparisonOnly) state.menu?.let { menu ->
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                            TextButton(onClick = { graph.catalog.value = state.copy(menu = null, product = null) }, enabled = !state.busy) { Text("العودة للمطاعم") }
+                            TextButton(onClick = { showRestaurants(true) }, enabled = !state.busy) { Text("العودة للمطاعم") }
                     Text(menu.restaurant.name, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
                     Text("اختر وجباتك وخصصها داخل الأخطبوط", color = OctopusPalette.Muted, fontSize = 13.sp)
                     Text("${menu.items.size} صنف مقروء • ${menu.restaurant.source.title}", color = OctopusPalette.Petrol, fontSize = 12.sp)
@@ -300,14 +360,16 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
             if (visibleMeals.isEmpty()) item { Text("لم تظهر وجبة بهذا الاسم في القائمة المقروءة.", fontSize = 13.sp) }
             items(visibleMeals, key = { it.selector }) { item ->
                 Card(onClick = {
+                    finishManualReading(); localError = null
                     showProduct = true
-                    if (!LiveCatalogBridge.openProduct(menu.restaurant, item)) localError = "تعذرت قراءة خيارات الوجبة."
+                    if (!LiveCatalogBridge.openProduct(menu.restaurant, item)) localError = graph.catalog.value.error
+                        ?: "خيارات هذه الوجبة غير محفوظة. افتحها في هنقرستيشن ثم اضغط «احفظ وارجع للأخطبوط»."
                 }, enabled = !state.busy && ready, shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                     Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                             Text(item.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            Text(item.listedPrice?.let(::money) ?: "السعر غير مقروء", color = OctopusPalette.Petrol, fontWeight = FontWeight.Bold)
-                            Text("عرض الخيارات", color = OctopusPalette.Muted, fontSize = 11.sp)
+                            Text(item.listedPrice?.let { money(it) + " • سعر قائمة محفوظ" } ?: "السعر غير مقروء", color = OctopusPalette.Petrol, fontWeight = FontWeight.Bold)
+                            Text(if (item.selector.startsWith("public-hs:")) "اختيار الكمية" else "عرض الخيارات", color = OctopusPalette.Muted, fontSize = 11.sp)
                             draft?.takeIf { it.restaurant == menu.restaurant.name }?.items
                                 ?.filter { it.name == item.name }?.sumOf { it.quantity }?.takeIf { it > 0 }?.let {
                                     Text("في طلبك: $it", color = OctopusPalette.Petrol, fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -320,6 +382,9 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
         }
         item { Text("اختر المطعم والوجبة. تُقبل الخيارات عند اكتمال قراءتها؛ المقارنة وتجهيز السلة التلقائي حاليًا لصنف واحد دون خيارات أو ملاحظة. الأصناف والتوصيل لا يمثلان الإجمالي النهائي مع الرسوم.", fontSize = 11.sp, color = OctopusPalette.Muted) }
     }
+    if (areaDialog) CatalogAreaDialog(graph, onDismiss = { areaDialog = false })
+    publicMeal?.let { (menu, meal) -> PublicMealDialog(graph, menu, meal,
+        onDismiss = { graph.publicMealSelection.value = null }) }
     if (!comparisonOnly) draft?.takeIf { ComparisonRequestSelection.matches(state.selectedRestaurant, it) }?.let { cart ->
         Surface(shadowElevation = 6.dp, color = Color.White) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp),
@@ -338,20 +403,21 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
         ProductConfigurationSheet(graph, details, onDismiss = { showProduct = false }, onSaved = {
             localError = null
             graph.catalog.value = graph.catalog.value.copy(product = null)
-            onOpenComparison()
+            showProduct = false
         })
     }
     if (consent) AlertDialog(onDismissRequest = { consent = false }, title = { Text("السماح باستعراض المطاعم") },
-        text = { Text("يفتح الأخطبوط هنقرستيشن لقراءة المطاعم والوجبات الظاهرة ثم يعود إليك. المقارنة تقرأ كيتا وهنقرستيشن دون تعديل سلالهما. تجهيز السلة يبدأ فقط بعد اختيارك. لا يُؤكد طلب أو دفع. تبقى البيانات محلية ويمكن إيقاف التنقل من الزر فوق المنصة.") },
+        text = { Text("يفتح هنقرستيشن لتتصفحه بنفسك. الأخطبوط لا ينقر ولا يمرّر أثناء الاستعراض. يحفظ محليًا بيانات المطاعم والوجبات وخياراتها التي تعرضها أثناء هذه الجلسة. زر «احفظ وارجع للأخطبوط» ينهي القراءة ويعيدك للاختيار هنا. لا يبدأ التنقل وتجهيز السلتين إلا بعد ضغط زر المقارنة. لا يُؤكد طلب أو دفع.") },
         confirmButton = { TextButton(onClick = {
             consent = false
-            graph.scope.launch { graph.settingsStore.acceptCatalogConsent(); graph.settings.first { it.catalogConsent }; search() }
+            graph.scope.launch { graph.settingsStore.acceptCatalogConsent(); graph.settings.first { it.catalogConsent }; beginManualReading() }
         }) { Text("ابدأ الاستعراض") } }, dismissButton = { TextButton(onClick = { consent = false }) { Text("إلغاء") } })
 }
 
 @Composable
 private fun MosabHomeHeader(query: String, onQuery: (String) -> Unit, enabled: Boolean,
-    onSearch: () -> Unit, onBrowse: () -> Unit, onProviders: () -> Unit, onCart: () -> Unit, onSettings: () -> Unit, allowed: Int) {
+    onSearch: () -> Unit, onBrowse: () -> Unit, onProviders: () -> Unit, onCart: () -> Unit, onSettings: () -> Unit, allowed: Int,
+    browseEnabled: Boolean, browseLabel: String) {
     Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(
         OctopusPalette.Ink, OctopusPalette.Petrol, OctopusPalette.SeaMid)),
         RoundedCornerShape(bottomStart = 36.dp, bottomEnd = 36.dp)).statusBarsPadding()
@@ -374,7 +440,7 @@ private fun MosabHomeHeader(query: String, onQuery: (String) -> Unit, enabled: B
         }
         OutlinedTextField(value = query, onValueChange = onQuery, enabled = enabled,
             modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(16.dp),
-            placeholder = { Text("ابحث عن مطعم…", fontSize = 14.sp) }, leadingIcon = { Icon(Icons.Outlined.Search, null) },
+            placeholder = { Text("ابحث في المطاعم المحفوظة…", fontSize = 14.sp) }, leadingIcon = { Icon(Icons.Outlined.Search, null) },
             trailingIcon = { IconButton(onClick = onSearch, enabled = enabled && query.isNotBlank()) {
                 Icon(Icons.AutoMirrored.Outlined.ArrowForward, "ابحث")
             } }, colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = Color.White,
@@ -395,8 +461,8 @@ private fun MosabHomeHeader(query: String, onQuery: (String) -> Unit, enabled: B
                 Icon(Icons.Outlined.Tune, "إدارة التطبيقات", tint = Color.White, modifier = Modifier.size(19.dp))
             }
         }
-        Button(onClick = onBrowse, enabled = enabled, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-            Text("استعرض المطاعم", fontWeight = FontWeight.Bold)
+        Button(onClick = onBrowse, enabled = browseEnabled, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+            Text(browseLabel, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -427,7 +493,7 @@ private fun MosabJourneyHero(title: String, subtitle: String, active: Int) {
 }
 
 @Composable
-private fun CostPreviewCard(preview: MenuCostPreview, fresh: Boolean, enabled: Boolean, now: Long, onSelect: () -> Unit) {
+private fun CostPreviewCard(preview: MenuCostPreview, fresh: Boolean, now: Long) {
     var allOffers by remember(preview) { mutableStateOf(false) }
     val accent = if (preview.provider == ProviderId.KEETA) Color(0xFFF9D941) else Color(0xFFFFCA45)
     Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
@@ -474,20 +540,17 @@ private fun CostPreviewCard(preview: MenuCostPreview, fresh: Boolean, enabled: B
             }
             if (preview.offers.isNotEmpty()) Text("هذا حساب للشروط المقروءة، وليس إثبات تطبيق العرض. الشروط غير المتحققة لا تدخل الحساب، ولا تُجمع عروض دون توثيق السماح بذلك.", fontSize = 11.sp, color = OctopusPalette.Muted)
             HorizontalDivider(color = OctopusPalette.Line)
-            Text("الإجمالي النهائي غير متحقق", fontWeight = FontWeight.Bold)
+            Text("هذه أسعار القائمة؛ الإجمالي يؤخذ من مراجعة الطلب", fontWeight = FontWeight.Bold)
             preview.error?.let { Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error) }
-            OutlinedButton(onClick = onSelect,
-                enabled = enabled && fresh && preview.itemSubtotal != null, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(15.dp)) {
-                Text("اختر ${preview.provider.title} وجهّز السلة")
-            }
         }
     }
 }
 
 
 @Composable
-private fun ComparisonSummary(previews: List<MenuCostPreview>, cart: CanonicalCart, now: Long) {
-    val sources = listOf(ProviderId.HUNGERSTATION, ProviderId.KEETA).map { id -> previews.firstOrNull { it.provider == id } }
+private fun ComparisonSummary(previews: List<MenuCostPreview>, totals: Map<ProviderId, FinalTotalReading>, cart: CanonicalCart, now: Long) {
+    val providers = listOf(ProviderId.HUNGERSTATION, ProviderId.KEETA)
+    val sources = providers.map { id -> previews.firstOrNull { it.provider == id } }
     Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(22.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(Modifier.fillMaxWidth()) {
@@ -499,8 +562,9 @@ private fun ComparisonSummary(previews: List<MenuCostPreview>, cart: CanonicalCa
             listOf("الأصناف", "الخصم المحسوب", "التوصيل المحسوب", "الأصناف والتوصيل", "الإجمالي النهائي").forEachIndexed { index, label ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(label, Modifier.weight(1.2f), fontSize = 12.sp, color = OctopusPalette.Muted)
-                    sources.forEach { source ->
-                        val value = if (source?.fresh(cart, now) != true) "غير مقروء" else when (index) {
+                    sources.forEachIndexed { sourceIndex, source ->
+                        val value = if (index == 4) totals[providers[sourceIndex]]?.takeIf { it.fresh(cart, now) }?.total?.let(::money) ?: "غير مقروء"
+                        else if (source?.fresh(cart, now) != true) "غير مقروء" else when (index) {
                             0 -> source.itemSubtotal?.let(::money) ?: "غير مقروء"
                             1 -> source.calculationAt(now)?.itemDiscount?.let(::money) ?: "غير مقروء"
                             2 -> source.calculationAt(now)?.delivery?.let(::money) ?: "غير مؤكد"
