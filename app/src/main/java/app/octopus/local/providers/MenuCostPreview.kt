@@ -71,10 +71,14 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
         return MenuCostPreview(ProviderId.KEETA, cart.fingerprint, amount, emptyList(), at, VERSION,
             "سعر الوجبة مقروء؛ رسوم التوصيل والخدمة والعروض المطبقة على السلة لم تُقرأ.")
     }
-    fun functionalLabel(raw: String): String {
+    fun functionalLabel(raw: String, resourceId: String = ""): String {
         val text = raw.replace(Regex("[\\u200e\\u200f\\u061c\\u202a-\\u202e\\u2066-\\u2069]"), "").trim()
+        // Observed public menu title field. Retain visible titles so scrolling past unrelated
+        // cards cannot look identical after redaction. Other unknown fields stay omitted.
+        if (VERSION == "3.13.203" && resourceId == "com.sankuai.sailor.afooddelivery:id/product_name" &&
+            text.length in 1..300 && text.any(Char::isLetter)) return text
         if (KeetaRestaurantName.matches(restaurant, text)) return restaurant
-        if (VERSION == "3.13.203" && (text in setOf("معلومات غذائية", "معلومات التغذية") || text.matches(Regex("[0-9٠-٩]{1,5} سعرة حرارية")))) return text
+        if (VERSION == "3.13.203" && (text in setOf("معلومات غذائية", "معلومات التغذية", "مسببات الحساسية") || text.matches(Regex("[0-9٠-٩]{1,5} سعرة حرارية")))) return text
         return if (text in setOf(restaurant, "feed shopcard", title, "homepage header searchbar", "search page box", "search page btn", "طلب خاص", "إضافة إلى السلة", "توصيل", "استلام شخصي",
                 "الاصناف الرئيسية", "الأصناف الرئيسية", "الأصناف المضافة", "تفريغ السلة", "إتمام الدفع", "قسائمي", "شروط الاستخدام", "عرض خاص", "حسنًا", "حسنا", "1", "١") || text.matches(Regex("[0-9٠-٩]{1,2}")) || PreviewEvidence.offer(text) ||
             (text.length < 40 && text.contains('﷼') && MoneyParser.parse(text) != null) ||

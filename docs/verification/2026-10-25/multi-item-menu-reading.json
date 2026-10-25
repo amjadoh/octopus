@@ -1,0 +1,90 @@
+{
+  "date": "2026-10-26",
+  "timezone": "Asia/Riyadh",
+  "scope": "Full-request, read-only menu item subtotal; not final review totals or multi-item cart preparation",
+  "request": {
+    "restaurant": "كودو",
+    "items": [
+      {
+        "quantity": 3,
+        "name": "بطاطس وسط",
+        "additions": []
+      },
+      {
+        "quantity": 1,
+        "name": "جبنة الناتشوز",
+        "additions": []
+      }
+    ]
+  },
+  "implementation": {
+    "fullCanonicalFingerprintRetained": true,
+    "allLinesRequired": true,
+    "unknownNeverZero": true,
+    "maxDistinctPlainLines": 10,
+    "unitAmountArithmetic": "exact integer halala",
+    "mainFullComparisonAdmission": "single plain item only"
+  },
+  "actualSuccess": {
+    "keetaItemSubtotalHalala": 4000,
+    "hungerStationItemSubtotalHalala": 4000,
+    "finalTotalReadings": [],
+    "multiItemCartPreparationVerified": false,
+    "providerBasketMutationCommandsInNewPath": false
+  },
+  "developmentAttempts": [
+    {
+      "hungerStationSubtotal": "not completed before old 150 second timeout",
+      "keetaSubtotal": "unknown",
+      "attempt": 1,
+      "requestVariant": "medium fries x3 + water x1",
+      "outcome": "No partial total reported"
+    },
+    {
+      "hungerStationItemSubtotalHalala": 4000,
+      "attempt": 2,
+      "cause": "Observed exact allergen information heading was omitted by functional-label filter",
+      "requestVariant": "medium fries x3 + nachos cheese x1",
+      "keetaFailureStage": "KEETA_VALIDATE_PRODUCT"
+    },
+    {
+      "changes": "Exact informational allergen heading supported",
+      "hungerStationItemSubtotalHalala": 4000,
+      "attempt": 3,
+      "keetaFailureStage": "KEETA_FIND_PRODUCT"
+    },
+    {
+      "changes": "Retain observed public product_name fields and wait for changed menu frames",
+      "hungerStationItemSubtotalHalala": 4000,
+      "attempt": 4,
+      "cause": "20 viewport bound ended before side dishes",
+      "keetaFailureStage": "KEETA_FIND_PRODUCT"
+    },
+    {
+      "changes": "Bounded scan 80, rewind 60; stop if visible matching card has unsupported opener",
+      "hungerStationItemSubtotalHalala": 4000,
+      "attempt": 5,
+      "keetaItemSubtotalHalala": 4000,
+      "outcome": "All requested plain menu lines read in both providers"
+    }
+  ],
+  "harnessEvents": [
+    "A transient ADB daemon connection interruption occurred during diagnostic polling; it recovered while the Android job completed. No user intervention requested.",
+    "Attempts used differing code and requests; they are development observations, not a reliability rate.",
+    "Normal build has no TEST_CATALOG receiver; saved bridge JSON is not evidence for a later normal-build run."
+  ],
+  "providerVersions": {
+    "KEETA": "3.13.203",
+    "HUNGERSTATION": "8.0.303"
+  },
+  "unitTestsPassed": 369,
+  "lintErrors": 0,
+  "lintWarnings": 5,
+  "limits": [
+    "40 SAR is a real menu item subtotal only; delivery, service, applied offers and final review totals are unknown for this two-item request.",
+    "Provider baskets remained the prior medium fries x3; adding nachos occurred in the Octopus draft only.",
+    "Address and branch equivalence remain unverified.",
+    "Multi-item prepare and final-total controls remain disabled until actual executors and full-cart verification exist."
+  ],
+  "published": false
+}

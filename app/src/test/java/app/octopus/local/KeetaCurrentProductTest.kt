@@ -86,6 +86,24 @@ class KeetaCurrentProductTest {
         assertNotNull(reader.productBody(frame.copy(nodes=frame.nodes+heading)))
         assertNull(reader.productBody(frame.copy(nodes=frame.nodes+heading.copy(label="",omittedText=true))))
     }
+    @Test fun observedMenuTitleFieldKeepsUnrelatedPublicTitlesDistinctForScrolling() {
+        val id="com.sankuai.sailor.afooddelivery:id/product_name"
+        assertEquals("صنف آخر",reader.functionalLabel("صنف آخر",id))
+        assertEquals("صنف مختلف",reader.functionalLabel("صنف مختلف",id))
+        assertEquals("",reader.functionalLabel("صنف آخر","unrelated:id/text"))
+        assertEquals("",reader.functionalLabel("صنف آخر","com.sankuai.sailor.afooddelivery:id/address"))
+        assertEquals("",KeetaMenuReader(reader.restaurant,reader.title,"3.12.501").functionalLabel("صنف آخر",id))
+    }
+    @Test fun observedAllergensInformationHeadingIsNotASelectableModifier() {
+        assertEquals("مسببات الحساسية",reader.functionalLabel("مسببات الحساسية"))
+        val frame=recorded()
+        val body=reader.productBody(frame)!!
+        val heading=CatalogNode(1002,body.index,"",reader.functionalLabel("مسببات الحساسية"),
+            "android.widget.TextView",false,false,false)
+        assertNotNull(reader.productBody(frame.copy(nodes=frame.nodes+heading)))
+        assertNull(reader.productBody(frame.copy(nodes=frame.nodes+heading.copy(label="اختر مسببات الحساسية"))))
+        assertNull(reader.productBody(frame.copy(nodes=frame.nodes+heading.copy(label="",omittedText=true))))
+    }
     @Test fun actualOptionalChipsModalCanBeClosedButCannotBeAddedAsPlainProduct() {
         val raw=recorded("optional-product")
         val frame=raw.copy(nodes=raw.nodes.map { n ->

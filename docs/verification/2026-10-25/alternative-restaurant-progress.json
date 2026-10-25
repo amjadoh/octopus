@@ -12,11 +12,11 @@
     "Dawar Al Saadah visibly closed in Keeta",
     "Kudo name in Keeta decorated with coupons; matcher updated with exact observed pattern"
   ],
-  "testsPassed": 361,
+  "testsPassed": 369,
   "published": false,
   "hungerStationCartVerified": true,
-  "reviewProgress": "Normal-APK Compare-button smoke passed again at 00:59 Riyadh after ledger generalization: Keeta 4081 / HS 3750 halala, same Kudo plain request. 361 tests and lint pass. Multi-row ledger foundation implemented, but UI and actual provider executors remain single-item. Address/branch equivalence unverified.",
-  "nextTest": "Continue from docs/development/multi-item-runtime-status.md. Do not repeat the same plain-item five-run suite absent changed code/failure. Next implementation: full-request per-line read plan, then ownership-bound multi-item Android preparation. Keep PreviewEvidence gate closed until actual path implemented/tested. Normal APK no test receiver. No publication.",
+  "reviewProgress": "Normal APK Compare button passed after menu-read changes at 02:04 Riyadh: Kudo medium fries x3, Keeta 4081 / HS 3750 halala. Both verified baskets, existing matching request. Separately both real menus gave 4000 halala item subtotal for fries x3 plus nachos cheese x1; no multi-item basket build or final total. Address/branch equivalence remains unverified.",
+  "nextTest": "Continue ownership-bound complete multi-item cart observations/executors in docs/development/multi-item-runtime-status.md. Keep full Compare single-item admission until physical mixed-cart preparation works. Normal APK installed without test receiver; never trust stale bridge JSON. No publication.",
   "keetaFinalTotalHalala": 4081,
   "hungerStationFinalTotalHalala": 3750,
   "sameRunFinalReadingsSucceeded": true,
@@ -26,11 +26,14 @@
   "normalApkCompareButtonVerified": true,
   "normalApkInstalled": true,
   "lintPassed": true,
-  "normalApkSha256": "6EB5089682971162EBB33A876F720DC0F8C032628D3645CCE1B795912CC159F2",
+  "normalApkSha256": "C38F4DB782F7D0987028C193E77EC13B47A8A0C5E7F6378F0C04585B6C8B0BAE",
   "normalCompareRunsSucceeded": 5,
   "normalCompareStartedFailures": 0,
   "repeatabilityReport": "docs/verification/2026-10-25/normal-ui-repeatability.json",
   "postLedgerSmokeReport": "docs/verification/2026-10-25/post-ledger-smoke.json",
   "multiItemLedgerImplemented": true,
-  "multiItemAutomationImplemented": false
+  "multiItemAutomationImplemented": false,
+  "multiItemMenuReadingVerified": true,
+  "multiItemMenuReadingReport": "docs/verification/2026-10-25/multi-item-menu-reading.json",
+  "postMenuPlanSmokeReport": "docs/verification/2026-10-25/post-menu-plan-smoke.json"
 }
