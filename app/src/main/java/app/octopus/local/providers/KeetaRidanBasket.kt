@@ -4,7 +4,8 @@ import app.octopus.local.domain.ProviderId
 import app.octopus.local.pricing.MoneyParser
 
 /** Honor 3.12.501 cart drawer only. No checkout or clear-cart selector. */
-open class KeetaBasketReader(private val catalog: KeetaMenuReader) {
+open class KeetaBasketReader(private val catalog: KeetaMenuReader, private val requestedTitles: Set<String> = setOf(catalog.title)) {
+    init { require(requestedTitles.isNotEmpty() && catalog.title in requestedTitles && requestedTitles.all { it.isNotBlank() }) }
     private val title get() = catalog.title
     private fun parent(f: CatalogFrame, n: CatalogNode) = f.nodes.singleOrNull { it.index == n.parent }
     private fun ancestors(f: CatalogFrame, n: CatalogNode): List<CatalogNode> {
@@ -68,7 +69,7 @@ open class KeetaBasketReader(private val catalog: KeetaMenuReader) {
         return f.descendants(bag.index).filter { !it.clickable }.mapNotNull(::quantity).singleOrNull()
     }
 
-    private fun row(f: CatalogFrame): CatalogNode? {
+    private fun rows(f: CatalogFrame): List<CatalogNode>? {
         if (!catalog.basketDrawer(f)) return null
         val heading = f.nodes.singleOrNull { it.label == "الأصناف المضافة" } ?: return null
         val pane = parent(f, parent(f, heading) ?: return null) ?: return null
@@ -78,21 +79,36 @@ open class KeetaBasketReader(private val catalog: KeetaMenuReader) {
         val content = f.nodes.singleOrNull { it.parent == scroll.index } ?: return null
         val rows = f.nodes.filter { it.parent == content.index }.firstOrNull() ?: return null
         val cards = f.nodes.filter { it.parent == rows.index }
-        val card = cards.singleOrNull()?.takeIf { it.clickable && it.enabled } ?: return null
+        if (cards.isEmpty() || cards.size > requestedTitles.size) return null
+        val names = mutableSetOf<String>()
+        for (card in cards) {
+        if (!card.clickable || !card.enabled) return null
         val body = f.descendants(card.index)
+        val name = body.filter { it.label in requestedTitles }.singleOrNull()?.label ?: return null
+        if (!names.add(name)) return null
         if (body.size > 65 || body.any { it.omittedText || it.editable } ||
-            body.filter { it.label.isNotEmpty() }.any { it.label != title && quantity(it) == null && !it.label.contains('﷼') } ||
-            body.count { it.label == title } != 1 || body.count { quantity(it) != null && it.clickable } != 1 ||
+            body.filter { it.label.isNotEmpty() }.any { it.label != name && quantity(it) == null && !it.label.contains('﷼') } ||
+            body.count { it.label == name } != 1 || body.count { quantity(it) != null && it.clickable } != 1 ||
             body.count { it.label.contains('﷼') && MoneyParser.parse(it.label) != null } != 1) return null
-        return card
+        }
+        return cards
+    }
+
+    private fun row(f: CatalogFrame): CatalogNode? = rows(f)?.singleOrNull { card ->
+        f.descendants(card.index).any { it.label == title }
     }
 
     fun evidence(f: CatalogFrame): BasketEvidence? {
-        val row = row(f) ?: return null
-        val body = f.descendants(row.index)
-        val count = body.singleOrNull { quantity(it) != null && it.clickable }?.let(::quantity) ?: return null
-        val amount = body.singleOrNull { it.label.contains('﷼') }?.label?.let(MoneyParser::parse) ?: return null
-        return BasketEvidence(ProviderId.KEETA, catalog.restaurant, listOf(BasketLineEvidence(title, emptyList(), count, amount)), amount, true)
+        val cards = rows(f) ?: return null
+        val lines = cards.map { card ->
+            val body = f.descendants(card.index)
+            val name = body.single { it.label in requestedTitles }.label
+            val count = body.singleOrNull { quantity(it) != null && it.clickable }?.let(::quantity) ?: return null
+            val amount = body.singleOrNull { it.label.contains('﷼') }?.label?.let(MoneyParser::parse) ?: return null
+            BasketLineEvidence(name, emptyList(), count, amount)
+        }
+        val subtotal = runCatching { lines.fold(0L) { total, line -> Math.addExact(total,line.lineAmount!!) } }.getOrNull() ?: return null
+        return BasketEvidence(ProviderId.KEETA, catalog.restaurant, lines, subtotal, true)
     }
 
     fun quantityTarget(f: CatalogFrame, increase: Boolean): CatalogNode? {

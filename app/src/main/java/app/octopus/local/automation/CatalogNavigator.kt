@@ -216,7 +216,16 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     fun compareAndPrepare(): Boolean {
         val desired = graph.draft.value ?: return false
         if (!matchesSelectedRestaurant()) return false
-        if (active || comparisonJob?.isActive == true || graph.session.value.active || !PreviewEvidence.supports(desired)) return false
+        if (active || comparisonJob?.isActive == true || graph.session.value.active) {
+            graph.catalog.value = graph.catalog.value.copy(error = "توجد عملية نشطة؛ أوقفها قبل بدء مقارنة جديدة.")
+            return false
+        }
+        if (!PreviewEvidence.supports(desired)) {
+            graph.catalog.value = graph.catalog.value.copy(error =
+                if (desired.items.size > 1) "طلبك محفوظ كاملًا (${desired.items.size} أصناف). تجهيز الطلب متعدد الأصناف غير منفذ في محولي المنصتين بعد؛ لم تبدأ المقارنة ولم تتغير السلال."
+                else "لم يبدأ تجهيز السلة: خيارات الوجبة أو حجمها أو ملاحظتها غير مدعومة في مسار التجهيز الحالي. احتُفظ بطلبك كاملًا.")
+            return false
+        }
         graph.catalog.value = graph.catalog.value.copy(comparisonRunning = true, comparisonProgress = emptyMap(), finalTotals = emptyMap(), error = null)
         val epoch = ++comparisonEpoch
         comparisonJob = graph.scope.launch(start = CoroutineStart.LAZY) {
@@ -287,7 +296,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     previousItems = visible
                     if (!act(menu, CatalogAction.SCROLL_MENU,
                             { it.scrollable && it.className == "android.widget.ScrollView" }, allowNoOp = true)) break
-                    menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
+                    menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU &&
+                        HungerStationCatalog.menuItems(it).toString() != visible }
                 }
                 val item = HungerStationCatalog.menuItems(menu).singleOrNull { it.name == desired.items.single().name }
                     ?: error("لم تظهر الوجبة المطابقة في هنقرستيشن؛ لم أستبدلها بوجبة أخرى.")
@@ -312,9 +322,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             catch (stopped: CatalogStoppedException) { throw stopped }
             catch (interrupted: UserInterrupted) { throw interrupted }
             catch (changed: ScreenChangedBeforeAction) { throw changed }
-            catch (_: Exception) {
+            catch (failure: Exception) {
                 failedMenuPreview(ProviderId.HUNGERSTATION, desired,
-                    "تعذرت قراءة الوجبة وخياراتها في هنقرستيشن؛ سأكمل قراءة كيتا.")
+                    menuFailure(failure, "تعذرت قراءة الوجبة وخياراتها في هنقرستيشن أثناء: $phase؛ سأكمل قراءة كيتا."))
             }
             graph.catalog.value = graph.catalog.value.copy(previews = listOf(hunger), message = "انتهت محاولة هنقرستيشن؛ جارٍ قراءة كيتا دون تغيير السلال…")
             val keeta = try {
@@ -414,9 +424,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             catch (stopped: CatalogStoppedException) { throw stopped }
             catch (interrupted: UserInterrupted) { throw interrupted }
             catch (changed: ScreenChangedBeforeAction) { throw changed }
-            catch (_: Exception) {
+            catch (failure: Exception) {
                 failedMenuPreview(ProviderId.KEETA, desired,
-                    "تعذرت قراءة الوجبة المطابقة في كيتا؛ احتُفظ بنتيجة هنقرستيشن المتاحة.")
+                    menuFailure(failure, "تعذرت قراءة الوجبة المطابقة في كيتا أثناء: $phase؛ احتُفظ بنتيجة هنقرستيشن المتاحة."))
             }
             check(graph.draft.value?.fingerprint == desired.fingerprint) { "تغير طلبك؛ أعد المقارنة." }
             graph.catalog.value = graph.catalog.value.copy(previews = listOf(hunger, keeta),
@@ -425,6 +435,22 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 else "انتهت محاولة القراءة؛ تظهر نتيجة كل منصة وسبب تعذرها. لا يوجد إجمالي نهائي مؤكد.")
         }
     }
+
+    // Surface only our fixed messages; provider text and exception payloads stay private.
+    private fun menuFailure(failure: Exception, fallback: String): String = failure.message?.takeIf { it in setOf(
+        "المطعم غير متاح للطلب في القراءة الحالية.",
+        "لم تظهر الوجبة المطابقة في هنقرستيشن؛ لم أستبدلها بوجبة أخرى.",
+        "لم يكتمل التحقق من الوجبة في هنقرستيشن؛ لا توجد مقارنة مؤكدة.",
+        "تحتاج الوجبة خيارات إلزامية؛ لم أستخدم سعرًا لطلب ناقص.",
+        "خيارات كيتا تحتاج دعمًا، ولا توجد سلة مطابقة قابلة للتحقق؛ لم أضف وجبة.",
+        "تعذرت قراءة سلة كيتا بالكامل.",
+        "قراءة القائمة غير مكتملة؛ لم أفتح وجبة مختلفة.",
+        "الوجبة المطابقة غير ظاهرة في قائمة كيتا.",
+        "وصلت إلى نهاية الجزء المقروء دون الوجبة المطلوبة.",
+        "لم أجد الوجبة المطابقة ضمن مهلة التصفح؛ لم أستبدلها.",
+        "سلة كيتا مختلفة عن طلب المقارنة؛ لم أعدلها.",
+        "تعذر التحقق من سعر الوجبة المطابقة في كيتا؛ لم تتغير السلة."
+    ) } ?: fallback
 
     private fun failedMenuPreview(id: ProviderId, desired: CanonicalCart, reason: String) =
         MenuCostPreview(id, desired.fingerprint, null, emptyList(), System.currentTimeMillis(),
@@ -534,10 +560,17 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         KeetaPromotionEvidence.couponSheet(frame) || KeetaPromotionEvidence.terms(frame) ||
         KeetaPromotionEvidence.emptySheet(frame) || keetaMenu.searchCandidate(frame) != null
 
-    /** Uses only previously observed home/search controls. Never backs out of another live basket. */
+    /** Uses observed home/search controls and the exact review-header back arrow. */
     private suspend fun openKeetaRequest(): CatalogFrame {
+        val version = graph.installations.value.single { it.provider == ProviderId.KEETA }.version.orEmpty()
         var frame = await { keetaReadable(it) || keetaMenu.homeSearch(it) != null ||
-            keetaMenu.searchInput(it) != null || keetaMenu.editSearchQuery(it) != null }
+            keetaMenu.searchInput(it) != null || keetaMenu.editSearchQuery(it) != null ||
+            ReviewNavigationGuard.keetaReviewBackTarget(it, version) != null }
+        if (ReviewNavigationGuard.keetaReviewBackTarget(frame, version) != null) {
+            leaveKeetaPreviousReview(frame, version)
+            frame = await { keetaReadable(it) || keetaMenu.homeSearch(it) != null ||
+                keetaMenu.searchInput(it) != null || keetaMenu.editSearchQuery(it) != null }
+        }
         if (keetaReadable(frame)) return frame
         val home = keetaMenu.homeSearch(frame)
         val edit = keetaMenu.editSearchQuery(frame)
@@ -549,6 +582,31 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         frame = await { keetaMenu.searchSubmit(it) != null }
         keetaSearchAction(frame, KeetaSearchAction.SUBMIT_QUERY)
         return await { keetaMenu.searchCandidate(it) != null }
+    }
+
+    /** Leaves only the observed review header, without touching cart contents or financial controls. */
+    private suspend fun leaveKeetaPreviousReview(previous: CatalogFrame, version: String) {
+        currentCoroutineContext().ensureActive(); checkSession()
+        check(provider == ProviderId.KEETA)
+        val root = service.rootInActiveWindow ?: throw ScreenChangedBeforeAction()
+        try {
+            requireProviderWindow(root)
+            val fresh = capture(root)
+            if (fresh != previous) throw ScreenChangedBeforeAction()
+            val target = ReviewNavigationGuard.keetaReviewBackTarget(fresh, version)
+                ?: error("لم أتعرف على رجوع آمن من مراجعة كيتا.")
+            val node = locateKeetaNode(root, target) ?: throw ScreenChangedBeforeAction()
+            try {
+                val screen = Rect().also(root::getBoundsInScreen)
+                val arrow = Rect().also(node::getBoundsInScreen)
+                check(arrow.top >= screen.top && arrow.bottom <= screen.top + screen.height()/4) {
+                    "زر الرجوع خارج ترويسة المراجعة؛ توقفت العملية."
+                }
+            } finally { node.recycle() }
+            check(performKeetaReadAction(root, target, AccessibilityNodeInfo.ACTION_CLICK)) {
+                "تعذر الرجوع من مراجعة كيتا؛ لم أكرر النقر."
+            }
+        } finally { root.recycle() }
     }
 
     private suspend fun keetaSearchAction(previous: CatalogFrame, action: KeetaSearchAction) {
@@ -614,6 +672,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             frame = await { keetaMenu.product(it) }
         }
         if (keetaMenu.product(frame) && keetaMenu.productBody(frame) == null) {
+            if (BuildConfig.VERSION_NAME.endsWith("-device-tools")) withContext(Dispatchers.IO) {
+                // capture() has already removed personal and unrelated text. Local debug APK only.
+                service.filesDir.resolve("live-keeta-product.json").writeText(com.google.gson.Gson().toJson(frame))
+            }
             // Unknown modifier coverage permits closing only. Read a fully parsed matching
             // existing basket instead; do not add a potentially incomplete product.
             closeKeetaReadSheet(frame)
@@ -1067,6 +1129,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             if (rect.top < bounds.top + bounds.height()/4) {
                 val value = (node.text ?: node.contentDescription)?.toString()?.trim()
                 if (value in setOf("الدفع", "مراجعة الطلب", "تأكيد الطلب", "Checkout", "Order review") ||
+                    (root.packageName?.toString() == ProviderId.HUNGERSTATION.packageName &&
+                        ReviewNavigationGuard.hungerReviewHeading(value, graph.draft.value?.restaurant)) ||
                     (root.packageName?.toString() == "com.sankuai.sailor.afooddelivery" && value == "إتمام الدفع")) recognized = true
             }
             for (i in 0 until node.childCount.coerceAtMost(200)) {
@@ -1143,11 +1207,30 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         var lastScroll = start
         var scrolls = 0
         var lastReviewDiagnostic: String? = null
+        var recommendationsSkipped = false
         while (SystemClock.elapsedRealtime() - start < 20_000) {
             currentCoroutineContext().ensureActive(); checkSession()
             val review = service.rootInActiveWindow
             if (review != null) try {
                 requireProviderWindow(review)
+                if (provider == ProviderId.HUNGERSTATION && !recommendationsSkipped) {
+                    val frame = capture(review)
+                    val next = ReviewNavigationGuard.hungerRecommendationsTarget(frame, version)
+                    if (next != null) {
+                        val node = locateKeetaNode(review, next) ?: throw ScreenChangedBeforeAction()
+                        try {
+                            if (!node.refresh() || !node.isVisibleToUser || !node.isEnabled || !node.isClickable ||
+                                node.isPassword || node.isEditable ||
+                                (android.os.Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive)) throw ScreenChangedBeforeAction()
+                            verifyActiveFrame(frame, review.windowId)
+                            checkSession(); currentCoroutineContext().ensureActive()
+                            recommendationsSkipped = true
+                            check(node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) { "تعذر تجاوز توصيات الأصناف إلى المراجعة." }
+                        } finally { @Suppress("DEPRECATION") node.recycle() }
+                        delay(250)
+                        continue
+                    }
+                }
                 val snapshot = reader.read(review)
                 if (snapshot.sensitiveScreen || snapshot.accessRestriction != null)
                     throw UserInterrupted("ظهرت شاشة حماية أو بيانات محمية؛ توقفت المقارنة.")
@@ -1161,6 +1244,14 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                         val diagnostic=JSONObject().put("provider",provider.name).put("recognized",recognized)
                             .put("sensitive",snapshot.sensitiveScreen).put("truncated",snapshot.truncated)
                             .put("fields",JSONObject(quote.fields.mapKeys {it.key.name})).put("nodes",JSONArray(structure.nodes))
+                        // Store only presence of fixed public headings, never their field values.
+                        val headings = listOf("طريقة الدفع", "عنوان التوصيل", "ملخص الطلب", "الإجمالي", "المجموع",
+                            "تأكيد الطلب", "وقت التوصيل", "اختر عنوان", "أضف عنوان", "لا يوجد اتصال بالإنترنت",
+                            "استلام", "توصيل", "اختيار", "حدد")
+                        diagnostic.put("knownHeadings", JSONArray(headings.filter { heading ->
+                            val matches = review.findAccessibilityNodeInfosByText(heading)
+                            try { matches.isNotEmpty() } finally { matches.forEach { it.recycle() } }
+                        }))
                         withContext(Dispatchers.IO) {service.filesDir.resolve("live-review-${provider.name.lowercase()}.json")
                             .writeText(diagnostic.toString(),Charsets.UTF_8)}
                     }
@@ -1207,6 +1298,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                         lastScroll = SystemClock.elapsedRealtime()
                     }
                 }
+            } catch (_: ScreenChangedBeforeAction) {
+                // The guard rejected an undispatched navigation/scroll action.
+                // Re-read within the same bounded review deadline, never reuse its node.
+                stable = null
             } finally { @Suppress("DEPRECATION") review.recycle() }
             delay(250)
         }
@@ -1484,8 +1579,19 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         return act(frame, CatalogAction.SCROLL_PRODUCT, { it == control }, allowNoOp = true)
     }
 
-    private suspend fun click(screen: CatalogScreen, action: CatalogAction, selector: (CatalogNode) -> Boolean) =
-        act(await { HungerStationCatalog.screen(it) == screen }, action, selector)
+    private suspend fun click(screen: CatalogScreen, action: CatalogAction, selector: (CatalogNode) -> Boolean): Boolean {
+        // Rotating home banners can invalidate a frame before dispatch. Only retry
+        // opening search; never retry cart mutations or an already-dispatched action.
+        val attempts = if (screen == CatalogScreen.HOME && action == CatalogAction.OPEN_SEARCH) 4 else 1
+        repeat(attempts) { attempt ->
+            try { return act(await { HungerStationCatalog.screen(it) == screen }, action, selector) }
+            catch (changed: ScreenChangedBeforeAction) {
+                if (attempt == attempts - 1) throw changed
+                delay(200)
+            }
+        }
+        error("تعذر فتح البحث بعد تغير الشاشة.")
+    }
 
     private suspend fun act(previous: CatalogFrame, action: CatalogAction, selector: (CatalogNode) -> Boolean,
         text: String? = null, allowNoOp: Boolean = false, ridanProgram: RidanCartProgram? = null,
@@ -1665,6 +1771,13 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL; y = 30 }
         (service.getSystemService(Context.WINDOW_SERVICE) as WindowManager).addView(button, params)
         overlay = button; true
-    } catch (_: Exception) { false }
+    } catch (failure: Exception) {
+        if (BuildConfig.VERSION_NAME.endsWith("-device-tools")) runCatching {
+            service.filesDir.resolve("live-overlay-error.json").writeText(
+                JSONObject().put("exceptionType", failure.javaClass.name)
+                    .put("mainThread", android.os.Looper.myLooper() == android.os.Looper.getMainLooper()).toString())
+        }
+        false
+    }
     private fun hideStop() { overlay?.let { runCatching { (service.getSystemService(Context.WINDOW_SERVICE) as WindowManager).removeView(it) } }; overlay = null }
 }

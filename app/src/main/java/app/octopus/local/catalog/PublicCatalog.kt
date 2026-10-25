@@ -14,8 +14,11 @@ data class CatalogArea(val city: String, val district: String) {
         require(listOf(city, district).all { it.isNotBlank() && it.length <= 100 &&
             it == it.trim() && it.matches(Regex("[\\p{L}\\p{N} -]+")) })
     }
+    private fun slug(value: String) = value.replace(Regex("[ -]+"), "-")
+    val citySlug: String get() = slug(city).let { if (it == "مكة") "مكة-المكرمة" else it }
+    val districtSlug: String get() = slug(district)
     val url: String get() = "https://hungerstation.com/sa-ar/restaurants/regions/" +
-        listOf(city, district).joinToString("/") { URLEncoder.encode(it, "UTF-8").replace("+", "%20") }
+        listOf(citySlug, districtSlug).joinToString("/") { URLEncoder.encode(it, "UTF-8").replace("+", "%20") }
     val title: String get() = "$city • $district"
 }
 
@@ -69,8 +72,8 @@ class HungerStationPublicParser {
     private fun JsonObject.text(key: String, max: Int = 512): String = get(key)?.takeUnless { it.isJsonNull }
         ?.asString.orEmpty().trim().also { require(it.length <= max && !it.any { c -> c.code < 32 && c != '\n' }) }
     private fun verifyArea(p: JsonObject, area: CatalogArea) {
-        require(p.getAsJsonObject("city").getAsJsonObject("slug").text("ar") == area.city &&
-            p.getAsJsonObject("district").getAsJsonObject("slug").text("ar") == area.district) { "Area mismatch" }
+        require(p.getAsJsonObject("city").getAsJsonObject("slug").text("ar") == area.citySlug &&
+            p.getAsJsonObject("district").getAsJsonObject("slug").text("ar") == area.districtSlug) { "Area mismatch" }
     }
 
     fun directory(html: String, area: CatalogArea, requestedPage: Int, now: Long): PublicDirectory {

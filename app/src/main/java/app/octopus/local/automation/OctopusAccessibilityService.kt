@@ -100,7 +100,7 @@ class OctopusAccessibilityService : AccessibilityService() {
     override fun onInterrupt() { catalogNavigator?.stop("انقطع اتصال الخدمة."); stopRead("SERVICE_INTERRUPTED", "توقفت الخدمة؛ ابدأ اختبارًا جديدًا عند العودة.") }
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
-        catalogNavigator?.stop("تغير تخطيط الهاتف؛ توقفت العملية بأمان.")
+        catalogNavigator?.takeIf { it.active }?.stop("تغير تخطيط الهاتف؛ توقفت العملية بأمان.")
         stopRead("LAYOUT_CHANGED", "تغير تخطيط الشاشة؛ أعد الاختبار بعد استقرار وضع الجهاز.")
     }
     override fun onDestroy() {

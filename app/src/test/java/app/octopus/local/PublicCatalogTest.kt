@@ -8,6 +8,15 @@ import org.junit.Test
 
 /** Real unauthenticated public HTML captured on 2026-10-25; not current quotes. */
 class PublicCatalogTest {
+    @Test fun savedMakkahAliasAndSpacedNamesResolveToCanonicalPublicPath() {
+        val alias = CatalogArea("مكة", "البحيرات")
+        assertEquals(CatalogArea("مكة المكرمة", "البحيرات").url, alias.url)
+        assertEquals(CatalogArea("مكة-المكرمة", "البحيرات").url, alias.url)
+        assertEquals("مكة-المكرمة", alias.citySlug)
+        assertEquals("حي-الملك-فهد", CatalogArea("الرياض", "حي الملك فهد").districtSlug)
+        assertTrue(PublicCatalogUrls.allowed(alias.url))
+        assertFalse(PublicCatalogUrls.menuInArea(CatalogArea("مكة", "العزيزية").url + "/مطعم-123", alias))
+    }
     private val parser = HungerStationPublicParser()
     private val area = CatalogArea("الرياض","النرجس")
     private fun fixture(name:String) = javaClass.getResource("/public-catalog/$name.html")!!.readText(Charsets.UTF_8)
