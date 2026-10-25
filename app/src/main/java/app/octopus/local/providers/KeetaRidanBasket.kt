@@ -6,6 +6,11 @@ import app.octopus.local.pricing.MoneyParser
 /** Honor 3.12.501 cart drawer only. No checkout or clear-cart selector. */
 open class KeetaBasketReader(private val catalog: KeetaMenuReader, private val requestedTitles: Set<String> = setOf(catalog.title)) {
     init { require(requestedTitles.isNotEmpty() && catalog.title in requestedTitles && requestedTitles.all { it.isNotBlank() }) }
+    companion object {
+        fun requestedTitleCandidate(raw: String, requested: Set<String>): String? =
+            raw.replace(Regex("[\\u200e\\u200f\\u061c\\u202a-\\u202e\\u2066-\\u2069]"), "").trim()
+                .takeIf {it in requested}
+    }
     private val title get() = catalog.title
     private fun parent(f: CatalogFrame, n: CatalogNode) = f.nodes.singleOrNull { it.index == n.parent }
     private fun ancestors(f: CatalogFrame, n: CatalogNode): List<CatalogNode> {
@@ -69,7 +74,22 @@ open class KeetaBasketReader(private val catalog: KeetaMenuReader, private val r
         return f.descendants(bag.index).filter { !it.clickable }.mapNotNull(::quantity).singleOrNull()
     }
 
-    private fun rows(f: CatalogFrame): List<CatalogNode>? {
+    /** Restore only requested food names in the observed drawer's first text slot per row.
+     * Other requested names in a product/options sheet remain omitted and cannot authorize Add.
+     * Candidates are transient exact-name matches, never raw arbitrary screen text.
+     */
+    fun restoreRequestedRowTitles(f: CatalogFrame, candidates: Map<Int, String>): CatalogFrame {
+        val cards = visibleCards(f) ?: return f
+        val permitted = cards.mapNotNull { card ->
+            val name = f.descendants(card.index).firstOrNull { it.className == "android.widget.TextView" } ?: return@mapNotNull null
+            val value = candidates[name.index] ?: return@mapNotNull null
+            if (value !in requestedTitles || name.clickable || name.editable || name.id.isNotEmpty() ||
+                name.label.isNotEmpty() || !name.omittedText) null else name.index to value
+        }.toMap()
+        return f.copy(nodes=f.nodes.map { node -> permitted[node.index]?.let { node.copy(label=it,omittedText=false) } ?: node })
+    }
+
+    private fun visibleCards(f: CatalogFrame): List<CatalogNode>? {
         if (!catalog.basketDrawer(f)) return null
         val heading = f.nodes.singleOrNull { it.label == "الأصناف المضافة" } ?: return null
         val pane = parent(f, parent(f, heading) ?: return null) ?: return null
@@ -77,9 +97,30 @@ open class KeetaBasketReader(private val catalog: KeetaMenuReader, private val r
         // A scrolling/multi-row pane has not proved its full contents.
         if (scroll.scrollable) return null
         val content = f.nodes.singleOrNull { it.parent == scroll.index } ?: return null
-        val rows = f.nodes.filter { it.parent == content.index }.firstOrNull() ?: return null
-        val cards = f.nodes.filter { it.parent == rows.index }
-        if (cards.isEmpty() || cards.size > requestedTitles.size) return null
+        // Observed 3.13.203 wraps each row in its own section; older captures
+        // put several rows in one section. Account for every direct section/child.
+        val sections=f.nodes.filter {it.parent==content.index}
+        if(sections.isEmpty())return null
+        val cards=mutableListOf<CatalogNode>()
+        for(section in sections) {
+            if(section.className!="android.view.ViewGroup" || section.clickable || section.editable ||
+                section.scrollable || section.label.isNotEmpty() || section.omittedText)return null
+            val children=f.nodes.filter {it.parent==section.index}
+            val rows=children.filter {it.clickable && it.enabled && it.className=="android.view.ViewGroup"}
+            if(rows.isEmpty())return null
+            for(separator in children-rows.toSet()) {
+                val body=f.descendants(separator.index)
+                if(body.size>2 || body.any {it.className!="android.view.ViewGroup" || it.clickable || it.editable ||
+                        it.scrollable || it.label.isNotEmpty() || it.omittedText})return null
+            }
+            cards+=rows
+        }
+        if(cards.size>requestedTitles.size)return null
+        return cards
+    }
+
+    private fun rows(f: CatalogFrame): List<CatalogNode>? {
+        val cards = visibleCards(f) ?: return null
         val names = mutableSetOf<String>()
         for (card in cards) {
         if (!card.clickable || !card.enabled) return null
