@@ -10,6 +10,7 @@ object SnapshotPriceTextReader {
     private val labels = mapOf(
         "الإجمالي" to PriceField.ORDER_TOTAL, "الاجمالي" to PriceField.ORDER_TOTAL,
         "إجمالي الطلب" to PriceField.ORDER_TOTAL, "اجمالي الطلب" to PriceField.ORDER_TOTAL,
+        "مجموع الطلب" to PriceField.ORDER_TOTAL, "مجموع السلة" to PriceField.SUBTOTAL,
         "المجموع الإجمالي" to PriceField.ORDER_TOTAL, "المجموع الاجمالي" to PriceField.ORDER_TOTAL,
         "total" to PriceField.ORDER_TOTAL, "grand total" to PriceField.ORDER_TOTAL, "order total" to PriceField.ORDER_TOTAL,
         "المجموع الفرعي" to PriceField.SUBTOTAL, "مجموع الأصناف" to PriceField.SUBTOTAL,

@@ -5,6 +5,28 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class KeetaRidanBasketTest {
+    @Test fun multipleVisiblePlainRowsAreReadWithoutDroppingOrMergingProducts() {
+        val one = fixture()
+        val first = one.nodes.single { it.label == "نصف دجاج مضغوط" }
+        val card = one.nodes.single { it.index == first.parent }
+        val body = one.descendants(card.index)
+        val shift = 100
+        val copied = body.map { node -> node.copy(index = node.index + shift,
+            parent = if (node.index == card.index) card.parent else node.parent + shift,
+            label = if (node.label == "نصف دجاج مضغوط") "صنف ثان" else node.label) }
+        val two = one.copy(nodes = one.nodes + copied)
+        val reader = KeetaBasketReader(KeetaMenuPreview, setOf("نصف دجاج مضغوط", "صنف ثان"))
+        val result = reader.evidence(two)!!
+        assertEquals(2, result.lines.size)
+        assertEquals(18000L, result.subtotal)
+        assertEquals(setOf("نصف دجاج مضغوط", "صنف ثان"), result.lines.map { it.name }.toSet())
+        assertNull(KeetaRidanBasket.evidence(two))
+        val unknown = two.copy(nodes = two.nodes.map { if (it.label == "صنف ثان") it.copy(label = "صنف غير مطلوب") else it })
+        assertNull(reader.evidence(unknown))
+        val duplicate = two.copy(nodes = two.nodes.map { if (it.label == "صنف ثان") it.copy(label = "نصف دجاج مضغوط") else it })
+        assertNull(reader.evidence(duplicate))
+        assertNotNull(reader.quantityTarget(two,true))
+    }
     private fun fixture(quantity: Int = 3, unknown: Boolean = false, scrollable: Boolean = false): CatalogFrame {
         val nodes = mutableListOf<CatalogNode>()
         fun n(parent: Int, label: String = "", cls: String = "android.view.ViewGroup", click: Boolean = false, scroll: Boolean = false, omitted: Boolean = false): Int {

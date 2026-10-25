@@ -15,7 +15,7 @@ class CatalogTestReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (!BuildConfig.DEBUG || intent.action != "app.octopus.local.TEST_CATALOG") return
         val mode = intent.getStringExtra("mode") ?: "snapshot"
-        if (mode !in setOf("snapshot", "stop", "search", "browse", "open_menu", "open_product",
+        if (mode !in setOf("snapshot", "stop", "public_menu", "public_add", "search", "browse", "open_menu", "open_product",
                 "compare_menu", "compare_total", "resume_draft", "prepare_hs", "prepare_keeta", "handoff_hs", "handoff_keeta")) return
         val query = intent.getStringExtra("query")?.takeIf { it.isNotBlank() && it.length <= 100 }
         val item = intent.getStringExtra("item")?.takeIf { it.isNotBlank() && it.length <= 100 }
@@ -28,6 +28,21 @@ class CatalogTestReceiver : BroadcastReceiver() {
                 withTimeout(7000) { graph.draftReady.first { it } }
                 if (mode == "snapshot") started = true
                 else if (mode == "stop") { LiveCatalogBridge.stop(); started = true }
+                else if (mode == "public_menu") {
+                    check(!graph.catalog.value.busy && !graph.catalog.value.comparisonRunning)
+                    started = graph.publicCatalog.state.value.directory.singleOrNull { it.name == query }
+                        ?.let(graph.publicCatalog::openMenu) ?: false
+                    if (started) withTimeout(30_000) { graph.publicCatalog.state.first { !it.loadingMenu } }
+                }
+                else if (mode == "public_add") {
+                    val menu = graph.publicCatalog.currentMenu
+                    val meal = menu?.meals?.singleOrNull { it.name == item }
+                    if (menu != null && meal != null) {
+                        val result = graph.addPublicMeal(menu, meal, intent.getIntExtra("quantity", 1),
+                            intent.getBooleanExtra("replace", false))
+                        started = result is app.octopus.local.domain.DraftChange.Changed
+                    }
+                }
                 else {
                     withTimeout(7000) { graph.serviceConnected.first { it } }
                     check(graph.settings.value.catalogConsent)
@@ -70,6 +85,7 @@ class CatalogTestReceiver : BroadcastReceiver() {
                 .put("restaurantNames", JSONArray(state.restaurants.map { it.name }))
                 .put("menuItemsRead", state.menu?.items?.size ?: 0)
                 .put("menuItems", JSONArray(state.menu?.items?.map { it.name } ?: emptyList<String>()))
+                .put("publicMenuItems", JSONArray(graph.publicCatalog.currentMenu?.meals?.map { it.name } ?: emptyList<String>()))
                 .put("menuReachedEnd", state.menu?.reachedEnd ?: false)
                 .put("draftRestaurant", graph.draft.value?.restaurant ?: JSONObject.NULL)
                 .put("draftItems", graph.draft.value?.items?.size ?: 0)
@@ -94,6 +110,7 @@ class CatalogTestReceiver : BroadcastReceiver() {
                 .put("menuPricePreviews", JSONArray(state.previews.map { preview ->
                     JSONObject().put("provider", preview.provider.name)
                         .put("itemSubtotalHalala", preview.itemSubtotal ?: JSONObject.NULL)
+                        .put("error", preview.error ?: JSONObject.NULL)
                 }))
                 .put("preparedBasket", state.preparedBasket?.let { basket ->
                     JSONObject().put("provider", basket.provider.name).put("restaurant", basket.restaurant)

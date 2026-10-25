@@ -3,8 +3,46 @@ package app.octopus.local.safety
 import app.octopus.local.domain.*
 import app.octopus.local.providers.*
 
-/** One transition from a verified cart/menu. Never permits an action on the resulting review. */
+/** Verified review navigation and the observed review-header back arrow only. */
 object ReviewNavigationGuard {
+    /** Keeta 3.13.203 review header: back image wrapper beside the exact title. */
+    fun keetaReviewBackTarget(frame: CatalogFrame, version: String): CatalogNode? {
+        if (version != "3.13.203" || !frame.complete) return null
+        val title = frame.nodes.singleOrNull { it.label == "إتمام الدفع" &&
+            it.className == "android.widget.TextView" } ?: return null
+        fun children(node: CatalogNode) = frame.nodes.filter { it.parent == node.index }
+        fun plain(node: CatalogNode) = node.enabled && !node.editable && !node.omittedText &&
+            node.id.isEmpty() && !node.scrollable
+        if (!plain(title) || title.clickable) return null
+        val titleBox = frame.nodes.singleOrNull { it.index == title.parent } ?: return null
+        if (!plain(titleBox) || titleBox.className != "android.view.ViewGroup" ||
+            titleBox.clickable || titleBox.label.isNotEmpty() || children(titleBox) != listOf(title)) return null
+        val bar = frame.nodes.singleOrNull { it.index == titleBox.parent } ?: return null
+        if (!plain(bar) || bar.className != "android.view.ViewGroup" || bar.clickable ||
+            bar.label.isNotEmpty() || children(bar).size != 2) return null
+        val back = children(bar).singleOrNull { it.index != titleBox.index } ?: return null
+        if (!plain(back) || back.className != "android.view.ViewGroup" || !back.clickable ||
+            back.label.isNotEmpty()) return null
+        val icon = children(back).singleOrNull() ?: return null
+        if (!plain(icon) || icon.className != "android.widget.ImageView" || icon.clickable ||
+            icon.label.isNotEmpty() || children(icon).isNotEmpty()) return null
+        return back
+    }
+    fun hungerReviewHeading(value: String?, restaurant: String?): Boolean {
+        if (restaurant.isNullOrBlank() || value == null) return false
+        val lines = value.trim().lines().map(String::trim)
+        return lines == listOf("مراجعة الطلب", restaurant.trim())
+    }
+    /** Observed optional recommendations between the cart and review; never add a recommendation. */
+    fun hungerRecommendationsTarget(frame: CatalogFrame, version: String): CatalogNode? {
+        if (version != HungerStationCatalog.TESTED_VERSION || !frame.complete || frame.nodes.any { it.editable }) return null
+        if (frame.nodes.count { it.label == "لا تفوت الفرصة!\nعادةً ما يضيف الأشخاص هذه العناصر" &&
+                it.className == "android.widget.ImageView" } != 1 ||
+            frame.nodes.none { it.id == "menuItemActionSingleButtonAdd" } ||
+            frame.nodes.any { it.id.startsWith("FlutterCheckout") || it.label in setOf("تأكيد الطلب", "ادفع الآن", "تأكيد الدفع") }) return null
+        return frame.nodes.singleOrNull { it.label == "اذهب للدفع" && it.className == "android.widget.Button" &&
+            it.enabled && it.clickable && !it.editable && !it.omittedText }
+    }
     fun target(provider: ProviderId, frame: CatalogFrame, cart: CanonicalCart, version: String): CatalogNode? {
         if (!frame.complete || !PreviewEvidence.supports(cart)) return null
         if (provider == ProviderId.HUNGERSTATION) {
@@ -13,8 +51,17 @@ object ReviewNavigationGuard {
             if (basket.restaurant != cart.restaurant || basket.lines.size != 1 || basket.lines.single().let {
                 it.name != cart.items.single().name || it.quantity != cart.items.single().quantity || it.choices.isNotEmpty()
             }) return null
-            return frame.nodes.singleOrNull { it.id == "FlutterCart_footer_main_action_button" &&
-                it.label == "اذهب للدفع" && it.enabled && it.clickable && !it.editable }
+            val footer = frame.nodes.singleOrNull { it.id == "FlutterCart_footer_main_action_button" }
+                ?: return null
+            if (!footer.enabled || footer.editable) return null
+            if (footer.label == "اذهب للدفع" && footer.clickable) return footer
+            // Actual HS 8.0.303 cart on Honor, 2026-10-25: enabled semantics
+            // wrapper with one directly labelled button. No review-screen action allowed.
+            if (footer.label != "enabled" || footer.clickable || footer.className != "android.view.View") return null
+            return frame.nodes.filter { it.parent == footer.index }.singleOrNull()?.takeIf {
+                it.id.isEmpty() && it.label == "اذهب للدفع" && it.className == "android.widget.Button" &&
+                    it.enabled && it.clickable && !it.editable && !it.omittedText
+            }
         }
         if (version !in setOf("3.12.501", "3.13.203")) return null
         val menu = KeetaMenuReader(cart.restaurant, cart.items.single().name, version)

@@ -76,6 +76,16 @@ class KeetaCurrentProductTest {
         }), 700))
         assertNull(basket.addTarget(frame.copy(complete = false), 700))
     }
+    @Test fun observedNutritionHeadingIsNotAnUnknownModifier() {
+        assertEquals("معلومات التغذية", reader.functionalLabel("معلومات التغذية"))
+        val frame=recorded()
+        val body=reader.productBody(frame)!!
+        val label=reader.functionalLabel("معلومات التغذية")
+        val heading=CatalogNode(1001,body.index,"",label,"android.widget.TextView",false,false,false,
+            omittedText=label.isEmpty())
+        assertNotNull(reader.productBody(frame.copy(nodes=frame.nodes+heading)))
+        assertNull(reader.productBody(frame.copy(nodes=frame.nodes+heading.copy(label="",omittedText=true))))
+    }
     @Test fun actualOptionalChipsModalCanBeClosedButCannotBeAddedAsPlainProduct() {
         val raw=recorded("optional-product")
         val frame=raw.copy(nodes=raw.nodes.map { n ->

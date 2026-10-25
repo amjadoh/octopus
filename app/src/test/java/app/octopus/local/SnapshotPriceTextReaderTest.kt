@@ -22,6 +22,16 @@ class SnapshotPriceTextReaderTest {
         assertNull(quote.total)
     }
 
+    @Test fun observedKudoReviewDistinguishesBasketFromOrderTotal() {
+        val quote = extract("ملخص الطلب\nمجموع السلة\n‪§ 27.00‬\nرسوم التوصيل\n‪§ 9.00‬\nرسوم الخدمة\n‪§ 1.50‬\nمجموع الطلب\n‪§ 37.50‬")
+        assertEquals(2700L, quote.fields[PriceField.SUBTOTAL])
+        assertEquals(900L, quote.fields[PriceField.DELIVERY])
+        assertEquals(150L, quote.fields[PriceField.SERVICE])
+        assertEquals(3750L, quote.total)
+        assertNull(extract("مجموع السلة\n§ 27.00").total)
+        assertNull(extract("يمكنك إضافة الباقي من إجمالي الطلب والمساهمة بالعطاء عبر منصة إحسان.").total)
+    }
+
     @Test fun observedGlyphSupportsBothSpatialAmountAndMergedLabel() {
         assertEquals(listOf(SnapshotPriceTextReader.Value(null, 4290L)), SnapshotPriceTextReader.read("§ 42.90", hunger))
         assertEquals(listOf(SnapshotPriceTextReader.Value(PriceField.ORDER_TOTAL, 4290L)),

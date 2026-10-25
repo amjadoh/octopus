@@ -9,6 +9,7 @@ object GroupedReviewFields {
         "رسوم الطلب الصغير" to PriceField.SMALL_ORDER, "المجموع الفرعي" to PriceField.SUBTOTAL,
         "مجموع الأصناف" to PriceField.SUBTOTAL, "الإجمالي" to PriceField.ORDER_TOTAL,
         "إجمالي الطلب" to PriceField.ORDER_TOTAL, "الخصم" to PriceField.DISCOUNT,
+        "مجموع الطلب" to PriceField.ORDER_TOTAL, "مجموع السلة" to PriceField.SUBTOTAL,
         "ضريبة القيمة المضافة" to PriceField.TAX,
     )
     fun read(value: CharSequence): List<Pair<PriceField, Long>> {

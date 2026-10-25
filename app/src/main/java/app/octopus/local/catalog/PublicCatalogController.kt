@@ -61,7 +61,9 @@ class PublicCatalogController(
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) {
                 if (token == epoch) mutable.value = mutable.value.copy(error =
-                    "تعذر تحديث قائمة المطاعم من المصدر العام. بقيت آخر قائمة محفوظة؛ تحقق من الاتصال والمدينة والحي.")
+                    if (mutable.value.directory.isNotEmpty())
+                        "تعذر تحديث قائمة المطاعم من المصدر العام. بقيت آخر قائمة محفوظة؛ تحقق من الاتصال والمدينة والحي."
+                    else "تعذر تحميل قائمة المطاعم من المصدر العام؛ تحقق من الاتصال والمدينة والحي. لا توجد قائمة محفوظة بعد.")
             } finally {
                 if (token == epoch) mutable.value = mutable.value.copy(refreshing = false)
             }
