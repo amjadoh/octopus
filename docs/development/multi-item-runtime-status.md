@@ -17,3 +17,13 @@ Remaining actual integration:
 7. Enable full multi-item UI comparison only after real mixed-line preparation, reconciliation/retry and handoff verification on both providers.
 
 The generic `CartPreparationEngine`/`ComparisonCoordinator` ports are not implemented Android integrations. Current suite: 369 passing unit tests, zero lint errors, five warnings. Prior five normal-APK single-item runs validate repeated readings on one existing matching basket pair, not arbitrary restaurants or fresh mixed-cart builds. No publication.
+
+## Keeta ownership integration checkpoint — 2026-10-26 02:24 Riyadh
+
+`PlainBasketPreparationSession` now owns complete plain-row content transitions, checks full request/version, consumes one pending add or quantity change before dispatch, and checks all rows after it. It does not manufacture branch/address context. The Android Keeta driver is reachable only in device-tools through the DUMP-protected `prepare_multi_keeta` command; normal full Compare remains single-item. It admits exactly two distinct plain lines, needs an existing complete visible basket, and never clears or removes the last row.
+
+The actual 3.13.203 drawer uses one section per row, with an optional empty separator. The reader now accounts for every section and child. Requested titles are restored only at the first text slot of a known drawer card; an extra name in a product or modifier slot cannot become a plain-item permit. A redacted actual two-row TSV captures this structure.
+
+Actual Keeta cart: Kudo fries x3 + nachos cheese x1, no additions, item subtotal 40 SAR. The latest code retained this existing basket without another Add and changed nachos 1->2->1 while verifying fries remained x3 and every row matched. The first development Add reached the basket but the old reader timed out before same-run acknowledgement. Do not claim the fresh-add path is fully verified or that these are checkout totals. Report: `docs/verification/2026-10-25/keeta-owned-two-row-preparation.json`. Unit suite now 379 passing; lint zero errors/five warnings.
+
+Current phone build is device-tools, not normal. Draft is the two-row request; Keeta has both rows, HungerStation only fries x3. Do not run the old single-item golden case on these carts or trust its previous totals for the new request. Prior normal-APK report remains valid only for its original request and build. Next: implement real HS complete basket observation and an ownership-bound missing-row add, followed by mixed-row quantity controls and complete review admission. Do not merely remove the one-item guard. Keep all changes local.

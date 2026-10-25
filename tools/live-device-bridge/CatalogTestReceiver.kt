@@ -16,7 +16,7 @@ class CatalogTestReceiver : BroadcastReceiver() {
         if (!BuildConfig.DEBUG || intent.action != "app.octopus.local.TEST_CATALOG") return
         val mode = intent.getStringExtra("mode") ?: "snapshot"
         if (mode !in setOf("snapshot", "stop", "public_menu", "public_add", "draft_quantity", "search", "browse", "open_menu", "open_product",
-                "compare_menu", "compare_total", "resume_draft", "prepare_hs", "prepare_keeta", "handoff_hs", "handoff_keeta")) return
+                "compare_menu", "compare_total", "resume_draft", "prepare_hs", "prepare_keeta", "prepare_multi_keeta", "handoff_hs", "handoff_keeta")) return
         val query = intent.getStringExtra("query")?.takeIf { it.isNotBlank() && it.length <= 100 }
         val item = intent.getStringExtra("item")?.takeIf { it.isNotBlank() && it.length <= 100 }
         val graph = (context.applicationContext as OctopusApplication).graph
@@ -70,6 +70,7 @@ class CatalogTestReceiver : BroadcastReceiver() {
                         "compare_menu" -> LiveCatalogBridge.compareDraft()
                         "prepare_hs" -> LiveCatalogBridge.prepareComparedHungerStation()
                         "prepare_keeta" -> LiveCatalogBridge.prepareComparedKeeta()
+                        "prepare_multi_keeta" -> LiveCatalogBridge.preparePlainKeetaForVerification()
                         "handoff_hs" -> LiveCatalogBridge.openPreparedRidanBasket()
                         "handoff_keeta" -> LiveCatalogBridge.prepareComparedKeeta(true)
                         else -> false
@@ -119,7 +120,7 @@ class CatalogTestReceiver : BroadcastReceiver() {
                         .put("error", preview.error ?: JSONObject.NULL)
                 }))
                 .put("preparedBasket", state.preparedBasket?.let { basket ->
-                    JSONObject().put("provider", basket.provider.name).put("restaurant", basket.restaurant)
+                    JSONObject().put("provider", basket.provider.name).put("restaurant", basket.restaurant).put("complete",basket.complete)
                         .put("lines", JSONArray(basket.lines.map { line ->
                             JSONObject().put("name", line.name).put("quantity", line.quantity ?: JSONObject.NULL)
                                 .put("lineAmountHalala", line.lineAmount ?: JSONObject.NULL)

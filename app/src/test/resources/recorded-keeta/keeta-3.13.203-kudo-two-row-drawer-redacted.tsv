@@ -1,0 +1,65 @@
+# Actual Honor 3.13.203 drawer pane; second title was omitted by capture. No address, account or checkout data.
+231	215		android.view.ViewGroup	0	0	0	1	0	
+232	231		android.view.ViewGroup	0	0	0	1	0	
+233	232		android.widget.TextView	0	0	0	1	0	2KfZhNij2LXZhtin2YEg2KfZhNmF2LbYp9mB2Kk=
+234	232		android.view.ViewGroup	1	0	0	1	0	
+235	234		android.widget.ImageView	0	0	0	1	0	
+236	234		android.widget.TextView	0	0	0	1	0	2KrZgdix2YrYuiDYp9mE2LPZhNip
+237	231		android.widget.FrameLayout	0	0	0	1	0	
+238	237		android.widget.ScrollView	0	0	0	1	0	
+239	238		android.view.ViewGroup	0	0	0	1	0	
+240	239		android.view.ViewGroup	0	0	0	1	0	
+241	240		android.view.ViewGroup	1	0	0	1	0	
+242	241		android.view.ViewGroup	0	0	0	1	0	
+243	242		android.view.ViewGroup	0	0	0	1	0	
+244	243		android.view.ViewGroup	0	0	0	1	0	
+245	244		android.widget.TextView	0	0	0	1	0	2KjYt9in2LfYsyDZiNiz2Lc=
+246	244		android.widget.ImageView	0	0	0	1	0	
+247	242		android.view.ViewGroup	0	0	0	1	0	
+248	247		android.view.ViewGroup	0	0	0	1	0	
+249	248		android.widget.ImageView	0	0	0	1	0	
+250	248		android.view.ViewGroup	0	0	0	1	0	
+251	241		android.view.ViewGroup	0	0	0	1	0	
+252	251		android.view.ViewGroup	0	0	0	1	0	
+253	252		android.view.ViewGroup	0	0	0	1	0	
+254	253		android.view.ViewGroup	0	0	0	1	0	
+255	254		android.view.ViewGroup	0	0	0	1	0	
+256	255		android.widget.TextView	0	0	0	1	0	MjcuMDDCoO+3vA==
+257	253		android.view.ViewGroup	1	0	0	1	0	
+258	257		android.view.ViewGroup	0	0	0	1	0	
+259	258		android.view.ViewGroup	0	0	0	1	0	
+260	259		android.view.ViewGroup	0	0	0	1	0	
+261	260		android.view.ViewGroup	1	0	0	1	0	
+262	260		android.widget.ImageView	0	0	0	1	0	
+263	259		android.widget.TextView	1	0	0	1	0	Mw==
+264	259		android.view.ViewGroup	0	0	0	1	0	
+265	264		android.view.ViewGroup	1	0	0	1	0	
+266	264		android.widget.ImageView	0	0	0	1	0	
+267	240		android.view.ViewGroup	0	0	0	1	0	
+268	239		android.view.ViewGroup	0	0	0	1	0	
+269	268		android.view.ViewGroup	1	0	0	1	0	
+270	269		android.view.ViewGroup	0	0	0	1	0	
+271	270		android.view.ViewGroup	0	0	0	1	0	
+272	271		android.view.ViewGroup	0	0	0	1	0	
+273	272		android.widget.TextView	0	0	0	1	1	
+274	272		android.widget.ImageView	0	0	0	1	0	
+275	270		android.view.ViewGroup	0	0	0	1	0	
+276	275		android.view.ViewGroup	0	0	0	1	0	
+277	276		android.widget.ImageView	0	0	0	1	0	
+278	276		android.view.ViewGroup	0	0	0	1	0	
+279	269		android.view.ViewGroup	0	0	0	1	0	
+280	279		android.view.ViewGroup	0	0	0	1	0	
+281	280		android.view.ViewGroup	0	0	0	1	0	
+282	281		android.view.ViewGroup	0	0	0	1	0	
+283	282		android.view.ViewGroup	0	0	0	1	0	
+284	283		android.widget.TextView	0	0	0	1	0	MTMuMDDCoO+3vA==
+285	281		android.view.ViewGroup	1	0	0	1	0	
+286	285		android.view.ViewGroup	0	0	0	1	0	
+287	286		android.view.ViewGroup	0	0	0	1	0	
+288	287		android.view.ViewGroup	0	0	0	1	0	
+289	288		android.view.ViewGroup	1	0	0	1	0	
+290	288		android.widget.ImageView	0	0	0	1	0	
+291	287		android.widget.TextView	1	0	0	1	0	MQ==
+292	287		android.view.ViewGroup	0	0	0	1	0	
+293	292		android.view.ViewGroup	1	0	0	1	0	
+294	292		android.widget.ImageView	0	0	0	1	0	
