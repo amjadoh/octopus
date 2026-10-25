@@ -13,7 +13,7 @@ import app.octopus.local.providers.KeetaMenuReader
 import app.octopus.local.providers.CatalogNode
 
 enum class ProposedAction { CLICK, SCROLL, INPUT_TEXT, GESTURE, GLOBAL_ACTION, CREATE_ORDER, PAYMENT }
-enum class CatalogAction { OPEN_BROWSE, CLOSE_BROWSE_PROMO, CLOSE_SPIN_PROMO, SCROLL_RESTAURANTS, OPEN_SEARCH, SET_QUERY, SELECT_SUGGESTION, OPEN_RESTAURANT, VIEW_MENU_NOTICE, SCROLL_MENU, OPEN_PRODUCT, SCROLL_PRODUCT, RETURN_TO_CATALOG, ADD_RIDAN, OPEN_BASKET, ADJUST_RIDAN_QUANTITY }
+enum class CatalogAction { CLOSE_HUNGER_VARIANT, OPEN_BROWSE, CLOSE_BROWSE_PROMO, CLOSE_SPIN_PROMO, SCROLL_RESTAURANTS, OPEN_SEARCH, SET_QUERY, SELECT_SUGGESTION, OPEN_RESTAURANT, VIEW_MENU_NOTICE, SCROLL_MENU, OPEN_PRODUCT, SCROLL_PRODUCT, RETURN_TO_CATALOG, ADD_RIDAN, OPEN_BASKET, ADJUST_RIDAN_QUANTITY }
 
 class SafetyGuard {
     fun allowsSpinPromoClose(frame: CatalogFrame, node: CatalogNode, foregroundPackage: String?,
@@ -72,7 +72,7 @@ class SafetyGuard {
         if (Regex("تأكيد|إتمام|اتمام|ادفع|دفع|شراء|اشتراك|place order|pay now|confirm|subscribe", RegexOption.IGNORE_CASE).containsMatchIn(label)) return false
         return when (action) {
             CatalogAction.ADD_RIDAN, CatalogAction.OPEN_BASKET, CatalogAction.ADJUST_RIDAN_QUANTITY,
-            CatalogAction.CLOSE_SPIN_PROMO -> false // Separately issued typed checks only.
+            CatalogAction.CLOSE_HUNGER_VARIANT, CatalogAction.CLOSE_SPIN_PROMO -> false // Separately issued typed checks only.
             CatalogAction.OPEN_BROWSE -> screen == CatalogScreen.HOME
             CatalogAction.CLOSE_BROWSE_PROMO -> screen == CatalogScreen.BROWSE_PROMO
             CatalogAction.SCROLL_RESTAURANTS -> screen == CatalogScreen.BROWSE

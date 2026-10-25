@@ -5,10 +5,11 @@
   "realTwoProviderComparisonVerified": false,
   "realSelectedCartHandoffVerified": false,
   "providersVerified": [],
-  "note": "Earlier component evidence covers individual menu and basket steps, not full comparison. Review-only navigation is authorized by the user; order confirmation and payment remain prohibited. Missing runtime comparison ports, verified equal delivery context, both final-review readers and current Keeta version coverage prevent complete-journey verification. Oct 21 live search read 2 restaurants and 31 menu items on HungerStation.",
+  "note": "Oct25: actual Keeta basket3 feta/no additions and review total3063 halala verified as components. HS quantity3/final total, equivalent address/branch, two-provider comparison and selected-cart handoff remain unverified. User explicitly requested a current-work experimental release.",
   "componentEvidence": [
     "verification/2026-10-19/honor-menu-offers.json",
     "verification/2026-10-19/honor-basket-validation.json",
-    "verification/2026-10-20/honor-final-device.json"
+    "verification/2026-10-20/honor-final-device.json",
+    "verification/2026-10-25/physical-phone-components.json"
   ]
 }

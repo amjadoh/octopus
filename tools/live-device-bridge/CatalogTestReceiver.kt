@@ -35,7 +35,10 @@ class CatalogTestReceiver : BroadcastReceiver() {
                         "resume_draft" -> graph.draft.value?.let { cart ->
                             graph.catalog.value = graph.catalog.value.copy(selectedRestaurant = cart.restaurant); true
                         } ?: false
-                        "compare_total" -> LiveCatalogBridge.compareAndPrepare()
+                        "compare_total" -> {
+                            if(intent.getBooleanExtra("allowMatchingQuantity",false)) graph.approveExistingMatchingQuantity()
+                            LiveCatalogBridge.compareAndPrepare()
+                        }
                         "search" -> query?.let(LiveCatalogBridge::search) ?: false
                         "browse" -> LiveCatalogBridge.browseRestaurants()
                         "open_menu" -> graph.catalog.value.restaurants.singleOrNull { it.name == query }
@@ -70,6 +73,15 @@ class CatalogTestReceiver : BroadcastReceiver() {
                 .put("menuReachedEnd", state.menu?.reachedEnd ?: false)
                 .put("draftRestaurant", graph.draft.value?.restaurant ?: JSONObject.NULL)
                 .put("draftItems", graph.draft.value?.items?.size ?: 0)
+                .put("draftLines", JSONArray(graph.draft.value?.items?.map { line ->
+                    JSONObject().put("name",line.name).put("quantity",line.quantity)
+                        .put("optionCount",line.options.size).put("size",line.size ?: JSONObject.NULL)
+                } ?: emptyList<JSONObject>()))
+                .put("comparisonRunning", state.comparisonRunning)
+                .put("message",state.message)
+                .put("comparisonProgress",JSONArray(state.comparisonProgress.values.map { progress ->
+                    JSONObject().put("provider",progress.provider.name).put("detail",progress.detail ?: JSONObject.NULL)
+                }))
                 .put("finalTotalReadings", JSONArray(state.finalTotals.values.map { reading ->
                     JSONObject().put("provider",reading.provider.name).put("totalHalala",reading.total)
                         .put("capturedAt",reading.capturedAt)

@@ -1,0 +1,15 @@
+{
+  "version": "1.3.8-diagnostic",
+  "versionCode": 16,
+  "date": "2026-10-25",
+  "unitTests": 348.0,
+  "unitFailures": 0.0,
+  "unitErrors": 0.0,
+  "lintErrors": 0,
+  "lintWarnings": 5,
+  "apkBuilt": true,
+  "stableSigningVerified": true,
+  "developmentBridgeIncluded": false,
+  "uiTests": "Required in GitHub workflow before publication",
+  "actualTwoProviderComparisonVerified": false
+}

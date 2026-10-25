@@ -26,7 +26,7 @@ jobs:
           if plan.get('scope') == 'preview_current_work':
               assert plan.get('userRequestedPreview') is True and plan.get('prerelease') is True
               assert plan.get('realComparisonComplete') is False
-              assert plan.get('tag') == 'v1.3.7-alpha' and plan.get('version') == '1.3.7' and plan.get('versionCode') == 15
+              assert plan.get('tag') == 'v1.3.8-alpha' and plan.get('version') == '1.3.8' and plan.get('versionCode') == 16
               notes = Path('docs/PREVIEW_RELEASE.md').read_text(encoding='utf-8')
               assert 'المقارنة الفعلية وتجهيز سلتَي كيتا وهنقرستيشن غير مكتملين' in notes
           else:
@@ -67,7 +67,7 @@ jobs:
           target: google_apis
           disk-size: 2048M
           disable-animations: true
-          script: ./gradlew --no-daemon :app:connectedDiagnosticDebugAndroidTest
+          script: ./gradlew --no-daemon :app:connectedDiagnosticDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notAnnotation=app.octopus.local.LivePublicNetwork
       - name: Keep UI test evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -80,7 +80,7 @@ jobs:
       - name: Verify APKs and prepare release files
         run: |
           python3 .github/scripts/prepare_preview.py
-          git archive --format=zip --prefix=octopus-android/ HEAD -o release/octopus-source-1.3.7.zip
+          git archive --format=zip --prefix=octopus-android/ HEAD -o release/octopus-source-1.3.8.zip
           cp docs/TEST_ON_PHONE.md release/TEST_ON_PHONE.md
           cp docs/PREVIEW_RELEASE.md release/release-notes.md
           cd release
@@ -100,7 +100,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      RELEASE_TAG: v1.3.7-alpha
+      RELEASE_TAG: v1.3.8-alpha
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -112,12 +112,12 @@ jobs:
           if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > draft-state.txt; then
             test "$(cat draft-state.txt)" = true
           else
-            gh release create "$RELEASE_TAG" --draft --prerelease --target "$GITHUB_SHA" --title 'الأخطبوط 1.3.7 — تصميم مصعب والتحديث التلقائي (تجريبي)' --notes-file release/release-notes.md
+            gh release create "$RELEASE_TAG" --draft --prerelease --target "$GITHUB_SHA" --title 'الأخطبوط 1.3.8 — القوائم المحلية وتحسين تجهيز السلة (تجريبي)' --notes-file release/release-notes.md
           fi
           gh release edit "$RELEASE_TAG" --draft --prerelease --target "$GITHUB_SHA" --notes-file release/release-notes.md
-          gh release upload "$RELEASE_TAG" release/octopus-1.3.7.apk release/octopus-source-1.3.7.zip release/validation-summary-ci.json release/SHA256SUMS.txt release/TEST_ON_PHONE.md
+          gh release upload "$RELEASE_TAG" release/octopus-1.3.8.apk release/octopus-source-1.3.8.zip release/validation-summary-ci.json release/SHA256SUMS.txt release/TEST_ON_PHONE.md
           gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' > asset-names.txt
-          grep -Fx 'octopus-1.3.7.apk' asset-names.txt
+          grep -Fx 'octopus-1.3.8.apk' asset-names.txt
       - name: Publish prerelease after successful upload
         run: |
           gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false

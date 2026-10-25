@@ -23,7 +23,7 @@ class DiagnosticUiTest {
         compose.onNodeWithText("راجع الطلب وقارن").assertDoesNotExist()
         compose.onNodeWithText("المقارنة").performClick()
         scrollToText("استئناف الطلب المحفوظ")
-        compose.onNodeWithText("قارن أسعار الوجبات").assertDoesNotExist()
+        compose.onNodeWithText("قارن الإجمالي وجهّز السلتين").assertDoesNotExist()
         compose.onNodeWithText("استئناف الطلب المحفوظ").performClick()
         scrollToText("طلبك • مدور")
         compose.onNodeWithText("طلبك • مدور").assertIsDisplayed()
@@ -40,8 +40,7 @@ class DiagnosticUiTest {
         compose.onNodeWithText("المقارنة").performClick()
         scrollToText("المطعم المختار: مطعم آخر")
         compose.onNodeWithText("المطعم المختار: مطعم آخر").assertIsDisplayed()
-        compose.onNodeWithText("قارن أسعار الوجبات").assertDoesNotExist()
-        compose.onNodeWithText("جهّز السلتين لمقارنة الإجمالي").assertDoesNotExist()
+        compose.onNodeWithText("قارن الإجمالي وجهّز السلتين").assertDoesNotExist()
     }
     @Test fun restaurantMenuKeepsTheSelectedOrderInAFooterAndOpensItsComparison() {
         compose.waitUntil(5_000) { (compose.activity.application as OctopusApplication).graph.draftReady.value }
@@ -55,8 +54,8 @@ class DiagnosticUiTest {
         compose.onNodeWithText("راجع الطلب وقارن").assertIsDisplayed().performClick()
         scrollToText("طلبك • مطعم جديد")
         compose.onNodeWithText("طلبك • مطعم جديد").assertIsDisplayed()
-        scrollToText("قارن أسعار الوجبات")
-        compose.onNodeWithText("قارن أسعار الوجبات").assertIsDisplayed()
+        scrollToText("قارن الإجمالي وجهّز السلتين")
+        compose.onNodeWithText("قارن الإجمالي وجهّز السلتين").assertIsDisplayed()
     }
     @Test fun startsWithRestaurantSearchAndNoInventedPrices() {
         compose.onNodeWithText("المطاعم").assertIsDisplayed()

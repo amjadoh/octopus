@@ -11,7 +11,7 @@ fun CatalogAction.operation(): ElementOperation = when (this) {
     CatalogAction.SCROLL_RESTAURANTS, CatalogAction.SCROLL_MENU, CatalogAction.SCROLL_PRODUCT -> ElementOperation.SCROLL_FORWARD
     CatalogAction.OPEN_BROWSE, CatalogAction.CLOSE_BROWSE_PROMO, CatalogAction.OPEN_BASKET, CatalogAction.ADD_RIDAN, CatalogAction.ADJUST_RIDAN_QUANTITY, CatalogAction.OPEN_SEARCH, CatalogAction.SELECT_SUGGESTION, CatalogAction.OPEN_RESTAURANT,
     CatalogAction.VIEW_MENU_NOTICE, CatalogAction.OPEN_PRODUCT, CatalogAction.RETURN_TO_CATALOG,
-    CatalogAction.CLOSE_SPIN_PROMO -> ElementOperation.CLICK
+    CatalogAction.CLOSE_HUNGER_VARIANT, CatalogAction.CLOSE_SPIN_PROMO -> ElementOperation.CLICK
 }
 
 object CatalogCommands {
