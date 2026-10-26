@@ -44,6 +44,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private val observedMenuTitles=linkedMapOf<ProviderId,LinkedHashSet<String>>()
     private var lastKeetaFoodProduct:CatalogFrame?=null
     private var requestFingerprint: String? = null
+    private var requestAreaUrl: String? = null
     private var keetaContext: KeetaMenuReader? = null
     private val keetaMenu get() = checkNotNull(keetaContext) { "لا يوجد طلب محدد لقراءة كيتا." }
     private var keetaBasketTitles: Set<String> = emptySet()
@@ -100,6 +101,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     }
 
     private suspend fun rememberPrepared(desired: CanonicalCart, evidence: BasketEvidence, version: String) {
+        checkSession()
         check(graph.draft.value?.fingerprint == desired.fingerprint) { "تغير طلبك؛ لم أحتفظ بسلة لطلب سابق." }
         val record = PreparedBasketRecord.create(desired, evidence, version, System.currentTimeMillis())
             ?: error("السلة المقروءة لا تطابق الطلب؛ لا توجد سلة جاهزة للتسليم.")
@@ -241,7 +243,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     fun compareAndPrepare(): Boolean {
         val desired = graph.draft.value ?: return false
         if (!matchesSelectedRestaurant()) return false
-        if (active || comparisonJob?.isActive == true || graph.session.value.active) {
+        if (active || graph.catalog.value.busy || comparisonJob?.isActive == true || graph.session.value.active) {
             graph.catalog.value = graph.catalog.value.copy(error = "توجد عملية نشطة؛ أوقفها قبل بدء مقارنة جديدة.")
             return false
         }
@@ -253,6 +255,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             return false
         }
         graph.catalog.value = graph.catalog.value.copy(comparisonRunning = true, comparisonProgress = emptyMap(), finalTotals = emptyMap(), error = null)
+        val comparisonAreaUrl = graph.settings.value.catalogArea?.url
         val epoch = ++comparisonEpoch
         comparisonJob = graph.scope.launch(start = CoroutineStart.LAZY) {
             try {
@@ -281,7 +284,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                                 "لم يكتمل التحقق من السلة." else null
                         }
                     },
-                    unchanged = { graph.draft.value?.fingerprint == desired.fingerprint },
+                    unchanged = { graph.draft.value?.fingerprint == desired.fingerprint &&
+                        graph.settings.value.catalogArea?.url == comparisonAreaUrl },
                     progress = { value -> graph.catalog.value = graph.catalog.value.copy(
                         comparisonProgress = graph.catalog.value.comparisonProgress + (value.provider to value)) },
                     totalAvailable = { id -> graph.catalog.value.finalTotals[id]?.fresh(desired, System.currentTimeMillis()) == true },
@@ -1909,6 +1913,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 if (quote.total != null && !snapshot.truncated && recognized) {
                     if (stable?.fingerprint != quote.fingerprint) { stable = quote; stableSince = SystemClock.elapsedRealtime() }
                     else if (SystemClock.elapsedRealtime() - stableSince >= 1_000) {
+                        checkSession()
                         graph.catalog.value = graph.catalog.value.copy(finalTotals = graph.catalog.value.finalTotals +
                             (provider to FinalTotalReading(provider, version, desired.fingerprint, quote.fields, System.currentTimeMillis())))
                         return
@@ -2011,10 +2016,11 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private fun begin(returnOnSuccess: Boolean = true, operation: CatalogOperation = CatalogOperation.BROWSE,
         timeoutMillis: Long = 150_000, block: suspend () -> Unit): Boolean {
         require(timeoutMillis in 1_000..600_000 && (operation in setOf(CatalogOperation.COMPARE_MENU,CatalogOperation.BUILD_CART) || timeoutMillis == 150_000L))
-        if (job?.isActive == true || manualJob?.isActive == true || graph.session.value.active) { graph.catalog.value=graph.catalog.value.copy(error="توجد جلسة أخرى نشطة؛ أوقفها قبل بدء المقارنة."); return false }
+        if (graph.catalog.value.busy || job?.isActive == true || manualJob?.isActive == true || graph.session.value.active) { graph.catalog.value=graph.catalog.value.copy(error="توجد جلسة أخرى نشطة؛ أوقفها قبل بدء المقارنة."); return false }
         if (comparisonJob?.isActive != true && operation !in setOf(CatalogOperation.OPEN_PREPARED_CART, CatalogOperation.COMPARE_MENU)) { graph.catalog.value=graph.catalog.value.copy(error="لم تبدأ جلسة المقارنة المصرح بها."); return false }
         provider = ProviderId.HUNGERSTATION
         requestFingerprint = null
+        requestAreaUrl = graph.settings.value.catalogArea?.url
         if (!graph.settings.value.catalogConsent || provider !in graph.settings.value.allowed) { graph.catalog.value=graph.catalog.value.copy(error="هنقرستيشن غير مفعّل ضمن التطبيقات المسموح بها للمقارنة."); return false }
         graph.refreshInstallations()
         val installed = graph.installations.value.singleOrNull { it.provider == provider && it.installed } ?: return false
@@ -2175,6 +2181,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private fun checkSession() {
         catalogStop.throwIfStopped()
         check(movementAllowed) { "التنقل التلقائي متاح أثناء المقارنة أو فتح سلة متحققة فقط." }
+        if (graph.settings.value.catalogArea?.url != requestAreaUrl)
+            throw UserInterrupted("تغيرت منطقة المطاعم؛ توقفت العملية قبل أي إجراء آخر.")
         requestFingerprint?.let { if (graph.draft.value?.fingerprint != it)
             throw UserInterrupted("تغير طلبك؛ توقفت العملية قبل أي إجراء آخر.") }
         if (!graph.settings.value.catalogConsent || provider !in graph.settings.value.allowed)

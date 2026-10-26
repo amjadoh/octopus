@@ -62,6 +62,44 @@ class CatalogSourceRegressionUiTest {
         LiveCatalogBridge.attachGraph((compose.activity.application as OctopusApplication).graph)
     }
 
+    @Test fun savingNewRegionKeepsDraftAndManualMenuButInvalidatesComparison() {
+        val graph=graph()
+        try {
+            val manual=LiveRestaurant("مطعم محفوظ للاختبار",null,"مطعم محفوظ للاختبار")
+            fixture(graph,manual)
+            val product=ConfiguredProduct(manual.name, MenuProduct("manual-food","وجبة يدوية محفوظة",null,true,700,emptyList()),
+                CatalogProvenance(ProviderId.HUNGERSTATION,HungerStationCatalog.TESTED_VERSION,1000,"fixture"),true)
+            runBlocking { withContext(Dispatchers.Main) {
+                graph.addDraftProduct(product,ProductSelection("manual-food",emptyMap(),3))
+                graph.approveExistingMatchingQuantity()
+                val request=graph.draft.value!!
+                graph.catalog.value=graph.catalog.value.copy(finalTotals=mapOf(ProviderId.HUNGERSTATION to
+                    FinalTotalReading(ProviderId.HUNGERSTATION,"v",request.fingerprint,mapOf(PriceField.ORDER_TOTAL to 2500L),1000)))
+                val next=if(graph.settings.value.catalogArea==area)CatalogArea("الرياض","الياسمين") else area
+                graph.changeCatalogArea(next)
+                assertEquals(request,graph.draft.value)
+                assertEquals(next,graph.settings.value.catalogArea)
+                assertNull(graph.existingQuantityConsent.value)
+                assertTrue(graph.catalog.value.finalTotals.isEmpty())
+                assertFalse(graph.catalog.value.busy)
+                assertFalse(graph.catalog.value.comparisonRunning)
+                assertTrue(graph.catalog.value.restaurants.contains(manual))
+            } }
+        } finally { cleanup(graph) }
+    }
+    @Test fun runningComparisonCannotHaveItsRegionChanged() {
+        val graph=graph()
+        try {
+            runBlocking { withContext(Dispatchers.Main) {
+                val before=graph.settings.value.catalogArea
+                graph.catalog.value=graph.catalog.value.copy(comparisonRunning=true)
+                assertTrue(runCatching { graph.changeCatalogArea(area) }.isFailure)
+                assertEquals(before,graph.settings.value.catalogArea)
+                graph.catalog.value=graph.catalog.value.copy(comparisonRunning=false)
+            } }
+        } finally { cleanup(graph) }
+    }
+
     @Test fun compactHomeFiltersArabicNamesWithoutStartingComparison() {
         val graph = graph()
         try {

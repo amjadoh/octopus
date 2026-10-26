@@ -101,8 +101,10 @@ class AppGraph(private val app: Application, publicClient: PublicCatalogClient =
             catalogReady.first { it }
             settings.map { it.catalogArea }.distinctUntilChanged().collect { area ->
                 publicMealSelection.value = null
-                if (area != null) catalog.value = catalog.value.copy(restaurants = emptyList(), menu = null, product = null,
-                    selectedRestaurant = null, error = null)
+                if (publicCatalog.state.value.area != area) {
+                    existingQuantityConsent.value = null
+                    catalog.value = catalog.value.forChangedArea(catalogLibrary.value.restaurants.map { it.restaurant })
+                }
                 publicCatalog.configure(area)
                 if (area != null) PublicCatalogRefreshJob.schedule(app)
             }
@@ -113,6 +115,22 @@ class AppGraph(private val app: Application, publicClient: PublicCatalogClient =
         if (catalog.value.busy || catalog.value.comparisonRunning || publicCatalog.state.value.area == null) return false
         publicCatalog.refresh(force)
         return true
+    }
+
+    /** Serialize region saving against native comparison admission; never overwrite the draft. */
+    suspend fun changeCatalogArea(area: CatalogArea) {
+        check(!catalog.value.busy && !catalog.value.comparisonRunning && !catalog.value.manualCaptureActive && !session.value.active) {
+            "أوقف العملية الحالية قبل تغيير منطقة المطاعم."
+        }
+        if (settings.value.catalogArea == area) { refreshPublicRestaurants(); return }
+        catalog.value = catalog.value.copy(busy = true)
+        try {
+            settingsStore.setCatalogArea(area)
+            settings.first { it.catalogArea == area }
+            existingQuantityConsent.value = null
+            publicMealSelection.value = null
+            catalog.value = catalog.value.forChangedArea(catalogLibrary.value.restaurants.map { it.restaurant })
+        } finally { catalog.value = catalog.value.copy(busy = false) }
     }
 
     suspend fun addPublicMeal(menu: PublicMenu, meal: PublicMeal, quantity: Int, replace: Boolean): DraftChange = draftLock.withLock {

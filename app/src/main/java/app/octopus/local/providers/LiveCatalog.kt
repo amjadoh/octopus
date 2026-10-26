@@ -65,6 +65,15 @@ fun LiveCatalogState.forChangedDraft(cart: app.octopus.local.domain.CanonicalCar
     error = null,
 )
 
+/** Region changes invalidate quotes and public selection, never the user's saved draft or native carts. */
+fun LiveCatalogState.forChangedArea(manualRestaurants: List<LiveRestaurant>) = copy(
+    restaurants = manualRestaurants.filter { it.origin == CatalogOrigin.MANUAL },
+    menu = null, product = null, selectedRestaurant = null, selectedCatalogOrigin = null,
+    previews = emptyList(), finalTotals = emptyMap(), comparisonProgress = emptyMap(),
+    preparedBasket = null, preparedBaskets = PreparedBasketLedger(), error = null,
+    message = "تغيرت منطقة المطاعم؛ احتُفظ بطلبك، ويلزم اختيار المطعم والتحقق من الأسعار والعنوان مجددًا.",
+)
+
 /** Selectors recorded on Honor / HS 8.0.302. Unknown screens never authorize an action. */
 object HungerStationCatalog {
     const val TESTED_VERSION = "8.0.303"
