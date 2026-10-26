@@ -20,6 +20,31 @@ class RidanPreparationTest {
         return reader.finish(now)
     }
     private val selection = ProductSelection("item", emptyMap(), 1)
+    private fun occupiedMenu()=emptyMenu.copy(nodes=emptyMenu.nodes+listOf(
+        node(10,"FlutterMenu_goToCartButton"),node(11,text="عرض السلة\n30\n§",click=true,cls="android.widget.Button",parent=10),
+        node(12,"FlutterMenu_goToCartQuantity","1",parent=11)))
+    private val previous=BasketEvidence(ProviderId.HUNGERSTATION,"ريدان",listOf(BasketLineEvidence("صنف سابق",emptyList(),1,3000)),3000,true)
+    private val mixed=CanonicalCart("ريدان",null,listOf(CanonicalItem("صنف سابق",null,emptyList(),1),CanonicalItem(RidanCartProgram.TITLE,null,emptyList(),1)))
+    @Test fun occupiedCartAdditionRequiresOwnedMissingLineAndChecksAllContentsAfterward() {
+        val owner=PlainBasketPreparationSession.create(mixed,previous,HungerStationCatalog.TESTED_VERSION)!!
+        val edit=(owner.next(mixed,previous,HungerStationCatalog.TESTED_VERSION,now) as PlainBasketPreparationSession.Step.Change).edit
+        val permit=RidanCartProgram.createForOwnedAddition(details(),selection,occupiedMenu(),mixed,previous,owner,edit,now)!!
+        assertTrue(permit.consumeAdd(product,add,now))
+        assertFalse(permit.consumeAdd(product,add,now))
+        val after=previous.copy(lines=previous.lines+BasketLineEvidence(RidanCartProgram.TITLE,emptyList(),1,3000),subtotal=6000)
+        assertTrue(owner.acknowledge(edit,mixed,after,HungerStationCatalog.TESTED_VERSION,now+1))
+        assertEquals(PlainBasketPreparationSession.Step.Ready,owner.next(mixed,after,HungerStationCatalog.TESTED_VERSION,now+2))
+        assertNull(RidanCartProgram.create(details(),selection,occupiedMenu(),now))
+    }
+    @Test fun occupiedCartPermitRejectsChangedFooterPartialObservationAndAnotherSessionsEdit() {
+        val owner=PlainBasketPreparationSession.create(mixed,previous,HungerStationCatalog.TESTED_VERSION)!!
+        val edit=(owner.next(mixed,previous,HungerStationCatalog.TESTED_VERSION,now) as PlainBasketPreparationSession.Step.Change).edit
+        val changed=occupiedMenu().copy(nodes=occupiedMenu().nodes.map {if(it.id=="FlutterMenu_goToCartQuantity")it.copy(label="2") else it})
+        assertNull(RidanCartProgram.createForOwnedAddition(details(),selection,changed,mixed,previous,owner,edit,now))
+        assertNull(RidanCartProgram.createForOwnedAddition(details(),selection,occupiedMenu(),mixed,previous.copy(complete=false),owner,edit,now))
+        val other=PlainBasketPreparationSession.create(mixed,previous,HungerStationCatalog.TESTED_VERSION)!!
+        assertNull(RidanCartProgram.createForOwnedAddition(details(),selection,occupiedMenu(),mixed,previous,other,edit,now))
+    }
     @Test fun fixedMealHasNoRequiredOptionsAndCanBeSelected() {
         assertTrue(details().optionsComplete)
         assertTrue(RidanCartProgram.supports(details(),selection,now))

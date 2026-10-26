@@ -55,6 +55,34 @@ class ReviewNavigationGuardTest {
         node(2,1,"FlutterCart_cartItem","وجبة\nتعديل\n30\n§",true),
         node(3,2,"menuItemActionDualButtonValue","3"),
         node(4,-1,"FlutterCart_footer_main_action_button","اذهب للدفع",true)),true)
+    private fun twoItemFrame()=frame().copy(nodes=frame().nodes.map {if(it.id=="FlutterCart_scroll_view")it.copy(label="ملخص الطلب\nالمجموع\n40.00\n§") else it}+
+        listOf(node(8,1,"FlutterCart_cartItem","صنف ثان\nتعديل\n10\n§",true),node(9,8,"menuItemActionDualButtonValue","1")))
+    private val twoItemCart get()=cart.copy(items=cart.items+CanonicalItem("صنف ثان",null,emptyList(),1))
+    private fun record()=PreparedBasketRecord.create(twoItemCart,BasketEvidenceReader.hungerStation(twoItemFrame(),true),HungerStationCatalog.TESTED_VERSION,1000)!!
+    @Test fun fullMultiRowReviewNeedsFreshCompleteAdmissionAndCanOnlyDispatchOnce() {
+        val source=twoItemFrame()
+        assertNull(ReviewNavigationGuard.target(ProviderId.HUNGERSTATION,source,twoItemCart,HungerStationCatalog.TESTED_VERSION))
+        val admission=app.octopus.local.safety.PreparedReviewAdmission.create(ProviderId.HUNGERSTATION,twoItemCart,record(),source,HungerStationCatalog.TESTED_VERSION,1000)!!
+        val target=ReviewNavigationGuard.target(ProviderId.HUNGERSTATION,source,twoItemCart,HungerStationCatalog.TESTED_VERSION,admission,1001)!!
+        assertTrue(admission.consume(source,target,ProviderId.HUNGERSTATION,twoItemCart,HungerStationCatalog.TESTED_VERSION,1002))
+        assertFalse(admission.consume(source,target,ProviderId.HUNGERSTATION,twoItemCart,HungerStationCatalog.TESTED_VERSION,1003))
+        assertNull(ReviewNavigationGuard.target(ProviderId.HUNGERSTATION,source,twoItemCart,HungerStationCatalog.TESTED_VERSION,admission,1004))
+    }
+    @Test fun changedFrameRequestVersionExpiryOrConfirmationCannotUseMultiReviewAdmission() {
+        val source=twoItemFrame()
+        fun admission()=app.octopus.local.safety.PreparedReviewAdmission.create(ProviderId.HUNGERSTATION,twoItemCart,record(),source,HungerStationCatalog.TESTED_VERSION,1000)!!
+        val changed=source.copy(nodes=source.nodes.map {if(it.index==9)it.copy(label="2") else it})
+        assertNull(ReviewNavigationGuard.target(ProviderId.HUNGERSTATION,changed,twoItemCart,HungerStationCatalog.TESTED_VERSION,admission(),1001))
+        assertNull(ReviewNavigationGuard.target(ProviderId.HUNGERSTATION,source,twoItemCart.copy(restaurant="آخر"),HungerStationCatalog.TESTED_VERSION,admission(),1001))
+        assertNull(ReviewNavigationGuard.target(ProviderId.HUNGERSTATION,source,twoItemCart,"other",admission(),1001))
+        assertNull(ReviewNavigationGuard.target(ProviderId.HUNGERSTATION,source,twoItemCart,HungerStationCatalog.TESTED_VERSION,admission(),16001))
+        assertNull(app.octopus.local.safety.PreparedReviewAdmission.create(ProviderId.HUNGERSTATION,twoItemCart,record(),changed,HungerStationCatalog.TESTED_VERSION,1000))
+        for(label in listOf("تأكيد الطلب","ادفع الآن","تأكيد الدفع")) {
+            val bad=source.copy(nodes=source.nodes.map {if(it.index==4)it.copy(label=label) else it})
+            val permit=app.octopus.local.safety.PreparedReviewAdmission.create(ProviderId.HUNGERSTATION,twoItemCart,record(),bad,HungerStationCatalog.TESTED_VERSION,1000)!!
+            assertNull(ReviewNavigationGuard.target(ProviderId.HUNGERSTATION,bad,twoItemCart,HungerStationCatalog.TESTED_VERSION,permit,1001))
+        }
+    }
     @Test fun onlyRecordedNavigationFromExactBasketIsAllowed() {
         assertNotNull(ReviewNavigationGuard.target(ProviderId.HUNGERSTATION,frame(),cart,HungerStationCatalog.TESTED_VERSION))
         assertNull(ReviewNavigationGuard.target(ProviderId.HUNGERSTATION,frame(),cart.copy(restaurant="آخر"),HungerStationCatalog.TESTED_VERSION))

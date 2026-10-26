@@ -64,6 +64,42 @@ class HungerStationBasketNavigationTest {
     private suspend fun run(port: Port, stop: StopSignal = StopSignal()) =
         HungerStationBasketNavigation(clock = { 2000 }).read(restaurant, port, stop)
     private fun blocked(reason: BasketNavigationFailure) = BasketNavigationResult.Blocked(reason)
+    private fun balancedMenu()=change(menu,{it==button}) {it.copy(label="عرض السلة\n36\n§")}
+    @Test fun cartReturnIsOneBackOnlyFromTheExactCompletelyObservedCart() {
+        val evidence=BasketEvidenceReader.hungerStation(basket,true)
+        fun command()=HungerStationCartReturnCommand.create(basket,evidence,HungerStationCatalog.TESTED_VERSION,2000)!!
+        val back=command()
+        assertTrue(back.consume(basket,HungerStationCatalog.TESTED_VERSION,2500))
+        assertFalse(back.consume(basket,HungerStationCatalog.TESTED_VERSION,2501))
+        assertFalse(command().consume(menu,HungerStationCatalog.TESTED_VERSION,2500))
+        assertFalse(command().consume(basket,"other",2500))
+        assertFalse(command().consume(basket,HungerStationCatalog.TESTED_VERSION,17001))
+        assertNull(HungerStationCartReturnCommand.create(menu,evidence,HungerStationCatalog.TESTED_VERSION,2000))
+        assertNull(HungerStationCartReturnCommand.create(basket,evidence.copy(complete=false),HungerStationCatalog.TESTED_VERSION,2000))
+    }
+    @Test fun completeCartProofRequiresConsumedMenuCommandAndAccountsForEveryUnitAndAmount() {
+        val origin=balancedMenu()
+        val proof=HungerStationCompleteCartProof.fromMenu(origin,restaurant,HungerStationCatalog.TESTED_VERSION,2000)!!
+        assertTrue(proof.command.consume(origin,HungerStationCatalog.TESTED_VERSION,true,2000))
+        val result=proof.finish(basket,HungerStationCatalog.TESTED_VERSION,2500)!!
+        assertTrue(result.complete)
+        assertEquals(3600L,result.subtotal)
+        assertFalse(result.recognizedOrderReview)
+        assertNull(proof.finish(basket,HungerStationCatalog.TESTED_VERSION,2600))
+        assertTrue(HungerStationCompleteCartProof.matchesMenu(origin,result))
+    }
+    @Test fun completeCartProofRejectsMissingRowsQuantityAmountVersionAndExpiredNavigation() {
+        val origin=balancedMenu()
+        fun proof():HungerStationCompleteCartProof=HungerStationCompleteCartProof.fromMenu(origin,restaurant,HungerStationCatalog.TESTED_VERSION,2000)!!.also {
+            assertTrue(it.command.consume(origin,HungerStationCatalog.TESTED_VERSION,true,2000))}
+        assertNull(proof().finish(change(basket,{it.id=="menuItemActionDualButtonValue"}) {it.copy(label="2")},HungerStationCatalog.TESTED_VERSION,2500))
+        assertNull(proof().finish(change(basket,{it.id=="FlutterCart_cartItem"}) {it.copy(label=it.label.replace("36","35"))},HungerStationCatalog.TESTED_VERSION,2500))
+        assertNull(proof().finish(basket.copy(complete=false),HungerStationCatalog.TESTED_VERSION,2500))
+        assertNull(proof().finish(basket,"other",2500))
+        assertNull(proof().finish(basket,HungerStationCatalog.TESTED_VERSION,32001))
+        assertNull(HungerStationCompleteCartProof.fromMenu(origin,restaurant,"other",2000))
+        assertNull(HungerStationCompleteCartProof.fromMenu(origin,restaurant,HungerStationCatalog.TESTED_VERSION,2000)!!.finish(basket,HungerStationCatalog.TESTED_VERSION,2500))
+    }
     @Test fun bidiWrappedBasketAmountKeepsTheSameKnownControl() {
         val changed = change(menu, { it == button }) { it.copy(label="عرض السلة\n\u202a7\n§\u202c") }
         assertNotNull(HungerStationBasketControls.openTarget(changed))

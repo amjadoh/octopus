@@ -1,10 +1,10 @@
 {
-  "test": "Physical Honor alternative restaurant",
+  "test": "Physical Honor current two-row plain request",
   "authorization": "User permitted changing restaurant and meals; no order or payment",
   "selectedRestaurant": "كودو",
-  "selectedItem": "بطاطس وسط",
-  "quantity": 3,
-  "hungerStationItemsSubtotalHalala": 2700,
+  "selectedItem": null,
+  "quantity": null,
+  "hungerStationItemsSubtotalHalala": 4000,
   "finalTotalsVerified": false,
   "cartsVerified": true,
   "observations": [
@@ -12,13 +12,13 @@
     "Dawar Al Saadah visibly closed in Keeta",
     "Kudo name in Keeta decorated with coupons; matcher updated with exact observed pattern"
   ],
-  "testsPassed": 379,
+  "testsPassed": 387,
   "published": false,
   "hungerStationCartVerified": true,
-  "reviewProgress": "Normal APK Compare button passed after menu-read changes at 02:04 Riyadh: Kudo medium fries x3, Keeta 4081 / HS 3750 halala. Both verified baskets, existing matching request. Separately both real menus gave 4000 halala item subtotal for fries x3 plus nachos cheese x1; no multi-item basket build or final total. Address/branch equivalence remains unverified.",
-  "nextTest": "Current installed device-tools build and draft: Kudo fries x3 + nachos x1. Keeta complete two-row basket verified, quantity 1->2->1 verified; HS cart remains fries x3 only. Next implement actual HS full-cart observation and ownership-bound missing-row add; do not relax main full Compare gate. Keeta fresh-add complete same-run acknowledgement and empty-cart support remain gaps. No two-row final totals/address/branch proof. Read keeta-owned-two-row-preparation.json and runtime status.",
-  "keetaFinalTotalHalala": 4081,
-  "hungerStationFinalTotalHalala": 3750,
+  "reviewProgress": "Current two-row request verified in both actual carts: Kudo fries x3 + nachos x1, no additions, item subtotal 40 SAR each. HS missing-row Add dispatched once and complete contents acknowledged. Both fresh final readings displayed inside Octopus: Keeta 41.20, HS 41.80 SAR, at 03:04 Riyadh. Device command sequence, NOT main UI Compare. Details partial; no address/branch equality or cheapest ranking.",
+  "nextTest": "Refactor real provider steps into a shared in-app coordinator; implement empty first-line preparation under full request identity and HS row quantity changes before enabling multi-item main Compare. Generalize both handoff paths only with complete fresh observations. Current UI multi-item Compare remains disabled; do not blindly relax PreviewEvidence gate. Existing carts/draft are matching Kudo fries x3 + nachos x1; device-tools installed. Fresh 2-row final readings report is two-row-final-readings.json; original one-row five-run report is historical only. No publication.",
+  "keetaFinalTotalHalala": 4120,
+  "hungerStationFinalTotalHalala": 4180,
   "sameRunFinalReadingsSucceeded": true,
   "hungerStationHandoffVerified": true,
   "keetaAutomaticReviewRecoveryVerified": true,
@@ -37,5 +37,20 @@
   "multiItemMenuReadingReport": "docs/verification/2026-10-25/multi-item-menu-reading.json",
   "postMenuPlanSmokeReport": "docs/verification/2026-10-25/post-menu-plan-smoke.json",
   "keetaTwoRowReport": "docs/verification/2026-10-25/keeta-owned-two-row-preparation.json",
-  "installedApkScope": "device-tools 1.3.8, not published; no active comparison at checkpoint"
+  "installedApkScope": "device-tools 1.3.8, both two-row final readings verified through protected commands; main UI multi-item comparison not enabled; idle on Octopus",
+  "currentDraft": [
+    {
+      "name": "بطاطس وسط",
+      "quantity": 3
+    },
+    {
+      "name": "جبنة الناتشوز",
+      "quantity": 1
+    }
+  ],
+  "multiItemProviderStepsImplemented": true,
+  "multiItemFinalReadingsVerified": true,
+  "currentDeviceToolsSha256": "604726B9F52E8A19720EE54BEDB4FBF07FF447ACDA916172D0CBD1A5BAA7A243",
+  "multiItemFinalReport": "docs/verification/2026-10-25/two-row-final-readings.json",
+  "hsOwnedAddReport": "docs/verification/2026-10-25/hs-owned-two-row-add.json"
 }
