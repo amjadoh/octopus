@@ -12,11 +12,11 @@
     "Dawar Al Saadah visibly closed in Keeta",
     "Kudo name in Keeta decorated with coupons; matcher updated with exact observed pattern"
   ],
-  "testsPassed": 423,
+  "testsPassed": 427,
   "published": false,
   "hungerStationCartVerified": true,
   "reviewProgress": "Native Keeta reached Fatera feta PDP, visibly7SAR, plain notes-field layout. Main reader timed out because this alternative layout is not recognized under3.13.203. No Add dispatched, no total, HS stage not reached. Saved local screenshot is food-only under ignored work/device-20261025/keeta-search-0659.png. Actual structured frame still needs capture; do not fabricate it from screenshot.",
-  "nextTest": "Review/implement guarded notes-PDP reader using saved historical structured fixtures where available. Do not invent Fatera nodes or generalize Add from screenshot. Review strict cart/preparation tests and foreign-cart replacement architecture. Device verification remains pending; no phone actions until user reconnects. No push/publication.",
+  "nextTest": "OFFLINE source/fixtures only until user reconnects. See offline-read-timeout-isolation.json. Do not claim full release; current normal APK not installed or real-journey tested.",
   "keetaFinalTotalHalala": null,
   "hungerStationFinalTotalHalala": 5579,
   "sameRunFinalReadingsSucceeded": false,
@@ -26,7 +26,7 @@
   "normalApkCompareButtonVerified": false,
   "normalApkInstalled": false,
   "lintPassed": true,
-  "normalApkSha256": "9F2DD2B6E4BCF9516D3F057FB71C67247F08F52A61998A5211A78ED9A9B88D2F",
+  "normalApkSha256": "036C0EB31E92CD4482FF256E5A73FDEA91DB091BCDECFA8C67EF88A235943BB5",
   "normalCompareRunsSucceeded": 0,
   "normalCompareStartedFailures": 1,
   "repeatabilityReport": "docs/verification/2026-10-25/normal-ui-repeatability.json",
@@ -96,8 +96,8 @@
   "historicalMultiItemFinalReadingsVerified": true,
   "historicalMultiItemHandoffsVerified": true,
   "historicalTwoRowNormalCompareRunsSucceeded": 2,
-  "latestCheckpointLocal": "2026-10-26 07:01 Asia/Riyadh",
-  "latestReport": "docs/verification/2026-10-25/device-disconnect-0701.json",
+  "latestCheckpointLocal": "2026-10-26 07:07 Asia/Riyadh",
+  "latestReport": "docs/verification/2026-10-25/offline-read-timeout-isolation.json",
   "hungerStationFinalCapturedAt": 1792986280893,
   "currentDraftRestaurant": "فطيرة"
 }
