@@ -461,7 +461,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 provider = id
                 targetSeen = false
                 val version = graph.installations.value.singleOrNull { it.provider == id }?.version.orEmpty()
-                val preview = try {
+                val preview = MenuReadTimeoutBoundary.read(onTimeout = {
+                    failedMenuPreview(id,desired,"انتهت مهلة قراءة أصناف ${id.title}؛ لم أحتسب سعرًا ناقصًا ولم أغيّر السلة.")
+                }) { try {
                     checkSession()
                     check((id == ProviderId.HUNGERSTATION && version == HungerStationCatalog.TESTED_VERSION) ||
                         (id == ProviderId.KEETA && version == "3.13.203")) { "إصدار المنصة يحتاج تحققًا لقراءة جميع الأصناف." }
@@ -491,6 +493,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                                 .put("exceptionType",failure.javaClass.name).toString(),Charsets.UTF_8)
                     }
                     failedMenuPreview(id,desired,"لم تكتمل قراءة جميع أصناف الطلب في ${id.title}؛ لم أحتسب مجموعًا جزئيًا ولم أغيّر السلة.")
+                }
                 }
                 previews += preview
                 graph.catalog.value = graph.catalog.value.copy(previews=previews.toList())
