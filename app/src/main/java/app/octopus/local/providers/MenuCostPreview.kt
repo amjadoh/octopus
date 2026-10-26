@@ -78,7 +78,7 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
         if (VERSION == "3.13.203" && resourceId == "com.sankuai.sailor.afooddelivery:id/product_name" &&
             text.length in 1..300 && text.any(Char::isLetter)) return text
         if (KeetaRestaurantName.matches(restaurant, text)) return restaurant
-        if (KeetaAvailability.closedText(text) || text=="موافق") return text
+        if (KeetaAvailability.closedText(text) || KeetaAvailability.unavailableText(text) || text=="موافق") return text
         if (VERSION == "3.13.203" && (text in setOf("معلومات غذائية", "معلومات التغذية", "مسببات الحساسية") || text.matches(Regex("[0-9٠-٩]{1,5} سعرة حرارية")))) return text
         return if (text in setOf(restaurant, "feed shopcard", title, "homepage header searchbar", "search page box", "search page btn", "طلب خاص", "إضافة إلى السلة", "توصيل", "استلام شخصي",
                 "الاصناف الرئيسية", "الأصناف الرئيسية", "الأصناف المضافة", "تفريغ السلة", "إتمام الدفع", "قسائمي", "شروط الاستخدام", "عرض خاص", "حسنًا", "حسنا", "1", "١") || text.matches(Regex("[0-9٠-٩]{1,2}")) || PreviewEvidence.offer(text) ||
@@ -174,11 +174,22 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
     }
     /** Read-only recognition does not authorize adding a product with unknown modifiers. */
     private fun currentReadOnlyProductBody(frame: CatalogFrame): CatalogNode? {
+        KeetaSingleSkuProduct.body(frame,restaurant,title)?.let {return it}
         if (!frame.complete || frame.nodes.count { it.label == restaurant } != 1 ||
             frame.nodes.count { it.label == "إضافة إلى السلة" } != 1) return null
         return frame.nodes.filter { it.className == "android.widget.ScrollView" }.singleOrNull { body ->
             val content = frame.descendants(body.index)
-            content.count { it.label == title && !it.clickable } == 1 && content.none { it.editable } &&
+            // A SKU can repeat the heading. Recognize the unique description-heading slot
+            // for safe closing only; currentPlainProductBody still rejects unknown/scrolling options.
+            val headings=content.filter { node ->
+                if(node.label!=title || node.clickable || node.className!="android.widget.TextView") false else {
+                    val group=frame.nodes.singleOrNull {it.index==node.parent}
+                    val section=group?.let {g->frame.nodes.singleOrNull {it.index==g.parent}}
+                    val parts=section?.let {p->frame.nodes.filter {it.parent==p.index}}.orEmpty()
+                    parts.size>=2 && parts[0]==group && parts[1].className=="android.view.ViewGroup" && parts[1].clickable
+                }
+            }
+            (content.count { it.label == title && !it.clickable } == 1 || headings.size==1) && content.none { it.editable } &&
                 ancestors(frame,body).any { modal ->
                     val parts = frame.nodes.filter { it.parent == modal.index }
                     parts.size == 3 && parts[0].className == "android.widget.FrameLayout" &&
@@ -189,6 +200,7 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
     }
     /** Honor / 3.13.203 plain-product modal. Only its observed description slot may omit text. */
     private fun currentPlainProductBody(frame: CatalogFrame): CatalogNode? {
+        KeetaSingleSkuProduct.body(frame,restaurant,title)?.let {return it}
         if (!frame.complete || frame.nodes.count { it.label == restaurant } != 1 ||
             frame.nodes.count { it.label == "إضافة إلى السلة" } != 1) return null
         val candidates = frame.nodes.filter { it.className == "android.widget.ScrollView" && !it.scrollable }

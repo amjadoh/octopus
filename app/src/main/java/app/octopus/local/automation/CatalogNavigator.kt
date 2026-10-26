@@ -41,6 +41,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private var provider = ProviderId.HUNGERSTATION
     private var comparedProduct: ConfiguredProduct? = null
     private var multiReadStage = "IDLE"
+    private val observedMenuTitles=linkedMapOf<ProviderId,LinkedHashSet<String>>()
+    private var lastKeetaFoodProduct:CatalogFrame?=null
     private var requestFingerprint: String? = null
     private var keetaContext: KeetaMenuReader? = null
     private val keetaMenu get() = checkNotNull(keetaContext) { "لا يوجد طلب محدد لقراءة كيتا." }
@@ -1103,9 +1105,28 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     /** Uses observed home/search controls and the exact review-header back arrow. */
     private suspend fun openKeetaRequest(): CatalogFrame {
         val version = graph.installations.value.single { it.provider == ProviderId.KEETA }.version.orEmpty()
-        var frame = await { keetaReadable(it) || keetaMenu.homeSearch(it) != null ||
-            keetaMenu.searchInput(it) != null || keetaMenu.editSearchQuery(it) != null ||
-            ReviewNavigationGuard.keetaReviewBackTarget(it, version) != null }
+        val ready:(CatalogFrame)->Boolean = {keetaReadable(it) || keetaMenu.homeSearch(it)!=null ||
+            keetaMenu.searchInput(it)!=null || keetaMenu.editSearchQuery(it)!=null ||
+            ReviewNavigationGuard.keetaReviewBackTarget(it,version)!=null}
+        var frame = try {await(ready)} catch(timeout:TimeoutCancellationException) {
+            currentCoroutineContext().ensureActive();checkSession()
+            val root=service.rootInActiveWindow ?: throw timeout
+            try {
+                requireProviderWindow(root)
+                val foreign=capture(root)
+                check(KeetaForeignMenuRecovery.permits(foreign,version)) {"شاشة كيتا الحالية ليست قائمة طعام معروفة للعودة الآمنة؛ توقفت."}
+                val entry=android.content.ComponentName(provider.packageName,"com.sankuai.sailor.shell.SplashActivity")
+                @Suppress("DEPRECATION")
+                val activity=service.packageManager.getActivityInfo(entry,0)
+                check(activity.enabled && activity.exported)
+                verifyActiveFrame(foreign,root.windowId);checkSession()
+                // Observed installed entry, not a guessed deep link. One launcher recovery only;
+                // it changes no basket and never presses an unknown screen control.
+                targetSeen=false
+                service.startActivity(Intent().setComponent(entry).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } finally {@Suppress("DEPRECATION") root.recycle()}
+            await(ready)
+        }
         if (ReviewNavigationGuard.keetaReviewBackTarget(frame, version) != null) {
             leaveKeetaPreviousReview(frame, version)
             frame = await { keetaReadable(it) || keetaMenu.homeSearch(it) != null ||
@@ -1930,6 +1951,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         this.operation = operation
         priorRecognizedScreen = null
         lastStats = JSONObject()
+        observedMenuTitles.clear()
+        lastKeetaFoodProduct=null
         val evidenceGeneration = graph.inspectionRecorder.generation()
         graph.catalog.value = graph.catalog.value.copy(busy = true, error = null, message = "جارٍ تنفيذ المقارنة والتحقق من طلبك…")
         stepInterrupted = null
@@ -1971,6 +1994,20 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 if (BuildConfig.DEBUG) withContext(NonCancellable + Dispatchers.IO) {
                     // Optional debug storage must never prevent releasing controls and clearing busy state.
                     runCatching { service.filesDir.resolve("catalog-frame-stats.json").writeText(stats, Charsets.UTF_8) }
+                    if(BuildConfig.VERSION_NAME.endsWith("-device-tools")) lastKeetaFoodProduct?.let { frame -> runCatching {
+                        service.filesDir.resolve("last-keeta-public-product.json").writeText(JSONObject()
+                            .put("recordedAt",System.currentTimeMillis())
+                            .put("frame",JSONObject(com.google.gson.Gson().toJson(frame))).toString(),Charsets.UTF_8)
+                    }}
+                    if(BuildConfig.VERSION_NAME.endsWith("-device-tools")) runCatching {
+                        service.filesDir.resolve("observed-public-menu-titles.json").writeText(JSONObject()
+                            .put("recordedAt",System.currentTimeMillis())
+                            .put("restaurant",graph.draft.value?.restaurant ?: JSONObject.NULL)
+                            .put("completeMenu",false)
+                            .put("providers",JSONObject().also { out -> observedMenuTitles.forEach { (id,titles) ->
+                                out.put(id.name,JSONArray(titles.toList()))
+                            }}).toString(),Charsets.UTF_8)
+                    }
                 }
                 if (generation == token) { sessionEvidence = null; hideStop(); job = null; graph.catalog.value = graph.catalog.value.copy(busy = false) }
             }
@@ -1992,10 +2029,13 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 frame = await { HungerStationCatalog.screen(it) == CatalogScreen.BROWSE && CatalogCommands.backTarget(it) != null }
             }
             val target = CatalogCommands.backTarget(frame) ?: error("لا يوجد رجوع معروف من هذه الشاشة.")
+            val beforeReturn=frame
             act(frame, if (screen == CatalogScreen.SPIN_PROMO) CatalogAction.CLOSE_SPIN_PROMO else CatalogAction.RETURN_TO_CATALOG,
                 { it.index == target.index && it == target })
+            // Android can return from one known menu to another known menu. The actual
+            // frame must change, but the screen enum need not change; still admit known Back only.
             frame = await {
-                HungerStationCatalog.screen(it) != screen &&
+                it != beforeReturn &&
                     (HungerStationCatalog.screen(it) == CatalogScreen.HOME || CatalogCommands.backTarget(it) != null)
             }
         }
@@ -2016,7 +2056,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     delay(200); continue
                 }
                 val frame = capture(root)
-                if(provider==ProviderId.KEETA && KeetaAvailability.closedNotice(frame))
+                if(provider==ProviderId.KEETA && (KeetaAvailability.closedNotice(frame) || KeetaAvailability.closedMenu(frame)))
                     throw UserInterrupted("المطعم مغلق حاليًا في كيتا؛ توقفت دون إضافة أخرى أو تأكيد طلب. اختر مطعمًا متاحًا للمقارنة.")
                 if (provider == ProviderId.HUNGERSTATION && frame.complete && frame.nodes.size<=30 &&
                     frame.nodes.any{it.label.trim()=="لا يوجد اتصال بالإنترنت"} &&
@@ -2112,6 +2152,20 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             keetaBasket.restoreRequestedRowTitles(captured, requestedBasketLabels) else captured
         firstDisabledFinancialControl?.let {
             if (!CatalogFinancialBoundary.permitsDisabledControls(frame, provider)) catalogStop.stop(it)
+        }
+        if(BuildConfig.VERSION_NAME.endsWith("-device-tools") && provider==ProviderId.KEETA && frame.complete &&
+            frame.nodes.none {it.editable} && frame.nodes.count {it.label=="إضافة إلى السلة"}==1 &&
+            frame.nodes.any {it.label==keetaMenu.restaurant} && frame.hasId("card_root")) lastKeetaFoodProduct=frame
+        if(BuildConfig.VERSION_NAME.endsWith("-device-tools") && frame.complete) {
+            val titles=when(provider) {
+                ProviderId.HUNGERSTATION -> if(HungerStationCatalog.screen(frame)==CatalogScreen.MENU)
+                    HungerStationCatalog.menuItems(frame).map {it.name} else emptyList()
+                ProviderId.KEETA -> if(keetaMenu.menu(frame)) frame.nodes.filter {
+                    it.id=="com.sankuai.sailor.afooddelivery:id/product_name" && it.label.isNotBlank()
+                }.map {it.label} else emptyList()
+            }
+            val observed=observedMenuTitles.getOrPut(provider) {linkedSetOf()}
+            titles.filter {it.length in 1..300}.take((1000-observed.size).coerceAtLeast(0)).forEach(observed::add)
         }
         return frame
     }

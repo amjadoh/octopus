@@ -95,6 +95,10 @@ class CatalogTestReceiver : BroadcastReceiver() {
                 .put("error", reportError ?: state.error ?: JSONObject.NULL)
                 .put("busy", state.busy).put("serviceConnected", graph.serviceConnected.value)
                 .put("restaurantNames", JSONArray(state.restaurants.map { it.name }))
+                .put("publicRestaurants", JSONArray(graph.publicCatalog.state.value.directory.map {
+                    JSONObject().put("name",it.name).put("status",it.status)
+                }))
+                .put("publicMenuStatus",graph.publicCatalog.currentMenu?.restaurant?.status ?: JSONObject.NULL)
                 .put("menuItemsRead", state.menu?.items?.size ?: 0)
                 .put("menuItems", JSONArray(state.menu?.items?.map { it.name } ?: emptyList<String>()))
                 .put("publicMenuItems", JSONArray(graph.publicCatalog.currentMenu?.meals?.map { it.name } ?: emptyList<String>()))

@@ -18,4 +18,16 @@ class KeetaAvailabilityTest {
         assertFalse(KeetaAvailability.closedNotice(frame().copy(complete=false)))
         assertFalse(KeetaAvailability.closedNotice(frame().copy(nodes=frame().nodes+frame().nodes.last().copy(index=2))))
     }
+    @Test fun disabledMenuBannerStopsBeforeLookingForAnEnabledProduct() {
+        val banner="المتجر مغلق وغير متاح مؤقتًا"
+        val menu=CatalogFrame(listOf(
+            CatalogNode(0,-1,"com.sankuai.sailor.afooddelivery:id/card_root","","android.view.ViewGroup",false,false,false),
+            CatalogNode(1,-1,"",banner,"android.widget.TextView",false,false,false)),true)
+        assertTrue(KeetaAvailability.closedMenu(menu))
+        assertEquals(banner,KeetaMenuReader("مطاعم فوال العربي","فول","3.13.203").functionalLabel(banner))
+        assertFalse(KeetaAvailability.closedMenu(menu.copy(complete=false)))
+        assertFalse(KeetaAvailability.closedMenu(menu.copy(nodes=menu.nodes.drop(1))))
+        assertFalse(KeetaAvailability.closedMenu(menu.copy(nodes=menu.nodes+menu.nodes.last().copy(index=2))))
+        assertFalse(KeetaAvailability.unavailableText("المتجر متاح الآن"))
+    }
 }
