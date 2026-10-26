@@ -684,8 +684,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             provider=ProviderId.KEETA;bindKeetaRequest(cart,line);targetSeen=false
             val launch=service.packageManager.getLaunchIntentForPackage(provider.packageName) ?: error("كيتا غير مثبت.")
             service.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            val frame=openKeetaRequest()
-            check(keetaMenu.menu(frame)) {"الشاشة ليست قائمة المطعم؛ لم أصورها أو أحفظها."}
+            val frame=await {f->keetaMenu.menu(f) || (f.complete && f.nodes.count {it.label==cart.restaurant}==1 &&
+                f.nodes.count {it.label==line.name && !it.clickable}==1 && f.nodes.count {it.label=="طلب خاص"}==1 &&
+                f.nodes.count {it.label=="إضافة إلى السلة"}==1 && f.nodes.count {it.editable}==1 && f.nodes.none {it.enteredText})}
             withContext(Dispatchers.IO) {
                 service.filesDir.resolve("keeta-public-menu-shape.json").writeText(JSONObject()
                     .put("recordedAt",System.currentTimeMillis()).put("frame",JSONObject(com.google.gson.Gson().toJson(frame)))

@@ -12,11 +12,11 @@
     "Dawar Al Saadah visibly closed in Keeta",
     "Kudo name in Keeta decorated with coupons; matcher updated with exact observed pattern"
   ],
-  "testsPassed": 422,
+  "testsPassed": 423,
   "published": false,
   "hungerStationCartVerified": true,
-  "reviewProgress": "Actual HS complete SAME-RUN preparation at06:44: two Add dispatches (seed + missing row), all-row acknowledgements, nachos2/fries3 subtotal53, actual final55.79. New scoped native restaurant search/PDP/Close lifecycle verified on plain nachos; pancake options unsupported and rejected. Keeta scanning stops in MID-MENU because Recycler ACTION_SCROLL_FORWARD returns false, visually checked known public food menu06:49. New bounded menu-only upward stroke fallback builds now; NOT device-verified yet. No current paired totals. Prior Keeta basket is not current proof;06:49 menu footer visibly showed empty-cart free-delivery threshold.",
-  "nextTest": "Finish423-test build; install and run Keeta full two-row preparation/review with gesture fallback. Observe all rows and new final total. Then actual normal UI both-initially-empty Compare, both handoffs and retry. Foreign-cart replacement/address-branch/options remain unresolved; no push/publication.",
+  "reviewProgress": "Native Keeta reached Fatera feta PDP, visibly7SAR, plain notes-field layout. Main reader timed out because this alternative layout is not recognized under3.13.203. No Add dispatched, no total, HS stage not reached. Saved local screenshot is food-only under ignored work/device-20261025/keeta-search-0659.png. Actual structured frame still needs capture; do not fabricate it from screenshot.",
+  "nextTest": "Review/implement guarded notes-PDP reader using saved historical structured fixtures where available. Do not invent Fatera nodes or generalize Add from screenshot. Review strict cart/preparation tests and foreign-cart replacement architecture. Device verification remains pending; no phone actions until user reconnects. No push/publication.",
   "keetaFinalTotalHalala": null,
   "hungerStationFinalTotalHalala": 5579,
   "sameRunFinalReadingsSucceeded": false,
@@ -37,14 +37,14 @@
   "multiItemMenuReadingReport": "docs/verification/2026-10-25/multi-item-menu-reading.json",
   "postMenuPlanSmokeReport": "docs/verification/2026-10-25/post-menu-plan-smoke.json",
   "keetaTwoRowReport": "docs/verification/2026-10-25/keeta-owned-two-row-preparation.json",
-  "installedApkScope": "DEVICE-TOOLS1.3.8,4617697407AE447C031B6AF55D38FFF6897C0E63250E72FC71B0FF25507AB6A2; newer menu-scroll build running, not installed yet.",
+  "installedApkScope": "DEVICE-TOOLS06C32476...; newer dev-capture build passed but NOT installed. User disconnecting; stop sent, NO DEVICE ACTIONS until user explicitly reconnects.",
   "currentDraft": [
     {
-      "name": "جبنة الناتشوز",
-      "quantity": 2
+      "name": "جبن فيتا",
+      "quantity": 3
     },
     {
-      "name": "بطاطس وسط",
+      "name": "زعتر",
       "quantity": 3
     }
   ],
@@ -96,7 +96,8 @@
   "historicalMultiItemFinalReadingsVerified": true,
   "historicalMultiItemHandoffsVerified": true,
   "historicalTwoRowNormalCompareRunsSucceeded": 2,
-  "latestCheckpointLocal": "2026-10-26 06:53 Asia/Riyadh",
-  "latestReport": "docs/verification/2026-10-25/hs-search-empty-two-row.json",
-  "hungerStationFinalCapturedAt": 1792986280893
+  "latestCheckpointLocal": "2026-10-26 07:01 Asia/Riyadh",
+  "latestReport": "docs/verification/2026-10-25/device-disconnect-0701.json",
+  "hungerStationFinalCapturedAt": 1792986280893,
+  "currentDraftRestaurant": "فطيرة"
 }
