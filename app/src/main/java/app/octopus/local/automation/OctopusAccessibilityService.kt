@@ -46,8 +46,8 @@ object LiveCatalogBridge {
     fun endManualCatalog() { navigator.get()?.endManualCatalog() }
     fun compareDraft(): Boolean = navigator.get()?.compareDraft() ?: false
     fun compareAndPrepare(): Boolean = navigator.get()?.compareAndPrepare() ?: false
-    fun preparePlainHungerForVerification(readReview:Boolean=false): Boolean = navigator.get()?.preparePlainHungerForVerification(readReview) ?: false
-    fun preparePlainKeetaForVerification(readReview:Boolean=false): Boolean = navigator.get()?.preparePlainKeetaForVerification(readReview) ?: false
+    fun preparePlainHungerForVerification(readReview:Boolean=false,showCart:Boolean=false): Boolean = navigator.get()?.preparePlainHungerForVerification(readReview,showCart) ?: false
+    fun preparePlainKeetaForVerification(readReview:Boolean=false,clearTestCart:Boolean=false): Boolean = navigator.get()?.preparePlainKeetaForVerification(readReview,clearTestCart) ?: false
     fun prepareComparedHungerStation(): Boolean = navigator.get()?.prepareComparedHungerStation() ?: false
     fun prepareComparedKeeta(handoff: Boolean = false): Boolean = navigator.get()?.prepareComparedKeeta(handoff) ?: false
     fun browseRestaurants(): Boolean = graph.get()?.showLocalRestaurants() ?: false

@@ -167,4 +167,15 @@ class RidanPreparationTest {
         assertFalse(program.consumeAdd(product.copy(nodes=product.nodes.map { if(it.id==changed.id)changed else it }),changed,now))
         assertTrue(program.consumeAdd(product,add,now))
     }
+    @Test fun fullRequestSeedUsesExistingPlainAddChecksAndRejectsShrunkenDraft() {
+        val line=mixed.items.last()
+        val first=RidanCartProgram.createForSeed(details(),selection,emptyMenu,mixed,line,now,now)!!
+        assertFalse(first.first.consumeAdd(product,add,now+1,mixed.copy(items=listOf(line))))
+        val next=RidanCartProgram.createForSeed(details(),selection,emptyMenu,mixed,line,now,now)!!
+        assertTrue(next.first.consumeAdd(product,add,now+1,mixed))
+        val actual=BasketEvidence(ProviderId.HUNGERSTATION,mixed.restaurant,listOf(BasketLineEvidence(line.name,emptyList(),1,3000)),3000,true)
+        assertTrue(next.second.acknowledge(mixed,actual,HungerStationCatalog.TESTED_VERSION,now+2))
+        assertFalse(next.first.consumeAdd(product,add,now+3,mixed))
+    }
+
 }

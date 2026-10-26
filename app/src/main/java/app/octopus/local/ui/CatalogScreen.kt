@@ -233,7 +233,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                             Icon(Icons.Outlined.CompareArrows, null); Spacer(Modifier.width(8.dp)); Text("قارن الإجمالي وجهّز السلتين")
                         }
-                        if (PlainComparisonSupport.existingTwoRow(cart)) Text("المقارنة متعددة الأصناف تعمل حاليًا على سلة موجودة من المطعم نفسه دون إضافات. تتوقف عند سلة فارغة أو مختلفة؛ لا تستبدلها تلقائيًا.",fontSize=12.sp,color=OctopusPalette.Muted)
+                        if (PlainComparisonSupport.existingTwoRow(cart)) Text("المقارنة الحالية تدعم صنفين دون خيارات. يفحص التطبيق السلة أولًا؛ السلة المختلفة لا تُستبدل تلقائيًا.",fontSize=12.sp,color=OctopusPalette.Muted)
                         if (!PreviewEvidence.supports(cart) && !PlainComparisonSupport.existingTwoRow(cart)) Text("حُفظ طلبك. التجهيز يدعم صنفًا واحدًا، أو صنفين دون خيارات من سلة موجودة؛ بقية الطلبات تحتاج دعمًا إضافيًا.", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
                         Text("يجهّز السلتين ويقرأ إجمالي المراجعة إذا تعرّف على مسارها، دون تأكيد طلب أو دفع. النتيجة غير المقروءة لا تُقدّر.", fontSize = 12.sp, color = OctopusPalette.Muted)
                         state.comparisonProgress.values.forEach { result ->
@@ -382,7 +382,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                 }
             }
         }
-        item { Text("اختر المطعم والوجبة. تُقبل الخيارات عند اكتمال قراءتها؛ المقارنة وتجهيز السلة التلقائي حاليًا لصنف واحد دون خيارات أو ملاحظة. الأصناف والتوصيل لا يمثلان الإجمالي النهائي مع الرسوم.", fontSize = 11.sp, color = OctopusPalette.Muted) }
+        item { Text("اختر المطعم والوجبة. تُقبل الخيارات عند اكتمال قراءتها؛ التجهيز يدعم صنفًا واحدًا أو صنفين دون خيارات أو ملاحظات ضمن الشاشات المدعومة. الأصناف والتوصيل لا يمثلان الإجمالي النهائي مع الرسوم.", fontSize = 11.sp, color = OctopusPalette.Muted) }
     }
     if (areaDialog) CatalogAreaDialog(graph, onDismiss = { areaDialog = false })
     publicMeal?.let { (menu, meal) -> PublicMealDialog(graph, menu, meal,

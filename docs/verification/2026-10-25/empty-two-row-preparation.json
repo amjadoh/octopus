@@ -1,0 +1,100 @@
+{
+  "date": "2026-10-26",
+  "timezone": "Asia/Riyadh",
+  "request": {
+    "restaurant": "كودو",
+    "lines": [
+      {
+        "name": "بطاطس وسط",
+        "quantity": 3
+      },
+      {
+        "name": "جبنة الناتشوز",
+        "quantity": 2
+      }
+    ],
+    "additions": []
+  },
+  "keeta": {
+    "status": "COMPLETE",
+    "apkSha256": "3760804A54A8BDE45950C2255689F759B211A0EF7D93EA5B82FE663406FEF63E",
+    "entry": "Protected actual provider preparation command; not main UI Compare",
+    "reset": "Known exact matching cart verified; test-only clear header clicked. Driver stopped at unknown confirmation. The actual question هل تريد حذف جميع المنتجات من السلة؟ and موافق / إلغاء buttons were visually inspected. Confirmed cart deletion manually as test fixture setup, no order/payment action.",
+    "stage": {
+      "recordedAt": 1792976332117,
+      "stage": "COMPLETE",
+      "dispatchedAdds": 2,
+      "observedRows": 2
+    },
+    "preparedBasket": {
+      "provider": "KEETA",
+      "restaurant": "كودو",
+      "complete": true,
+      "lines": [
+        {
+          "name": "بطاطس وسط",
+          "quantity": 3,
+          "lineAmountHalala": 2700,
+          "choiceCount": 0
+        },
+        {
+          "name": "جبنة الناتشوز",
+          "quantity": 2,
+          "lineAmountHalala": 2600,
+          "choiceCount": 0
+        }
+      ]
+    },
+    "finalTotalReadings": [
+      {
+        "provider": "KEETA",
+        "totalHalala": 5459,
+        "capturedAt": 1792976332105
+      }
+    ],
+    "error": null,
+    "proof": "Two Add dispatches and full acknowledgement after each row; only the empty seed path can add both requested rows starting from no requested rows. Full draft retained throughout, no shrunken request or fabricated empty BasketEvidence.",
+    "missingRowFreshAddAcknowledged": true
+  },
+  "hungerStationFirstAttempt": {
+    "status": "PARTIAL_TIMEOUT",
+    "apkSha256": "F81122BFD262356C02DAECBF31EFF646604E95AB8439523C3012A4E9D0E281F0",
+    "reset": "Actual previously verified test cart manually emptied through item-specific delete dialogs. No order or payment.",
+    "stage": {
+      "recordedAt": 1792976628533,
+      "stage": "FIND_MISSING_LINE",
+      "dispatchedAdds": 1,
+      "observedRows": 1
+    },
+    "verifiedSeed": "First Add dispatched once with fries x3 selected in product page, complete one-row menu-to-cart evidence acknowledged under full request.",
+    "remaining": "Nachos absent; timeout while locating next line after returning from the first-line cart. No second Add dispatched.",
+    "fix": "Missing-line search now resets restaurant through known search, then reobserves complete cart immediately before Add. Fresh same-run full HS seed path still needs verification."
+  },
+  "postFixNormalUiRecovery": {
+    "status": "STOPPED_PROVIDER_CLOSED",
+    "apkSha256": "25B9EBDD62A4918A9936A8270C798A57635CD07A9BC0EF9D26577F96C9EAEB15",
+    "entry": "Actual normal APK Compare with matching-cart consent; HS first row exists, Keeta full request exists.",
+    "observedAtLocalMinute": "04:13",
+    "source": "work/device-20261025/keeta-normal-menu-stop.png",
+    "reason": "Keeta displayed the actual closed-store modal: هذا المتجر مغلق حاليًا. ألقِ نظرة على المتاجر الأخرى. During read-only menu collection, before preparation. No new prices were accepted and HS remained fries x3 only. This run does not verify the HS missing-line reset fix."
+  },
+  "unitTestsPassed": 406,
+  "lint": {
+    "errors": 0,
+    "warnings": 5
+  },
+  "published": false,
+  "limits": [
+    "Full fresh two-provider main-UI journey not yet established.",
+    "Address/branch equivalence unverified; no confirmed cheapest ranking.",
+    "No foreign-cart automatic replacement or full options/notes/scrolling cart support.",
+    "Test-cart clearing is dev-only; unknown clear confirmation is never automatically accepted."
+  ],
+  "installedNormalApkSha256": "9F2DD2B6E4BCF9516D3F057FB71C67247F08F52A61998A5211A78ED9A9B88D2F",
+  "installedScope": "Normal APK, no TEST_CATALOG receiver. UI explanatory text fixed. Closed-store recognizer added from the actual observed notice; unit-tested, not a new completed device comparison.",
+  "verificationTimeoutCleanup": "Fixed cancelled dev verification skipping state cleanup after suspending diagnostic I/O. NonCancellable cleanup always releases state even if recording fails; two coroutine regression tests passed.",
+  "currentPhysicalCarts": {
+    "KEETA": "Kudo fries x3 + nachos x2, no additions, item sum53 SAR. Last final54.59 at03:58, historical now.",
+    "HUNGERSTATION": "Kudo fries x3 only, item sum27 SAR. Nachos absent after first empty-cart attempt stopped. Not matching current full draft."
+  }
+}

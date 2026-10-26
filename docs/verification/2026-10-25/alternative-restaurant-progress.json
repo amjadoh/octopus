@@ -1,34 +1,34 @@
 {
-  "test": "Physical Honor current two-row plain request",
+  "test": "Physical Honor two-row fresh cart preparation checkpoint",
   "authorization": "User permitted changing restaurant and meals; no order or payment",
   "selectedRestaurant": "كودو",
   "selectedItem": null,
   "quantity": null,
-  "hungerStationItemsSubtotalHalala": 5300,
+  "hungerStationItemsSubtotalHalala": 2700,
   "finalTotalsVerified": false,
-  "cartsVerified": true,
+  "cartsVerified": false,
   "observations": [
     "Rukn unavailable in HungerStation",
     "Dawar Al Saadah visibly closed in Keeta",
     "Kudo name in Keeta decorated with coupons; matcher updated with exact observed pattern"
   ],
-  "testsPassed": 393,
+  "testsPassed": 406,
   "published": false,
-  "hungerStationCartVerified": true,
-  "reviewProgress": "03:27 Riyadh: actual normal-APK Compare button read Keeta 41.20 and HS 41.80 for fries x3 + nachos x1. Both normal-UI handoffs rechecked all rows/review, no edits. 03:34: changed nachos to x2 in Octopus, approved matching-cart changes and pressed Compare; app independently changed both carts, kept fries x3, and displayed fresh Keeta 54.59 and HS 55.39, item subtotal 53 each. No provider intervention after Compare. Address/branch equality unverified; no cheapest ranking.",
-  "nextTest": "Implement empty first-line preparation under full request identity and safely handle existing foreign carts with explicit approval. Keeta fresh missing-row Add plus same-run acknowledgement still needs verification. Exactly two plain lines on existing completely observed baskets are wired to main Compare; do not broaden admission to full modifiers/scrolling or arbitrary restaurants without executors. Both current carts/draft: Kudo fries x3 + nachos x2. Fix outdated single-item explanatory footer text. No publication.",
-  "keetaFinalTotalHalala": 5459,
-  "hungerStationFinalTotalHalala": 5539,
-  "sameRunFinalReadingsSucceeded": true,
-  "hungerStationHandoffVerified": true,
+  "hungerStationCartVerified": false,
+  "reviewProgress": "Keeta empty-cart rebuild completed in one protected-command run at03:58: two Add dispatches, complete fries x3 + nachos x2, subtotal53, actual final54.59. Test cart reset confirmation was visually checked and manually accepted as fixture setup only. HS fresh attempt added first fries x3 once and acknowledged complete row under full request, then timed out locating nachos after cart Back. Added read-only restaurant-search reset before missing-line lookup. Normal UI retry at04:09 was stopped by actual Keeta closed-store modal; no fresh pair or HS completion claimed. Current physical carts DIFFER: Keeta fries3/nachos2, HS fries3 only.",
+  "nextTest": "Read empty-two-row-preparation.json and current runtime status first. Kudo CLOSED in Keeta around04:09; do not treat this as code failure or keep retrying closed restaurant. Choose another actually open restaurant with supported two plain products, or wait until provider says Kudo open. Verify HS full empty first-line+missing-line+review in SAME run after search-reset fix, then actual normal-UI Compare with both carts initially empty, both handoffs, safe retry. Existing single-row/2row historical comparisons remain valid only for their recorded states. New empty-card permit retains full draft and consumes Add once; never shrink draft or fabricate complete evidence. No publication.",
+  "keetaFinalTotalHalala": null,
+  "hungerStationFinalTotalHalala": null,
+  "sameRunFinalReadingsSucceeded": false,
+  "hungerStationHandoffVerified": false,
   "keetaAutomaticReviewRecoveryVerified": true,
-  "keetaHandoffVerified": true,
-  "normalApkCompareButtonVerified": true,
+  "keetaHandoffVerified": false,
+  "normalApkCompareButtonVerified": false,
   "normalApkInstalled": true,
   "lintPassed": true,
-  "normalApkSha256": "5C4FE0F02E896A51E9D774AA15A13E379BB49B1DB11F84CDFA07C70977CD3C1B",
-  "normalCompareRunsSucceeded": 2,
-  "normalCompareStartedFailures": 0,
+  "normalApkSha256": "9F2DD2B6E4BCF9516D3F057FB71C67247F08F52A61998A5211A78ED9A9B88D2F",
+  "normalCompareRunsSucceeded": 0,
+  "normalCompareStartedFailures": 1,
   "repeatabilityReport": "docs/verification/2026-10-25/normal-ui-repeatability.json",
   "postLedgerSmokeReport": "docs/verification/2026-10-25/post-ledger-smoke.json",
   "multiItemLedgerImplemented": true,
@@ -37,7 +37,7 @@
   "multiItemMenuReadingReport": "docs/verification/2026-10-25/multi-item-menu-reading.json",
   "postMenuPlanSmokeReport": "docs/verification/2026-10-25/post-menu-plan-smoke.json",
   "keetaTwoRowReport": "docs/verification/2026-10-25/keeta-owned-two-row-preparation.json",
-  "installedApkScope": "Normal 1.3.8-diagnostic WITHOUT TEST_CATALOG receiver; two-row main Compare and both handoffs tested. Idle on Octopus. Existing known plain carts only.",
+  "installedApkScope": "Normal 1.3.8-diagnostic WITHOUT TEST_CATALOG receiver, source/build tests406/lint0errors5warnings, idle on Octopus. Latest completed normal comparison remains the03:34 historical request;04:09 attempt stopped when Keeta Kudo closed.",
   "currentDraft": [
     {
       "name": "بطاطس وسط",
@@ -49,15 +49,51 @@
     }
   ],
   "multiItemProviderStepsImplemented": true,
-  "multiItemFinalReadingsVerified": true,
+  "multiItemFinalReadingsVerified": false,
   "multiItemFinalReport": "docs/verification/2026-10-25/two-row-final-readings.json",
   "hsOwnedAddReport": "docs/verification/2026-10-25/hs-owned-two-row-add.json",
   "historicalSingleItemNormalCompareRunsSucceeded": 5,
   "fullRestaurantJourneyImplemented": false,
   "multiItemMainCompareButtonVerified": true,
-  "multiItemHandoffsVerified": true,
+  "multiItemHandoffsVerified": false,
   "multiItemHsQuantityVerified": true,
   "multiItemNormalUiReport": "docs/verification/2026-10-25/normal-two-row-ui-comparison.json",
   "hsOwnedQuantityReport": "docs/verification/2026-10-25/hs-owned-two-row-quantity.json",
-  "lastDeviceToolsSha256": "604726B9F52E8A19720EE54BEDB4FBF07FF447ACDA916172D0CBD1A5BAA7A243"
+  "lastDeviceToolsSha256": "604726B9F52E8A19720EE54BEDB4FBF07FF447ACDA916172D0CBD1A5BAA7A243",
+  "emptySeedImplemented": true,
+  "keetaEmptyTwoRowVerified": true,
+  "keetaFreshMissingRowAddAcknowledged": true,
+  "hungerStationEmptySeedFirstLineVerified": true,
+  "hungerStationEmptyTwoRowCompleteVerified": false,
+  "latestNormalApkCompareCompleted": false,
+  "latestNormalApkCompareFailure": "Keeta Kudo became closed during read-only menu collection",
+  "emptyCartReport": "docs/verification/2026-10-25/empty-two-row-preparation.json",
+  "currentPhysicalCarts": {
+    "KEETA": {
+      "lines": [
+        {
+          "name": "بطاطس وسط",
+          "quantity": 3
+        },
+        {
+          "name": "جبنة الناتشوز",
+          "quantity": 2
+        }
+      ],
+      "subtotalHalala": 5300
+    },
+    "HUNGERSTATION": {
+      "lines": [
+        {
+          "name": "بطاطس وسط",
+          "quantity": 3
+        }
+      ],
+      "subtotalHalala": 2700
+    }
+  },
+  "historicalNormalApkCompareButtonVerified": true,
+  "historicalMultiItemFinalReadingsVerified": true,
+  "historicalMultiItemHandoffsVerified": true,
+  "historicalTwoRowNormalCompareRunsSucceeded": 2
 }
