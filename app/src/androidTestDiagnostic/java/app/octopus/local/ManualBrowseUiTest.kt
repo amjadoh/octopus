@@ -8,6 +8,7 @@ import app.octopus.local.providers.*
 import app.octopus.local.automation.LiveCatalogBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import org.junit.Assert.*
 import org.junit.Rule
@@ -32,8 +33,8 @@ class ManualBrowseUiTest {
     @Test fun homeHasRefreshButtonAndDoesNotBeginProviderReadingOnOpen() {
         ready()
         compose.onNodeWithText("تحديث قائمة المطاعم").assertIsDisplayed()
-        scrollTo("اختر طلبك داخل الأخطبوط")
-        compose.onNodeWithText("اختر طلبك داخل الأخطبوط").assertIsDisplayed()
+        scrollTo("اختر هنا، وقارن عندما يكتمل طلبك")
+        compose.onNodeWithText("اختر هنا، وقارن عندما يكتمل طلبك").assertIsDisplayed()
         compose.runOnIdle {
             assertFalse(graph.catalog.value.manualCaptureActive)
             assertFalse(graph.catalog.value.busy)
@@ -74,7 +75,20 @@ class ManualBrowseUiTest {
         }
         compose.onNodeWithText("المقارنة").performClick()
         scrollTo("قارن الإجمالي وجهّز السلتين")
+        compose.onNodeWithText("قارن الإجمالي وجهّز السلتين").assertIsNotEnabled()
+        runBlocking {
+            graph.settingsStore.acceptCatalogConsent()
+            graph.settings.first { it.catalogConsent }
+        }
+        compose.runOnIdle {
+            // Installation/service fixtures only: never launch real provider apps in this UI test.
+            graph.serviceConnected.value = true
+            graph.installations.value = listOf(
+                ProviderInstallation(ProviderId.HUNGERSTATION, true, HungerStationCatalog.TESTED_VERSION),
+                ProviderInstallation(ProviderId.KEETA, true, "3.13.203"))
+        }
         compose.onNodeWithText("قارن الإجمالي وجهّز السلتين").assertIsEnabled()
+        compose.runOnIdle { graph.serviceConnected.value = false; graph.installations.value = emptyList() }
         compose.onNodeWithText("قارن أسعار الوجبات").assertDoesNotExist()
         compose.onNodeWithText("اختر هنقرستيشن وجهّز السلة").assertDoesNotExist()
         compose.runOnIdle { assertFalse(graph.catalog.value.comparisonRunning) }
