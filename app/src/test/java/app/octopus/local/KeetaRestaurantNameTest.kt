@@ -21,4 +21,17 @@ class KeetaRestaurantNameTest {
         assertFalse(KeetaRestaurantName.matches("مدور", "مدور ( توصيل مجاني 🔥🏍️) فرع آخر"))
         assertFalse(KeetaRestaurantName.matches("مدور", "مدور (خصم 20%)"))
     }
+    @Test fun exactHerfyCampaignDoesNotAcceptOtherChainsOrBranchSuffixes() {
+        assertTrue(KeetaRestaurantName.matches("هرفي", "هرفي🔥السوبر كامل ومكمل🔥"))
+        assertFalse(KeetaRestaurantName.matches("كودو", "هرفي🔥السوبر كامل ومكمل🔥"))
+        assertFalse(KeetaRestaurantName.matches("هرفي", "هرفي النرجس🔥السوبر كامل ومكمل🔥"))
+        assertFalse(KeetaRestaurantName.matches("هرفي", "هرفي🔥السوبر كامل ومكمل🔥 فرع آخر"))
+        assertFalse(KeetaRestaurantName.matches("هرفي", "هرفي🔥حملة أخرى🔥"))
+    }
+    @Test fun observedBrownBrandTranslationDoesNotRemoveBranchOrOtherBrandNames() {
+        assertTrue(KeetaRestaurantName.matches("براون كوفي","براون كافيه"))
+        assertFalse(KeetaRestaurantName.matches("براون كوفي","براون كافيه فرع آخر"))
+        assertFalse(KeetaRestaurantName.matches("براون كوفي","براون هارت كافيه"))
+        assertFalse(KeetaRestaurantName.matches("بون كافية","براون كافيه"))
+    }
 }

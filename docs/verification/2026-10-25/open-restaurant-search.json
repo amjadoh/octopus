@@ -1,0 +1,64 @@
+{
+  "checkpointLocal": "2026-10-26 05:42 Asia/Riyadh",
+  "status": "CURRENT_NEW_REQUEST_NOT_PREPARED",
+  "installedApk": "1.3.8-device-tools",
+  "installedSha256": "7A5A6E62CC0968F1745E40195A0670AC99EC1461F39219CC53DE421944BBA3FD",
+  "unitTestsPassed": 415,
+  "draft": {
+    "restaurant": "مطاعم فوال العربي",
+    "items": [
+      {
+        "name": "تميس",
+        "quantity": 10
+      },
+      {
+        "name": "تميس جبن",
+        "quantity": 5
+      }
+    ],
+    "additions": []
+  },
+  "physicalCarts": "UNCHANGED from previous checkpoint: Keeta Kudo fries3/nachos2, HS Kudo fries3 only. Current Herfy draft is different. No basket preparation during this search.",
+  "observations": [
+    "Kudo HS native restaurant notice at04:27: unavailable, zero Add dispatches. Keeta Kudo previously closed04:13.",
+    "Fawal native Keeta menu04:29 explicitly says المتجر مغلق وغير متاح مؤقتًا / يفتح الساعة 5:30 ص. Added exact stop-only disabled-menu recognizer, tested.",
+    "Public website menu CLOSE is NOT a reliable claim about native-app availability: Herfy native Keeta menu04:38 visibly offers active products and20-minute delivery.",
+    "Herfy exact observed campaign header هرفي🔥السوبر كامل ومكمل🔥 now maps only to هرفي. Branch suffixes/other campaigns still rejected. This does not verify branch equality.",
+    "First Herfy fries/water request not found within bounded scans. No cart edits. Development-only observation now records only already-parsed public menu titles, marked incomplete, at most1000 per provider.",
+    "Super Herfy and Double Super Herfy observed by exact names in BOTH actual menus. New read-only price/options run started04:47. Do not interrupt active run or interpret stale JSON as completion.",
+    "The04:47 local public-add replace flag changes restaurants only, so previous Herfy fries/water remained temporarily. Explicitly removed them via local draft quantity0 at04:49; subsequent requests had exactly2 rows. No provider basket edits from those read-only requests.",
+    "Actual Herfy Super Herfy single-SKU modal now read/closed. Required options on the other products are rejected. Actual HS Super Herfy opens a combo with size/side/drink choices, unlike Keeta single sandwich. Never accept same title as proof of equal meals.",
+    "Added exact single-named-SKU structural reader from real redacted frame: sole identical SKU/title, one price agreeing with Add total and quantity, complete non-scrolling body, no unknown modifiers. Long/unknown configurations recognized for Close only, never Add.",
+    "Found and fixed foreign-restaurant startup stall: one recovery through observed exported Keeta Splash entry from a fully recognized read-only public menu. Native Brown Cafe was reached after Herfy; native title differs from website. Exact chain alias supported by chain self-description https://linktr.ee/Brown_sa1; no branch equality asserted.",
+    "HS Home-return now permits transition between two different known MENU frames. No unknown/back/payment control is added. Further same-run live proof remains incomplete; Brown first lookup later timed out.",
+    "Brown Passion Fruit absent from actual Keeta observed scan; no substitution. Later Blue Lagoon actual SKU metadata not understood and not added. No current quote accepted.",
+    "Final new request started05:38 after Keeta advertised Fawal opening05:30: tamees10 + cheese tamees5. Keeta reached product validation but required SKU metadata unsupported; HS explicitly unavailable. Both preparation paths skipped, no Add or order/payment confirmations, no final totals.",
+    "Current physical carts have not been edited during these searches: historical Kudo Keeta fries3/nachos2 and HS fries3 only. Draft differs; no fresh pair."
+  ],
+  "sourceChanges": [
+    "KeetaAvailability exact menu-closed banner stop-only",
+    "KeetaRestaurantName exact observed Herfy campaign",
+    "Development-only public menu title observation and public-source status diagnostics",
+    "KeetaSingleSkuProduct actual-frame parsing and negative tests",
+    "Read-only named heading recognition to close unsupported long/SKU product sheet",
+    "One permitted launch recovery from foreign public Keeta menu; no unknown-node click",
+    "HS same-screen-type Back progress handling"
+  ],
+  "published": false,
+  "userLatest": "User allowed one hour from approximately04:42 Riyadh to continue independent testing and prepare one update; no payment/order confirmations. Do not claim arbitrary restaurants/options or current paired totals.",
+  "normalBuild": {
+    "sha256": "4A01B32F24CE1F36DB75B41DE7108999BF852AE6DF26753A37898317BC3820DB",
+    "testReceiverInManifest": false,
+    "installed": false,
+    "tests": {
+      "tests": 415,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "lintErrors": 0,
+    "lintWarnings": 5
+  },
+  "currentPairAvailable": false,
+  "next": "Do not repeat closed/unavailable Fawal or use old totals. Need actual same-run full HS empty2row build+review, normal UI with both carts initially empty, handoffs and retry before full-journey publication. Improve provider product identity/options matching rather than accepting same name or ignoring unknown SKU labels. Native current device tools receiver available; normal APK exists on disk only. No new public release."
+}

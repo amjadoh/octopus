@@ -1,3 +1,17 @@
+# Latest checkpoint 2026-10-26 05:42 Riyadh — supersedes older draft/install notes
+
+Read `docs/verification/2026-10-25/open-restaurant-search.json` FIRST. User gave approximately04:42–05:42 to continue independently and prepare an update; no completed new same-request comparison was achieved in that period. All newer restaurant tests stopped before preparation, with no new pair accepted. Physical carts remain historical Kudo Keeta fries3/nachos2 and HS fries3 ONLY; current full draft Fawal tamees10 + cheese tamees5 differs. Latest Fawal attempt05:38: Keeta product SKU metadata unsupported; HS unavailable. Do not repeat it or use stale totals.
+
+CURRENT INSTALLED APK is DEVICE-TOOLS SHA256 `7A5A6E62CC0968F1745E40195A0670AC99EC1461F39219CC53DE421944BBA3FD`. NORMAL APK is built but NOT installed, SHA256 `4A01B32F24CE1F36DB75B41DE7108999BF852AE6DF26753A37898317BC3820DB`, no CatalogTestReceiver in manifest; 415 tests pass, lint zero errors/five warnings. Source local only, no publication.
+
+New changes: exact observed closed-menu notice, exact Herfy campaign + Brown chain alias (chain source https://linktr.ee/Brown_sa1; no branch equivalence), guarded single-exact-SKU parsing from actual redacted food modal, unknown long/SKU forms may Close only, one Keeta foreign read-only menu recovery via the observed exported Splash entry, HS Back progress between different known MENU frames, local dev-only public food-title observations. These do NOT establish full arbitrary-restaurant/modifier support. Actual Herfy same title differs combo vs sandwich; do not silently equate them. No failed products were added.
+
+Next live requirement unchanged: complete HS fresh two-row empty build+review in ONE run, then normal UI BOTH empty carts, handoffs/retry. Need context/option matching and approval-bound foreign-cart replacement. Keep privacy/payment guards. Do not claim the user deadline or full goal achieved.
+
+# Latest checkpoint 2026-10-26 04:47 Riyadh — supersedes draft/install above older reports
+
+Read `docs/verification/2026-10-25/open-restaurant-search.json` first. Installed DEVICE-TOOLS APK SHA256 `208B7D9D1124A0EFF547E0F69FAE5D9BCA14F9FA0E21A88E5028D95B6C71E5F6`, 408 unit tests passing. Current full draft Herfy Super Herfy x1 + Double Super Herfy x1, no additions; read-only price/options run started04:47. Physical carts still old Kudo and differ; no current pair. Do not interfere with an active job. Herfy is visibly available in Keeta despite public website CLOSE; public-source status cannot establish native availability. Exact observed Herfy campaign name now recognized. Fawal Keeta closed until05:30, exact disabled-menu closed banner now stops safely. New dev-only observed menu-title inventory records already-parsed public product names only and is explicitly incomplete. No publication. User awake briefly gave one hour around04:42 to continue tests and prepare update; no false completion claim.
+
 # Multi-item runtime status — latest checkpoint 2026-10-26 04:15 Riyadh
 
 ## Current checkpoint superseding the earlier matched baskets
