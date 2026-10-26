@@ -12,11 +12,11 @@
     "Dawar Al Saadah visibly closed in Keeta",
     "Kudo name in Keeta decorated with coupons; matcher updated with exact observed pattern"
   ],
-  "testsPassed": 427,
-  "published": false,
+  "testsPassed": 432,
+  "published": true,
   "hungerStationCartVerified": true,
   "reviewProgress": "Native Keeta reached Fatera feta PDP, visibly7SAR, plain notes-field layout. Main reader timed out because this alternative layout is not recognized under3.13.203. No Add dispatched, no total, HS stage not reached. Saved local screenshot is food-only under ignored work/device-20261025/keeta-search-0659.png. Actual structured frame still needs capture; do not fabricate it from screenshot.",
-  "nextTest": "OFFLINE source/fixtures only until user reconnects. See offline-read-timeout-isolation.json. Do not claim full release; current normal APK not installed or real-journey tested.",
+  "nextTest": "No phone actions until explicit reconnect. Actual notes-sheet structure still required before a guarded read/Add implementation. Continue evidence-based offline work, no new push/release absent human authorization.",
   "keetaFinalTotalHalala": null,
   "hungerStationFinalTotalHalala": 5579,
   "sameRunFinalReadingsSucceeded": false,
@@ -96,8 +96,11 @@
   "historicalMultiItemFinalReadingsVerified": true,
   "historicalMultiItemHandoffsVerified": true,
   "historicalTwoRowNormalCompareRunsSucceeded": 2,
-  "latestCheckpointLocal": "2026-10-26 07:07 Asia/Riyadh",
-  "latestReport": "docs/verification/2026-10-25/offline-read-timeout-isolation.json",
+  "latestCheckpointLocal": "2026-10-26 07:44 Asia/Riyadh",
+  "latestReport": "docs/verification/2026-10-25/offline-notes-stop-classification.json",
   "hungerStationFinalCapturedAt": 1792986280893,
-  "currentDraftRestaurant": "فطيرة"
+  "currentDraftRestaurant": "فطيرة",
+  "publishedVersion": "1.3.9",
+  "publishedCommit": "ac565f5569b820a6e0d6c74688d251a8242db423",
+  "latestLocalChangesPublished": false
 }

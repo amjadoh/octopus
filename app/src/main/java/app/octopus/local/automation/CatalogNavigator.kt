@@ -416,7 +416,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     val offers = PreviewEvidence.offers(frame)
                     if (!keetaMenu.product(frame)) {
                         openKeetaPreviewProduct(frame)
-                        frame = await { keetaMenu.product(it) }
+                        frame = awaitKeetaProduct()
                     }
                     val price = keetaMenu.unitPrice(frame) ?: error("تعذر ربط سعر كيتا بالوجبة المطلوبة.")
                     MenuCostPreview(provider, desired.fingerprint, Math.multiplyExact(price, desired.items.single().quantity.toLong()), offers,
@@ -492,7 +492,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                                 .put("reason",menuFailure(failure,"UNCLASSIFIED"))
                                 .put("exceptionType",failure.javaClass.name).toString(),Charsets.UTF_8)
                     }
-                    failedMenuPreview(id,desired,"لم تكتمل قراءة جميع أصناف الطلب في ${id.title}؛ لم أحتسب مجموعًا جزئيًا ولم أغيّر السلة.")
+                    failedMenuPreview(id,desired,menuFailure(failure,"لم تكتمل قراءة جميع أصناف الطلب في ${id.title}؛ لم أحتسب مجموعًا جزئيًا ولم أغيّر السلة."))
                 }
                 }
                 previews += preview
@@ -892,7 +892,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             }
             multiReadStage="KEETA_FIND_PRODUCT"
             openKeetaPreviewProduct(frame)
-            frame=await {keetaMenu.product(it)}
+            frame=awaitKeetaProduct()
         }
         return frame
     }
@@ -928,7 +928,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             val empty=frame
             val observedAt=System.currentTimeMillis()
             openKeetaPreviewProduct(frame)
-            frame=await {keetaMenu.product(it)}
+            frame=awaitKeetaProduct()
             val unit=keetaMenu.unitPrice(frame) ?: error("سعر الصنف الأول غير مقروء.")
             val token=PlainBasketSeed.create(desired,lines.first(),provider,keetaMenu.VERSION,unit,empty,observedAt)
                 ?: error("لم يثبت تصريح الصنف الأول من سلة فارغة؛ لم أضف.")
@@ -1102,6 +1102,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
 
     // Surface only our fixed messages; provider text and exception payloads stay private.
     private fun menuFailure(failure: Exception, fallback: String): String = failure.message?.takeIf { it in setOf(
+        KeetaUnsupportedNotesSheet.MESSAGE,
         "المطعم غير متاح للطلب في القراءة الحالية.",
         "لم تظهر الوجبة المطابقة في هنقرستيشن؛ لم أستبدلها بوجبة أخرى.",
         "لم يكتمل التحقق من الوجبة في هنقرستيشن؛ لا توجد مقارنة مؤكدة.",
@@ -1172,7 +1173,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     val preview = graph.catalog.value.previews.single { it.provider == ProviderId.KEETA }
                     val expectedUnit = preview.itemSubtotal!! / desired.items.single().quantity
                     openKeetaPreviewProduct(frame)
-                    frame = await { keetaMenu.product(it) }
+                    frame = awaitKeetaProduct()
                     check(keetaBasket.addTarget(frame, expectedUnit) != null) { "تغير سعر الوجبة أو خياراتها أو ملاحظتها؛ لم أضفها." }
                     // One add dispatch per run. A subsequent run sees the resulting basket and cannot duplicate it.
                     keetaBasketAction { keetaBasket.addTarget(it, expectedUnit) }
@@ -1221,6 +1222,16 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         } finally { @Suppress("DEPRECATION") root.recycle() }
     }
 
+    private fun unsupportedKeetaNotes(frame:CatalogFrame):Boolean =
+        KeetaUnsupportedNotesSheet.matches(frame,keetaMenu.restaurant,keetaMenu.title,keetaMenu.VERSION,keetaMenu.product(frame))
+
+    private fun requireSupportedKeetaNotes(frame:CatalogFrame) {
+        check(!unsupportedKeetaNotes(frame)) {KeetaUnsupportedNotesSheet.MESSAGE}
+    }
+
+    private suspend fun awaitKeetaProduct():CatalogFrame =
+        await {keetaMenu.product(it) || unsupportedKeetaNotes(it)}.also(::requireSupportedKeetaNotes)
+
     private fun keetaReadable(frame: CatalogFrame): Boolean = keetaMenu.product(frame) ||
         keetaMenu.menu(frame) || keetaMenu.basketDrawer(frame) ||
         KeetaPromotionEvidence.couponSheet(frame) || KeetaPromotionEvidence.terms(frame) ||
@@ -1229,7 +1240,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     /** Uses observed home/search controls and the exact review-header back arrow. */
     private suspend fun openKeetaRequest(): CatalogFrame {
         val version = graph.installations.value.single { it.provider == ProviderId.KEETA }.version.orEmpty()
-        val ready:(CatalogFrame)->Boolean = {keetaReadable(it) || keetaMenu.homeSearch(it)!=null ||
+        val ready:(CatalogFrame)->Boolean = {keetaReadable(it) || unsupportedKeetaNotes(it) || keetaMenu.homeSearch(it)!=null ||
             keetaMenu.searchInput(it)!=null || keetaMenu.editSearchQuery(it)!=null ||
             ReviewNavigationGuard.keetaReviewBackTarget(it,version)!=null}
         var frame = try {await(ready)} catch(timeout:TimeoutCancellationException) {
@@ -1253,9 +1264,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         }
         if (ReviewNavigationGuard.keetaReviewBackTarget(frame, version) != null) {
             leaveKeetaPreviousReview(frame, version)
-            frame = await { keetaReadable(it) || keetaMenu.homeSearch(it) != null ||
+            frame = await { keetaReadable(it) || unsupportedKeetaNotes(it) || keetaMenu.homeSearch(it) != null ||
                 keetaMenu.searchInput(it) != null || keetaMenu.editSearchQuery(it) != null }
         }
+        requireSupportedKeetaNotes(frame)
         if (keetaReadable(frame)) return frame
         val home = keetaMenu.homeSearch(frame)
         val edit = keetaMenu.editSearchQuery(frame)
@@ -1354,7 +1366,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         }
         if (keetaMenu.menu(frame)) {
             openKeetaPreviewProduct(frame)
-            frame = await { keetaMenu.product(it) }
+            frame = awaitKeetaProduct()
         }
         if (keetaMenu.product(frame) && keetaMenu.productBody(frame) == null) {
             if (BuildConfig.VERSION_NAME.endsWith("-device-tools")) withContext(Dispatchers.IO) {
@@ -1397,7 +1409,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 val offers=PreviewEvidence.offers(frame)
                 val rules=MenuOfferRules.fromFrame(ProviderId.KEETA,frame).filter { it.target==app.octopus.local.pricing.OfferTarget.DELIVERY }
                 openKeetaPreviewProduct(frame)
-                frame=await { keetaMenu.product(it) }
+                frame=awaitKeetaProduct()
                 val unit=keetaMenu.unitPrice(frame) ?: error("السعر غير مقروء")
                 MenuCostPreview(ProviderId.KEETA,desired.fingerprint,Math.multiplyExact(unit,desired.items.single().quantity.toLong()),
                     offers,System.currentTimeMillis(),keetaMenu.VERSION,
