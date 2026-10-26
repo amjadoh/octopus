@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-26",
+  "authorization": {
+    "publishLatestFixes": true,
+    "userRequestedNormalRelease": true,
+    "messages": [
+      "انشر الاصلاحات الجديدة",
+      "ليش كتجريبي ؟",
+      "انشره عادي"
+    ]
+  },
+  "classification": "normal GitHub release; current-work update, not complete-comparison certification",
+  "version": "1.3.11",
+  "versionCode": 19,
+  "tag": "v1.3.11",
+  "localVerification": {
+    "unitTests": 456,
+    "emulatorUiTests": 29,
+    "lintErrors": 0,
+    "lintWarnings": 5
+  },
+  "sourceCommits": [
+    "2cbc4fadd15fa2d10b3005da326e4f4af2c745c3",
+    "5c21be8"
+  ],
+  "phoneActions": false,
+  "repositoryMustStayPrivate": true,
+  "realComparisonComplete": false,
+  "limitationsReports": [
+    "local-1.3.11-fixes.json",
+    "cart-management.json"
+  ],
+  "ciMustRepeatVerification": true
+}
