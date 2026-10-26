@@ -7,9 +7,10 @@ import app.octopus.local.providers.*
 class RidanCartProgram private constructor(private val issuedAt: Long, private val restaurant: String, private val title: String, private val expectedUnit: Long, private val productId: String, private val requestedQuantity: Int,
     private val ownership: PlainBasketPreparationSession? = null,
     private val ownedEdit: PlainBasketPreparationSession.Edit? = null,
-    private val ownedRequest: CanonicalCart? = null) {
+    private val ownedRequest: CanonicalCart? = null,
+    private val seed:PlainBasketSeed?=null) {
     private var attempted = false
-    fun consumeAdd(frame: CatalogFrame, node: CatalogNode, now: Long): Boolean {
+    fun consumeAdd(frame: CatalogFrame, node: CatalogNode, now: Long, currentRequest:CanonicalCart?=null): Boolean {
         if (attempted || now < issuedAt || now - issuedAt > 120_000 || !frame.complete ||
             HungerStationCatalog.screen(frame) != CatalogScreen.PRODUCT ||
             frame.nodes.count { !it.clickable && IdentityText.clean(it.label) == IdentityText.clean(title) } != 1 ||
@@ -22,7 +23,8 @@ class RidanCartProgram private constructor(private val issuedAt: Long, private v
             app.octopus.local.pricing.MoneyParser.parse(node.label.lineSequence().last().trim()) != expectedUnit * requestedQuantity) return false
         // Acknowledgement is deliberately not needed: even a failed dispatch cannot be repeated.
         attempted = true
-        return if(ownership==null)true else ownership.consume(ownedEdit!!,ownedRequest!!,HungerStationCatalog.TESTED_VERSION,now)
+        return if(seed!=null) currentRequest?.let {seed.consumeAdd(it,HungerStationCatalog.TESTED_VERSION,now)}==true
+        else if(ownership==null)true else ownership.consume(ownedEdit!!,ownedRequest!!,HungerStationCatalog.TESTED_VERSION,now)
     }
     private fun plainOptionsVerified(frame: CatalogFrame, now: Long): Boolean {
         return runCatching {
@@ -66,6 +68,15 @@ class RidanCartProgram private constructor(private val issuedAt: Long, private v
             if(pending.edit!==edit)return null
             return RidanCartProgram(now,details.restaurant,details.product.title,details.product.listedPriceHalala!!,
                 details.product.id,1,ownership,edit,request)
+        }
+        fun createForSeed(details:ConfiguredProduct,selection:ProductSelection,emptyMenu:CatalogFrame,
+            request:CanonicalCart,line:CanonicalItem,now:Long,observedAt:Long):Pair<RidanCartProgram,PlainBasketSeed>? {
+            val program=create(details,selection,emptyMenu,now,line.quantity) ?: return null
+            if(details.restaurant!=request.restaurant || details.product.title!=line.name)return null
+            val token=PlainBasketSeed.create(request,line,ProviderId.HUNGERSTATION,HungerStationCatalog.TESTED_VERSION,
+                details.product.listedPriceHalala!!,emptyMenu,observedAt) ?: return null
+            return RidanCartProgram(now,program.restaurant,program.title,program.expectedUnit,program.productId,
+                line.quantity,seed=token) to token
         }
         fun create(details: ConfiguredProduct, selection: ProductSelection, emptyMenu: CatalogFrame, now: Long, requestedQuantity: Int = 1): RidanCartProgram? {
             if (requestedQuantity !in 1..99 || !supports(details, selection, now) || !emptyMenu.complete ||

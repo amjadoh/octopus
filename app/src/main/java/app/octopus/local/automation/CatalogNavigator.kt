@@ -225,7 +225,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         }
         if (!PreviewEvidence.supports(desired) && !PlainComparisonSupport.existingTwoRow(desired)) {
             graph.catalog.value = graph.catalog.value.copy(error =
-                if (desired.items.size > 1) "طلبك محفوظ كاملًا (${desired.items.size} أصناف). تجهيز الطلب متعدد الأصناف غير منفذ في محولي المنصتين بعد؛ لم تبدأ المقارنة ولم تتغير السلال."
+                if (desired.items.size > 1) "طلبك محفوظ كاملًا (${desired.items.size} أصناف). عدد الأصناف أو خياراتها خارج مسار التجهيز المدعوم؛ لم تبدأ المقارنة ولم تتغير السلال."
                 else "لم يبدأ تجهيز السلة: خيارات الوجبة أو حجمها أو ملاحظتها غير مدعومة في مسار التجهيز الحالي. احتُفظ بطلبك كاملًا.")
             return false
         }
@@ -581,7 +581,38 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         val restaurant=LiveRestaurant(desired.restaurant,null,desired.restaurant)
         check(!navigateToRestaurant(restaurant)) {"المطعم غير متاح للطلب؛ لم أعدل السلة."}
         var menu=await {HungerStationCatalog.screen(it)==CatalogScreen.MENU}
+        var seed:PlainBasketSeed?=null
+        if(menu.nodes.none {it.id=="FlutterMenu_goToCartButton"}) {
+            check(!readOnly) {"السلة أصبحت فارغة؛ أعد المقارنة. لم أضف أثناء التسليم."}
+            val first=PlainMenuReadPlan.create(desired,provider,HungerStationCatalog.TESTED_VERSION)!!.lines.first()
+            val found=locateHungerPlainLine(menu,first)
+            val empty=found.first
+            val observedAt=System.currentTimeMillis()
+            act(empty,CatalogAction.OPEN_PRODUCT,{HungerStationCatalog.menuItem(it)==found.second})
+            val read=readHungerProduct(restaurant,found.second)
+            val permit=RidanCartProgram.createForSeed(read.details,ProductSelection(read.details.product.id,emptyMap(),1),
+                empty,desired,first,System.currentTimeMillis(),observedAt) ?: error("لم تثبت سلة فارغة وصنف أول مطابق؛ لم أضف.")
+            var product=read.lastFrame
+            val unit=read.details.product.listedPriceHalala ?: error("سعر الصنف الأول غير مقروء.")
+            var changes=0
+            while(HungerStationProductQuantityCommand.observed(product,first.name,unit)!=first.quantity) {
+                check(++changes<=98)
+                val command=HungerStationProductQuantityCommand.next(product,first.name,unit,first.quantity,HungerStationCatalog.TESTED_VERSION,System.currentTimeMillis())
+                    ?: error("لم تثبت كمية الصنف الأول؛ لم أضف.")
+                act(product,CatalogAction.ADJUST_RIDAN_QUANTITY,{it==command.target},productQuantityCommand=command)
+                product=await {HungerStationProductQuantityCommand.observed(it,first.name,unit)==command.expectedAfter}
+            }
+            val add=product.nodes.singleOrNull {it.id=="flutterAddButton"} ?: error("زر الإضافة غير فريد.")
+            progress.stage="SEED_FIRST_LINE"
+            act(product,CatalogAction.ADD_RIDAN,{it==add},ridanProgram=permit.first)
+            progress.adds++
+            seed=permit.second
+            menu=await {HungerStationCatalog.screen(it)==CatalogScreen.MENU && it.hasId("FlutterMenu_goToCartButton")}
+        }
         var (cart,evidence)=readCompleteHungerBasket(menu,desired)
+        seed?.let {check(it.acknowledge(graph.draft.value ?: desired,evidence,HungerStationCatalog.TESTED_VERSION,System.currentTimeMillis())) {
+            "لم تتطابق السلة كاملة بعد أول إضافة؛ لم أكررها."
+        }}
         progress.rows=evidence.lines.size
         val owner=PlainBasketPreparationSession.create(desired,evidence,HungerStationCatalog.TESTED_VERSION)
             ?: error("السلة بها صنف أو إضافة غير مطابقة؛ لم أعدلها.")
@@ -593,7 +624,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 PlainBasketPreparationSession.Step.Ready -> {ready=true;break}
                 is PlainBasketPreparationSession.Step.Change -> {
                     check(!readOnly) {"تغيرت السلة منذ المقارنة؛ أعد المقارنة لتجهيز طلبك. لم أعدلها أثناء التسليم."}
-                    check(testEdits || graph.existingQuantityConsent.value?.permits(desired,System.currentTimeMillis())==true) {
+                    check(testEdits || seed!=null || graph.existingQuantityConsent.value?.permits(desired,System.currentTimeMillis())==true) {
                         "السلة السابقة تحتاج تعديلًا؛ فعّل الموافقة على تعديل الأصناف المطابقة ثم أعد المقارنة."
                     }
                     val edit=next.edit
@@ -620,6 +651,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     }
                     progress.stage="FIND_MISSING_LINE"
                     menu=leaveCompleteHungerBasket(cart,evidence)
+                    // The first added product can leave the menu below the next requested line.
+                    // Reset via known read-only restaurant search, then re-observe all rows before Add.
+                    check(!navigateToRestaurant(restaurant)) {"المطعم غير متاح؛ لم أضف الصنف الناقص."}
+                    menu=await {HungerStationCatalog.screen(it)==CatalogScreen.MENU}
                     val found=locateHungerPlainLine(menu,edit.line)
                     menu=found.first
                     val item=found.second
@@ -659,7 +694,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             else "تحققت أصناف سلة هنقرستيشن وكمياتها كاملة. لم تُقرأ مراجعة الطلب ولم يُؤكد طلب أو دفع.")
     }
 
-    fun preparePlainHungerForVerification(readReview:Boolean=false):Boolean {
+    fun preparePlainHungerForVerification(readReview:Boolean=false,showCart:Boolean=false):Boolean {
         if(!BuildConfig.DEBUG || !BuildConfig.VERSION_NAME.endsWith("-device-tools") || active || graph.session.value.active)return false
         val desired=graph.draft.value ?: return false
         val lines=PlainMenuReadPlan.create(desired,ProviderId.HUNGERSTATION,HungerStationCatalog.TESTED_VERSION)?.lines ?: return false
@@ -671,20 +706,22 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             val progress=PlainPreparationProgress()
             try {
                 check(begin(operation=CatalogOperation.BUILD_CART,timeoutMillis=600_000) {
-                    prepareOwnedHungerSteps(desired,readReview,progress,testEdits=true)
+                    prepareOwnedHungerSteps(desired,readReview,progress,testEdits=true,readOnly=showCart)
                 })
                 job?.join()
             } finally {
-                withContext(NonCancellable+Dispatchers.IO) {
+                val mayReturn=currentCoroutineContext().isActive
+                VerificationCleanup.finish(record={withContext(Dispatchers.IO) {
                     service.filesDir.resolve("multi-prepare-hs-stage.json").writeText(JSONObject()
                         .put("recordedAt",System.currentTimeMillis()).put("stage",progress.stage)
                         .put("dispatchedAdds",progress.adds).put("observedRows",progress.rows).toString(),Charsets.UTF_8)
-                }
+                }},release={
                 if(comparisonEpoch==epoch) {
                     graph.catalog.value=graph.catalog.value.copy(comparisonRunning=false)
                     comparisonJob=null
-                    if(stepInterrupted==null && currentCoroutineContext().isActive && catalogStop.evidence==null) returnToApp()
+                    if(!showCart && stepInterrupted==null && mayReturn && catalogStop.evidence==null) returnToApp()
                 }
+                })
             }
         }
         comparisonJob?.start()
@@ -735,7 +772,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     }
 
     /** Device verification entry only. No checkout, clear-cart or replacement action exists. */
-    private suspend fun prepareOwnedKeetaSteps(desired:CanonicalCart, readReview:Boolean, progress:PlainPreparationProgress, testEdits:Boolean=false, readOnly:Boolean=false) {
+    private suspend fun prepareOwnedKeetaSteps(desired:CanonicalCart, readReview:Boolean, progress:PlainPreparationProgress, testEdits:Boolean=false, readOnly:Boolean=false,clearTestCart:Boolean=false) {
         val lines=PlainMenuReadPlan.create(desired,ProviderId.KEETA,"3.13.203")?.lines ?: error("طلب غير مدعوم.")
         provider=ProviderId.KEETA
         bindKeetaRequest(desired,lines.first())
@@ -753,8 +790,32 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         if(keetaMenu.product(frame)) {
             closeKeetaReadSheet(frame);frame=await {keetaMenu.menu(it)}
         }
+        var seed:PlainBasketSeed?=null
+        if(keetaMenu.menu(frame) && keetaBasket.footerBag(frame)==null && !keetaBasket.emptyMenu(frame)) {
+            // Establish the first requested card without editing anything, then observe empty-menu evidence.
+            frame=openKeetaPlainLine(desired,lines.first())
+            closeKeetaReadSheet(frame)
+            frame=await {keetaMenu.menu(it)}
+        }
+        if(!keetaMenu.basketDrawer(frame) && keetaBasket.emptyMenu(frame)) {
+            check(!readOnly) {"سلة كيتا أصبحت فارغة؛ أعد المقارنة. لم أضف أثناء التسليم."}
+            val empty=frame
+            val observedAt=System.currentTimeMillis()
+            openKeetaPreviewProduct(frame)
+            frame=await {keetaMenu.product(it)}
+            val unit=keetaMenu.unitPrice(frame) ?: error("سعر الصنف الأول غير مقروء.")
+            val token=PlainBasketSeed.create(desired,lines.first(),provider,keetaMenu.VERSION,unit,empty,observedAt)
+                ?: error("لم يثبت تصريح الصنف الأول من سلة فارغة؛ لم أضف.")
+            progress.stage="SEED_FIRST_LINE"
+            keetaBasketAction { current -> keetaBasket.addTarget(current,unit)?.takeIf {
+                token.consumeAdd(graph.draft.value ?: desired,keetaMenu.VERSION,System.currentTimeMillis())
+            }}
+            progress.adds++
+            seed=token
+            frame=await {keetaMenu.menu(it) && keetaBasket.footerBag(it)!=null}
+        }
         if(!keetaMenu.basketDrawer(frame)) {
-            check(keetaMenu.menu(frame) && keetaBasket.footerBag(frame)!=null) {"هذه المرحلة تحتاج سلة موجودة مقروءة؛ لم أضف شيئًا."}
+            check(keetaMenu.menu(frame) && keetaBasket.footerBag(frame)!=null) {"تعذرت قراءة السلة كاملة؛ لم أكرر الإضافة."}
             keetaBasketAction {keetaBasket.footerBag(it)}
             frame=await {keetaMenu.basketDrawer(it)}
         }
@@ -772,6 +833,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             }
         }
         var evidence=keetaBasket.evidence(frame) ?: error("لم تثبت قراءة سلة كيتا كاملة؛ لم أعدلها.")
+        seed?.let {check(it.acknowledge(graph.draft.value ?: desired,evidence,keetaMenu.VERSION,System.currentTimeMillis())) {
+            "لم تتطابق سلة كيتا كاملة بعد أول إضافة؛ لم أكررها."
+        }}
         progress.rows=evidence.lines.size
         progress.stage="VALIDATE_BASELINE"
         val ownership=PlainBasketPreparationSession.create(desired,evidence,keetaMenu.VERSION)
@@ -784,7 +848,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 PlainBasketPreparationSession.Step.Ready -> {ready=true;break}
                 is PlainBasketPreparationSession.Step.Change -> {
                     check(!readOnly) {"تغيرت السلة منذ المقارنة؛ أعد المقارنة لتجهيز طلبك. لم أعدلها أثناء التسليم."}
-                    check(testEdits || graph.existingQuantityConsent.value?.permits(desired,System.currentTimeMillis())==true) {
+                    check(testEdits || seed!=null || graph.existingQuantityConsent.value?.permits(desired,System.currentTimeMillis())==true) {
                         "السلة السابقة تحتاج تعديلًا؛ فعّل الموافقة على تعديل الأصناف المطابقة ثم أعد المقارنة."
                     }
                     val edit=next.edit
@@ -830,7 +894,45 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         }
         progress.stage="VERIFY_COMPLETE"
         check(ready) {"انتهى حد إجراءات السلة؛ توقفت."}
+        if(clearTestCart) {
+            check(BuildConfig.DEBUG && BuildConfig.VERSION_NAME.endsWith("-device-tools") && testEdits && !readOnly && !readReview)
+            val command=KeetaOwnedCartClearCommand.create(frame,desired,evidence,keetaMenu.VERSION,System.currentTimeMillis())
+                ?: error("لم يثبت زر تفريغ سلة الاختبار المطابقة؛ لم أفرغها.")
+            val root=service.rootInActiveWindow ?: error("اختفت سلة الاختبار.")
+            try {
+                requireProviderWindow(root)
+                val current=capture(root)
+                checkSession()
+                check(command.consume(current,command.target,graph.draft.value ?: desired,keetaMenu.VERSION,System.currentTimeMillis()))
+                val node=locateKeetaNode(root,command.target) ?: error("اختفى زر تفريغ سلة الاختبار.")
+                try {
+                    check(node.refresh() && node.isVisibleToUser && node.isEnabled && node.isClickable && !node.isPassword && !node.isEditable &&
+                        !(android.os.Build.VERSION.SDK_INT>=34 && node.isAccessibilityDataSensitive))
+                    verifyActiveFrame(current,root.windowId);checkSession()
+                    check(node.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+                } finally {@Suppress("DEPRECATION") node.recycle()}
+            } finally {@Suppress("DEPRECATION") root.recycle()}
+            progress.stage="TEST_CLEAR_DISPATCHED"
+            val after=await {keetaMenu.menu(it) && keetaBasket.footerBag(it)==null || it.nodes.size<45}
+            withContext(Dispatchers.IO) {service.filesDir.resolve("keeta-test-clear-after.json").writeText(JSONObject()
+                .put("recordedAt",System.currentTimeMillis()).put("complete",after.complete).put("nodes",JSONArray(after.nodes.map {n->JSONObject()
+                    .put("index",n.index).put("parent",n.parent).put("id",n.id).put("label",n.label).put("className",n.className)
+                    .put("clickable",n.clickable).put("enabled",n.enabled).put("editable",n.editable).put("scrollable",n.scrollable)
+                    .put("omittedText",n.omittedText)})).toString(),Charsets.UTF_8)}
+            check(keetaMenu.menu(after) && keetaBasket.footerBag(after)==null) {"ظهر تأكيد تفريغ غير مدعوم؛ لم أضغطه."}
+            forgetPrepared(provider)
+            progress.stage="TEST_CART_CLEARED"
+            graph.catalog.value=graph.catalog.value.copy(message="فُرغت سلة الاختبار المطابقة. لم يُنشأ طلب أو دفع.")
+            return
+        }
         rememberPrepared(desired,evidence,keetaMenu.VERSION)
+        if(BuildConfig.DEBUG && BuildConfig.VERSION_NAME.endsWith("-device-tools")) withContext(Dispatchers.IO) {
+            service.filesDir.resolve("keeta-prepared-public-frame.json").writeText(JSONObject().put("recordedAt",System.currentTimeMillis())
+                .put("complete",frame.complete).put("nodes",JSONArray(frame.nodes.map {n->JSONObject()
+                    .put("index",n.index).put("parent",n.parent).put("id",n.id).put("label",n.label).put("className",n.className)
+                    .put("clickable",n.clickable).put("enabled",n.enabled).put("editable",n.editable).put("scrollable",n.scrollable)
+                    .put("omittedText",n.omittedText)})).toString(),Charsets.UTF_8)
+        }
         if(readReview) {progress.stage="READ_FINAL_REVIEW";readFinalTotal(desired,frame)}
         progress.stage="COMPLETE"
         graph.catalog.value=graph.catalog.value.copy(preparedBasket=evidence,
@@ -838,7 +940,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             else "تحققت أصناف سلة كيتا وكمياتها كاملة. لم تُقرأ مراجعة الطلب ولم يُؤكد طلب أو دفع.")
     }
 
-    fun preparePlainKeetaForVerification(readReview:Boolean=false): Boolean {
+    fun preparePlainKeetaForVerification(readReview:Boolean=false,clearTestCart:Boolean=false): Boolean {
         if (!BuildConfig.DEBUG || !BuildConfig.VERSION_NAME.endsWith("-device-tools") || active || graph.session.value.active) return false
         val desired=graph.draft.value ?: return false
         val lines=PlainMenuReadPlan.create(desired,ProviderId.KEETA,"3.13.203")?.lines ?: return false
@@ -850,20 +952,22 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             val progress=PlainPreparationProgress()
             try {
                 check(begin(operation=CatalogOperation.BUILD_CART,timeoutMillis=600_000) {
-                    prepareOwnedKeetaSteps(desired,readReview,progress,testEdits=true)
+                    prepareOwnedKeetaSteps(desired,readReview,progress,testEdits=true,clearTestCart=clearTestCart)
                 })
                 job?.join()
             } finally {
-                withContext(NonCancellable+Dispatchers.IO) {
+                val mayReturn=currentCoroutineContext().isActive
+                VerificationCleanup.finish(record={withContext(Dispatchers.IO) {
                     service.filesDir.resolve("multi-prepare-keeta-stage.json").writeText(JSONObject()
                         .put("recordedAt",System.currentTimeMillis()).put("stage",progress.stage)
                         .put("dispatchedAdds",progress.adds).put("observedRows",progress.rows).toString(),Charsets.UTF_8)
-                }
+                }},release={
                 if(comparisonEpoch==epoch) {
                     graph.catalog.value=graph.catalog.value.copy(comparisonRunning=false)
                     comparisonJob=null
-                    if(stepInterrupted==null && currentCoroutineContext().isActive && catalogStop.evidence==null) returnToApp()
+                    if(!clearTestCart && stepInterrupted==null && mayReturn && catalogStop.evidence==null) returnToApp()
                 }
+                })
             }
         }
         comparisonJob?.start()
@@ -1912,6 +2016,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     delay(200); continue
                 }
                 val frame = capture(root)
+                if(provider==ProviderId.KEETA && KeetaAvailability.closedNotice(frame))
+                    throw UserInterrupted("المطعم مغلق حاليًا في كيتا؛ توقفت دون إضافة أخرى أو تأكيد طلب. اختر مطعمًا متاحًا للمقارنة.")
                 if (provider == ProviderId.HUNGERSTATION && frame.complete && frame.nodes.size<=30 &&
                     frame.nodes.any{it.label.trim()=="لا يوجد اتصال بالإنترنت"} &&
                     frame.nodes.any{it.label.trim()=="يبدو أن هناك مشكلة في الاتصال بالإنترنت. يرجى التحقق والمحاولة مرة أخرى."})
@@ -2090,7 +2196,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     root.packageName?.toString(), graph.installations.value.singleOrNull { it.provider == provider }?.version,
                     graph.settings.value.catalogConsent, currentCoroutineContext().isActive)
                 CatalogAction.ADD_RIDAN -> graph.settings.value.catalogConsent &&
-                    ridanProgram?.consumeAdd(fresh, node, System.currentTimeMillis()) == true
+                    ridanProgram?.consumeAdd(fresh, node, System.currentTimeMillis(),graph.draft.value) == true
                 CatalogAction.ADJUST_RIDAN_QUANTITY -> graph.settings.value.catalogConsent &&
                     (ownedQuantityCommand?.let { command -> graph.draft.value?.let { request ->
                         command.consume(fresh,node,request,graph.installations.value.singleOrNull {it.provider==provider}?.version,System.currentTimeMillis())
