@@ -22,6 +22,27 @@ class ReleaseLinkResolverTest {
         val apk = "/amjadoh/octopus/releases/download/v1.3.7-alpha/octopus-1.3.7.apk"
         assertEquals("https://github.com$apk", ReleaseLinkResolver.choose(page, listOf(apk, "/archive/source.zip")))
     }
+    @Test fun newerLazyDoubleDigitPatchOutranksAnAlreadyExpandedOlderApk() {
+        val oldApk = "/amjadoh/octopus/releases/download/v1.3.9-alpha/octopus-1.3.9.apk"
+        val newFragment = "/amjadoh/octopus/releases/expanded_assets/v1.3.10-alpha"
+        for (links in listOf(listOf(oldApk, newFragment), listOf(newFragment, oldApk))) {
+            val selected = ReleaseLinkResolver.choose(UpdateDownloadPolicy.RELEASES, links)
+            assertEquals("https://github.com$newFragment", selected)
+            val newApk = "/amjadoh/octopus/releases/download/v1.3.10-alpha/octopus-1.3.10.apk"
+            val download = ReleaseLinkResolver.choose(selected!!, listOf(oldApk, newApk, newFragment))
+            assertEquals("https://github.com$newApk", download)
+            assertTrue(UpdateDownloadPolicy.newerFile(download!!, "1.3.9-diagnostic"))
+            assertFalse(UpdateDownloadPolicy.newerFile(download, "1.3.10-diagnostic"))
+        }
+    }
+    @Test fun sameVersionDirectApkIsPreferredAndNewerDirectApkWins() {
+        val fragment = "/amjadoh/octopus/releases/expanded_assets/v1.3.10-alpha"
+        val apk = "/amjadoh/octopus/releases/download/v1.3.10-alpha/octopus-1.3.10.apk"
+        val older = "/amjadoh/octopus/releases/expanded_assets/v1.3.9-alpha"
+        for (links in listOf(listOf(fragment, apk, older), listOf(older, apk, fragment))) {
+            assertEquals("https://github.com$apk", ReleaseLinkResolver.choose(UpdateDownloadPolicy.RELEASES, links))
+        }
+    }
     @Test fun neverReadsLoginOrAcceptsOtherRepositories() {
         val link = "/someone/other/releases/download/v1.3.7-alpha/octopus-1.3.7.apk"
         assertNull(ReleaseLinkResolver.choose(UpdateDownloadPolicy.RELEASES, listOf(link)))

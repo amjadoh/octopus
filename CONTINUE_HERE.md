@@ -1,3 +1,11 @@
+## Current release request - 2026-10-26: 1.3.10 / versionCode18
+
+Human explicitly authorized publishing the latest local fixes, then reconfirmed continuing1.3.10 so he can update inside Octopus. See `docs/RELEASE_PLAN.json`, `docs/PREVIEW_RELEASE.md` and `docs/verification/2026-10-26/preview-1.3.10-request.json`. The private prerelease pipeline must pass439 unit tests, lint and actual emulator UI tests, verify stable signing/no device bridge, then publish the new tag. Final publication state is the GitHub release plus its `validation-summary-ci.json`; never infer success from this request alone. Preserve1.3.9 and all private credentials.
+
+Includes af7bf66 notes-sheet stop classification,757781e generic context rejection, and an updater fix choosing a newer lazy assets fragment over an older already-expanded APK (numeric1.3.10 >1.3.9). This is a current-work experimental update, NOT completed arbitrary-restaurant comparison. No new Honor test/reconnection or phone actions are authorized by the publication request. Keep the full-comparison gate false; historical Kudo results do not apply to the current Fatera draft. See the latest top of `docs/development/multi-item-runtime-status.md` for device gaps.
+
+The recurring offline heartbeat was deleted after useful offline work was exhausted. Do not recreate it merely to poll unchanged state; user can explicitly reconnect for actual testing. Do not ask him to repeat earlier manual tests.
+
 ## Release1.3.8 current-work update
 User requested saving current work and publishing an experimental update before disconnecting the phone. Latest public-only captures confirmed HS MENU row->quantityStepper controls; no completed HS quantity3/total. Live report is docs/verification/2026-10-25/physical-phone-components.json. Raw phone files remain ignored under work/. Read docs/PREVIEW_RELEASE.md for exact scope. Do not present test fixture matches or Keeta-only total as a complete two-provider comparison. Stop actions when disconnected; no order or payment was submitted.
 ## Latest quantity implementation and live blocker

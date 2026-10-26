@@ -1,3 +1,9 @@
+## CURRENT release request 2026-10-26 - 1.3.10/code18
+
+Human explicitly asks to publish the latest local fixes as a new experimental update and reconfirmed continuing1.3.10. This supersedes the older no-push authorization limit ONLY for this requested release. `docs/verification/2026-10-26/preview-1.3.10-request.json` records scope and local verification; final CI/release evidence is attached to the GitHub prerelease. Workflow requires439 unit tests, lint, emulator UI tests and stable certificate/no-test-receiver verification. Do not overwrite1.3.9 or call the full-comparison gate complete.
+
+Includes the two local fixes below and numeric updater selection across both lazy asset fragments and direct APK links;1.3.10 outranks1.3.9 regardless of page ordering. No new phone actions, installation or actual new delivery comparison. NO DEVICE ACTIONS until human explicitly reconnects. The recurring offline heartbeat was deleted; do not restore it without a useful user-authorized purpose. Future releases beyond1.3.10 need new authorization.
+
 ## CURRENT checkpoint 2026-10-26 08:23 Riyadh - offline evidence and replacement audit
 
 Read `docs/verification/2026-10-25/offline-notes-and-replacement-audit.json` first. Bounded search of 136 historical JSON/XML/TSV files (including older parent capture directories and 35 Keeta-named files) found NO actual Keeta notes-product tree. The only Keeta editable match was an old search field; notes anchors occurred in HS carts. This cannot establish Fatera notes reading/Add or current3.13 compatibility. Do not repeat this inventory without new evidence or fabricate a fixture from the screenshot.
