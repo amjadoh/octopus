@@ -134,7 +134,7 @@ fun CatalogAreaDialog(graph: AppGraph, onDismiss: () -> Unit) {
                 }
             }
             hint?.let { Text("راجع المدينة والحي المقترحين قبل الحفظ. تحديد الموقع لا يغيّر عنوان التوصيل في التطبيقين.",style=MaterialTheme.typography.bodySmall) }
-            Text("تُحفظ المنطقة لتحديث المطاعم؛ يُتحقق من عنوان التوصيل والفرع داخل التطبيقين عند المقارنة.",style=MaterialTheme.typography.bodySmall)
+            Text("تُحفظ المنطقة لتحديث المطاعم؛ لا تغيّر عنوان التوصيل في التطبيقين. راجع تطابق العنوان والفرع قبل اعتماد المقارنة.",style=MaterialTheme.typography.bodySmall)
             error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
             if (error != null) TextButton(enabled = !loading && !locating && !saving,
                 onClick = { error = null; reload++ }) { Text("إعادة تحميل أسماء المناطق") }

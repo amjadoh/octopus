@@ -44,6 +44,30 @@ class PreparedBasketLedgerTest {
         assertNull(PreparedBasketRecord.create(cart,e.copy(subtotal=-1),"v",1000))
         assertNull(PreparedBasketRecord.create(cart,e.copy(lines=e.lines.map {it.copy(lineAmount=-1)}),"v",1000))
     }
+    @Test fun mismatchingSubtotalCannotBecomeReadyEvenWhenRowsAndQuantitiesMatch() {
+        val e = evidence(ProviderId.KEETA)
+        for (complete in listOf(false, true)) {
+            assertNull(PreparedBasketRecord.create(cart, e.copy(complete=complete, subtotal=701), "v", 1000))
+        }
+        val multi = cart.copy(items=cart.items + CanonicalItem("ماء",null,emptyList(),2))
+        val full = e.copy(complete=true, lines=e.lines + BasketLineEvidence("ماء",emptyList(),2,400), subtotal=700)
+        assertNull(PreparedBasketRecord.create(multi,full,"v",1000))
+        assertNotNull(PreparedBasketRecord.create(multi,full.copy(subtotal=1100),"v",1000))
+    }
+    @Test fun completeRecordRequiresReadAmountsAndSubtotalWithoutInventingThem() {
+        val e = evidence(ProviderId.KEETA).copy(complete=true)
+        assertNull(PreparedBasketRecord.create(cart,e.copy(subtotal=null),"v",1000))
+        assertNull(PreparedBasketRecord.create(cart,e.copy(lines=e.lines.map {it.copy(lineAmount=null)}),"v",1000))
+        // A visible-only historical observation stays partial, never promoted to complete.
+        assertNotNull(PreparedBasketRecord.create(cart,e.copy(complete=false,subtotal=null),"v",1000))
+    }
+    @Test fun rowAmountOverflowCannotWrapIntoAnAcceptedSubtotal() {
+        val multi=cart.copy(items=cart.items + CanonicalItem("ماء",null,emptyList(),1))
+        val e=evidence(ProviderId.KEETA).copy(complete=true,subtotal=0,
+            lines=listOf(BasketLineEvidence(cart.items.single().name,emptyList(),1,Long.MAX_VALUE),
+                BasketLineEvidence("ماء",emptyList(),1,1)))
+        assertNull(PreparedBasketRecord.create(multi,e,"v",1000))
+    }
     @Test fun preparingOrInvalidatingOneProviderPreservesTheOtherProvider() {
         val hs = record(ProviderId.HUNGERSTATION); val keeta = record(ProviderId.KEETA)
         val both = PreparedBasketLedger().record(hs).record(keeta)
