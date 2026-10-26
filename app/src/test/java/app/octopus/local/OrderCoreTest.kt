@@ -78,6 +78,36 @@ class CartReconcilerTest {
         assertTrue(reconciler.next(order(), actual, CartReplacementApproval(actual.fingerprint, "other-order")) is ReconcileDecision.NeedsApproval)
         assertTrue(reconciler.next(order(), actual, CartReplacementApproval(actual.fingerprint, order().fingerprint)) is ReconcileDecision.SetQuantity)
     }
+    @Test fun unknownRestaurantCannotBecomeMatchedOrEditableAfterApproval() {
+        val desired = order()
+        for (name in listOf(null, "", "   ")) for (items in listOf(emptyList(), listOf(meal()), listOf(meal(2)))) {
+            val actual = observed().copy(restaurant = name, items = items)
+            val approval = CartReplacementApproval(actual.fingerprint, desired.fingerprint)
+            for (permission in listOf(null, approval)) {
+                assertEquals(ReconcileDecision.Blocked(ReconcileBlock.RESTAURANT_UNKNOWN),
+                    CartReconciler().next(desired, actual, permission))
+            }
+        }
+    }
+    @Test fun unsupportedRestaurantReplacementIsBlockedBeforeAskingForApproval() {
+        val actual = observed().copy(restaurant = "Different restaurant")
+        val approval = CartReplacementApproval(actual.fingerprint, order().fingerprint)
+        for (permission in listOf(null, approval)) {
+            assertEquals(ReconcileDecision.Blocked(ReconcileBlock.WRONG_RESTAURANT),
+                CartReconciler().next(order(), actual, permission))
+        }
+    }
+    @Test fun missingOrWrongBranchIsBlockedBeforeAskingForApproval() {
+        val cases = listOf(null to ReconcileBlock.BRANCH_UNKNOWN, "" to ReconcileBlock.BRANCH_UNKNOWN,
+            "   " to ReconcileBlock.BRANCH_UNKNOWN, "Different branch" to ReconcileBlock.WRONG_BRANCH)
+        for ((branch, reason) in cases) for (items in listOf(emptyList(), listOf(meal(2)))) {
+            val actual = observed().copy(branch = branch, items = items)
+            val approval = CartReplacementApproval(actual.fingerprint, order().fingerprint)
+            for (permission in listOf(null, approval)) {
+                assertEquals(ReconcileDecision.Blocked(reason), CartReconciler().next(order(), actual, permission))
+            }
+        }
+    }
     @Test fun partialCartAndWrongAddressAreNeverEditedEvenWithApproval() {
         val actual = observed().copy(complete = false)
         assertEquals(ReconcileDecision.Blocked(ReconcileBlock.INCOMPLETE_CART), CartReconciler().next(order(), actual))
@@ -121,6 +151,23 @@ class CartPreparationTest {
         val approval = CartReplacementApproval(port.cart.fingerprint, order().fingerprint)
         assertTrue(fixturePreparation().prepare(order(), port, StopSignal(), approval) is PreparationResult.Ready)
         assertEquals(2, port.edits)
+    }
+    @Test fun unobservedRestaurantNeverBecomesReadyOrReceivesAnEdit() = runBlocking {
+        for (items in listOf(emptyList(), listOf(meal()), listOf(meal(2)))) {
+            val port = MemoryCartPort(observed().copy(restaurant = null, items = items))
+            val approval = CartReplacementApproval(port.cart.fingerprint, order().fingerprint)
+            assertEquals(PreparationResult.Failed(PreparationFailure.UNSAFE_CONTEXT),
+                fixturePreparation().prepare(order(), port, StopSignal(), approval))
+            assertEquals(0, port.edits)
+        }
+    }
+    @Test fun impossibleBranchReplacementDoesNotAskForConsentOrMutateTheCart() = runBlocking {
+        for (branch in listOf(null, "Different branch")) {
+            val port = MemoryCartPort(observed().copy(branch = branch, items = listOf(meal(2))))
+            assertEquals(PreparationResult.Failed(PreparationFailure.UNSAFE_CONTEXT),
+                fixturePreparation().prepare(order(), port, StopSignal()))
+            assertEquals(0, port.edits)
+        }
     }
     @Test fun stopDuringObservationPreventsAnyEdit() = runBlocking {
         val stop = StopSignal()
