@@ -167,6 +167,26 @@ class AppGraph(private val app: Application, publicClient: PublicCatalogClient =
         draftStorageError.value = null
     }
 
+    /** Delete the confirmed active draft only; diagnostics, menus and mutation recovery survive. */
+    suspend fun deleteActiveCart(expectedFingerprint: String): DraftChange = draftLock.withLock {
+        if (!draftReady.value) return@withLock DraftChange.Rejected("جارٍ تحميل الطلب المحفوظ.")
+        if (catalog.value.busy || catalog.value.comparisonRunning || catalog.value.manualCaptureActive || session.value.active)
+            return@withLock DraftChange.Rejected("أوقف العملية الحالية قبل حذف السلة.")
+        if (draft.value?.fingerprint != expectedFingerprint)
+            return@withLock DraftChange.Rejected("تغير الطلب بعد فتح التأكيد؛ راجعه قبل الحذف.")
+        commitDraft(DraftChange.Changed(null))
+    }
+
+    /** Opens the native app under user control; never claims its cart was deleted. */
+    fun openProviderCartManagement(provider: ProviderId): Boolean {
+        if (catalog.value.busy || catalog.value.comparisonRunning || catalog.value.manualCaptureActive || session.value.active) return false
+        val launch = app.packageManager.getLaunchIntentForPackage(provider.packageName) ?: return false
+        catalog.value = catalog.value.withoutProviderBasket(provider).copy(
+            message = "احذف السلة بنفسك داخل ${provider.title} ثم ارجع للأخطبوط. لم يُحذف طلبك المحلي.")
+        existingQuantityConsent.value = null
+        return runCatching { app.startActivity(launch.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)); true }.getOrDefault(false)
+    }
+
     suspend fun saveCatalogObservation(update: ManualCatalogUpdate, mayDisplay: () -> Boolean = { true }) = catalogLock.withLock {
         if (!catalogReady.value || !update.hasData) return@withLock
         var next = catalogLibrary.value

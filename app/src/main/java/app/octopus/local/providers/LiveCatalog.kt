@@ -44,6 +44,14 @@ data class LiveCatalogState(
     val preparedBaskets: PreparedBasketLedger = PreparedBasketLedger(),
 )
 
+/** Manual native-cart management invalidates readiness before leaving Octopus. */
+fun LiveCatalogState.withoutProviderBasket(provider: ProviderId) = copy(
+    finalTotals = finalTotals - provider,
+    comparisonProgress = comparisonProgress - provider,
+    preparedBasket = preparedBasket?.takeUnless { it.provider == provider },
+    preparedBaskets = preparedBaskets.invalidate(provider),
+)
+
 /** An edited order cannot inherit either provider's quote, progress or ready-cart badge. */
 fun LiveCatalogState.forChangedDraft(cart: app.octopus.local.domain.CanonicalCart?) = copy(
     finalTotals = emptyMap(),
