@@ -222,18 +222,19 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                         }
                         Row(verticalAlignment=Alignment.CenterVertically) {
                             Checkbox(checked=allowMatchingQuantity,onCheckedChange={allowMatchingQuantity=it},enabled=!state.busy)
-                            Text("أسمح بتعديل كمية الصنف المطابق في سلة سابقة إلى الكمية التي اخترتها؛ تُفحص الإضافات بعد فتح السلة.",fontSize=11.sp,modifier=Modifier.weight(1f))
+                            Text("أسمح بإكمال الأصناف المطابقة وتعديل كمياتها في سلة سابقة من المطعم نفسه إلى طلبي المختار، بعد فحص جميع الصفوف والإضافات.",fontSize=11.sp,modifier=Modifier.weight(1f))
                         }
                         Button(onClick = {
                             finishManualReading()
                             localError = null
                             if(allowMatchingQuantity) graph.approveExistingMatchingQuantity() else graph.existingQuantityConsent.value=null
                             if (!LiveCatalogBridge.compareAndPrepare()) localError = "تعذر بدء تجهيز السلتين؛ تحقق من الخدمة والطلب."
-                        }, enabled = !state.busy && !changing && PreviewEvidence.supports(cart),
+                        }, enabled = !state.busy && !changing && (PreviewEvidence.supports(cart) || PlainComparisonSupport.existingTwoRow(cart)),
                             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                             Icon(Icons.Outlined.CompareArrows, null); Spacer(Modifier.width(8.dp)); Text("قارن الإجمالي وجهّز السلتين")
                         }
-                        if (!PreviewEvidence.supports(cart)) Text("حُفظ طلبك. المسار الحالي للمقارنة يدعم صنفًا واحدًا دون خيارات أو ملاحظات؛ لن يحذف بقية اختياراتك ليكوّن طلبًا مختلفًا.", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                        if (PlainComparisonSupport.existingTwoRow(cart)) Text("المقارنة متعددة الأصناف تعمل حاليًا على سلة موجودة من المطعم نفسه دون إضافات. تتوقف عند سلة فارغة أو مختلفة؛ لا تستبدلها تلقائيًا.",fontSize=12.sp,color=OctopusPalette.Muted)
+                        if (!PreviewEvidence.supports(cart) && !PlainComparisonSupport.existingTwoRow(cart)) Text("حُفظ طلبك. التجهيز يدعم صنفًا واحدًا، أو صنفين دون خيارات من سلة موجودة؛ بقية الطلبات تحتاج دعمًا إضافيًا.", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
                         Text("يجهّز السلتين ويقرأ إجمالي المراجعة إذا تعرّف على مسارها، دون تأكيد طلب أو دفع. النتيجة غير المقروءة لا تُقدّر.", fontSize = 12.sp, color = OctopusPalette.Muted)
                         state.comparisonProgress.values.forEach { result ->
                             Text("${result.provider.title}: ${result.detail ?: "جارٍ تجهيز السلة والتحقق منها…"}", fontSize = 12.sp)
