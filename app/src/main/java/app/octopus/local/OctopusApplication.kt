@@ -234,7 +234,7 @@ class AppGraph(private val app: Application, publicClient: PublicCatalogClient =
         val all = CatalogSources.restaurants(publicCatalog.state.value.directory.map { it.live() },
             catalogLibrary.value.restaurants.map { it.restaurant })
         catalog.value = catalog.value.copy(menu = null, product = null, error = null,
-            restaurants = all.filter { query.isBlank() || it.name.contains(query.trim(), ignoreCase = true) })
+            restaurants = all.filter { CatalogSearch.matches(it.name, query) })
         return true
     }
 

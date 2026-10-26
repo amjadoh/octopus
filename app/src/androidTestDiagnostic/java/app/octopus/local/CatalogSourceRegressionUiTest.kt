@@ -62,6 +62,27 @@ class CatalogSourceRegressionUiTest {
         LiveCatalogBridge.attachGraph((compose.activity.application as OctopusApplication).graph)
     }
 
+    @Test fun compactHomeFiltersArabicNamesWithoutStartingComparison() {
+        val graph = graph()
+        try {
+            fixture(graph, LiveRestaurant("مطعم الأثيل للاختبار", null, "مطعم الأثيل للاختبار"))
+            compose.runOnIdle {
+                assertTrue(graph.showLocalRestaurants())
+                compose.activity.setContent { MaterialTheme { CatalogScreen(graph, {}, {}) } }
+            }
+            compose.onNodeWithText("منطقة عرض المطاعم").assertIsDisplayed()
+            compose.onNodeWithText("عنوانك النشط في هنقرستيشن").assertDoesNotExist()
+            compose.onNodeWithText("ابحث عن مطعم…").performTextInput("اثيل")
+            compose.onNode(hasScrollToNodeAction() and SemanticsMatcher.keyIsDefined(
+                androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange))
+                .performScrollToNode(hasText("مطعم الأثيل للاختبار"))
+            compose.onNodeWithText("مطعم الأثيل للاختبار").assertIsDisplayed()
+            compose.runOnIdle {
+                assertFalse(graph.catalog.value.comparisonRunning)
+                assertNull(graph.draft.value)
+            }
+        } finally { cleanup(graph) }
+    }
     @Test fun selectedAreaDoesNotHideManualMenuAbsentFromPublicDirectory() {
         val graph = graph()
         try {
