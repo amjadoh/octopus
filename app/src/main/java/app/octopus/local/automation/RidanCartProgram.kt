@@ -4,7 +4,10 @@ import app.octopus.local.domain.*
 import app.octopus.local.providers.*
 
 /** Selected meal using the observed option-free layout, one item, no checkout command and no replacement of existing carts. */
-class RidanCartProgram private constructor(private val issuedAt: Long, private val restaurant: String, private val title: String, private val expectedUnit: Long, private val productId: String, private val requestedQuantity: Int) {
+class RidanCartProgram private constructor(private val issuedAt: Long, private val restaurant: String, private val title: String, private val expectedUnit: Long, private val productId: String, private val requestedQuantity: Int,
+    private val ownership: PlainBasketPreparationSession? = null,
+    private val ownedEdit: PlainBasketPreparationSession.Edit? = null,
+    private val ownedRequest: CanonicalCart? = null) {
     private var attempted = false
     fun consumeAdd(frame: CatalogFrame, node: CatalogNode, now: Long): Boolean {
         if (attempted || now < issuedAt || now - issuedAt > 120_000 || !frame.complete ||
@@ -19,7 +22,7 @@ class RidanCartProgram private constructor(private val issuedAt: Long, private v
             app.octopus.local.pricing.MoneyParser.parse(node.label.lineSequence().last().trim()) != expectedUnit * requestedQuantity) return false
         // Acknowledgement is deliberately not needed: even a failed dispatch cannot be repeated.
         attempted = true
-        return true
+        return if(ownership==null)true else ownership.consume(ownedEdit!!,ownedRequest!!,HungerStationCatalog.TESTED_VERSION,now)
     }
     private fun plainOptionsVerified(frame: CatalogFrame, now: Long): Boolean {
         return runCatching {
@@ -51,6 +54,19 @@ class RidanCartProgram private constructor(private val issuedAt: Long, private v
                 details.product.groups.all { it.minimum == 0 && it.maximum == 1 } &&
                 details.product.listedPriceHalala != null && selection.quantity == 1 && selection.choices.values.all { it.isEmpty() } &&
                 MenuSelectionValidator().selectConfigured(details, selection, now) is SelectionResult.Accepted
+        /** Existing contents must be complete, session-owned and still agree with the visible menu footer. */
+        fun createForOwnedAddition(details:ConfiguredProduct,selection:ProductSelection,menu:CatalogFrame,
+            request:CanonicalCart,before:BasketEvidence,ownership:PlainBasketPreparationSession,
+            edit:PlainBasketPreparationSession.Edit,now:Long):RidanCartProgram? {
+            if(!supports(details,selection,now) || before.provider!=ProviderId.HUNGERSTATION ||
+                request.restaurant!=details.restaurant || before.restaurant!=details.restaurant ||
+                edit.kind!=PlainBasketPreparationSession.Kind.ADD_ONE || edit.line.name!=details.product.title ||
+                before.lines.any {it.name==edit.line.name} || !HungerStationCompleteCartProof.matchesMenu(menu,before))return null
+            val pending=ownership.next(request,before,HungerStationCatalog.TESTED_VERSION,now) as? PlainBasketPreparationSession.Step.Change ?: return null
+            if(pending.edit!==edit)return null
+            return RidanCartProgram(now,details.restaurant,details.product.title,details.product.listedPriceHalala!!,
+                details.product.id,1,ownership,edit,request)
+        }
         fun create(details: ConfiguredProduct, selection: ProductSelection, emptyMenu: CatalogFrame, now: Long, requestedQuantity: Int = 1): RidanCartProgram? {
             if (requestedQuantity !in 1..99 || !supports(details, selection, now) || !emptyMenu.complete ||
                 HungerStationCatalog.screen(emptyMenu) != CatalogScreen.MENU ||

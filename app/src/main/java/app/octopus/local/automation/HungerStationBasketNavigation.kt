@@ -22,6 +22,7 @@ class BasketOpenCommand internal constructor(
     private val issuedAt: Long,
 ) {
     private val consumed = AtomicBoolean(false)
+    internal val wasConsumed: Boolean get() = consumed.get()
     internal fun authorizes(current: CatalogFrame, version: String?, allowed: Boolean, now: Long): Boolean =
         !consumed.get() && allowed && version == HungerStationCatalog.TESTED_VERSION && current == frame &&
             now >= issuedAt && now - issuedAt <= 15_000 && HungerStationBasketControls.openTarget(current) == node

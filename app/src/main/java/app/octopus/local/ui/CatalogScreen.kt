@@ -258,6 +258,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                                 Text(id.title, fontWeight = FontWeight.Bold)
                                 Text(money(quote.total), fontSize = 30.sp, fontWeight = FontWeight.ExtraBold)
                                 Text(if (quote.fresh(cart, currentQuoteTime)) "إجمالي مقروء من مراجعة التطبيق وقت المقارنة" else "قراءة سابقة — يلزم تحديثها", fontSize = 12.sp)
+                                Text("الإجمالي مقروء — التفاصيل جزئية",fontSize=12.sp,color=OctopusPalette.Muted)
                                 quote.fields.filterKeys { it != PriceField.ORDER_TOTAL }.forEach { (field, amount) ->
                                     Text("${when(field) {
                                         PriceField.SUBTOTAL -> "الأصناف"; PriceField.DELIVERY -> "التوصيل"; PriceField.SERVICE -> "الخدمة"
@@ -265,7 +266,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                                         PriceField.WALLET -> "تغطية المحفظة"; PriceField.AMOUNT_DUE -> "المطلوب للدفع"; else -> "الإجمالي"
                                     }}: ${money(amount)}", fontSize = 12.sp)
                                 }
-                                Text("السلة متحققة. تطابق العنوان والفرع بين المنصتين يحتاج تحققًا مستقلًا؛ لم يُعتمد ترتيب الأرخص.", fontSize = 11.sp, color = OctopusPalette.Muted)
+                                Text("تم التحقق من السلة وقت القراءة. تطابق العنوان والفرع يحتاج تحققًا مستقلًا؛ لم يُعتمد ترتيب الأرخص.", fontSize = 11.sp, color = OctopusPalette.Muted)
                             }
                         }
                     } }
