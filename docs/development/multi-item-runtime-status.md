@@ -1,3 +1,13 @@
+## CURRENT checkpoint 2026-10-26 08:23 Riyadh - offline evidence and replacement audit
+
+Read `docs/verification/2026-10-25/offline-notes-and-replacement-audit.json` first. Bounded search of 136 historical JSON/XML/TSV files (including older parent capture directories and 35 Keeta-named files) found NO actual Keeta notes-product tree. The only Keeta editable match was an old search field; notes anchors occurred in HS carts. This cannot establish Fatera notes reading/Add or current3.13 compatibility. Do not repeat this inventory without new evidence or fabricate a fixture from the screenshot.
+
+LOCAL generic foundation fix: `CartReconciler` now rejects unknown/blank restaurant and wrong/unknown branch before returning Matched, authorizing row edits or asking for unusable contents approval. Five new regressions first failed on the old logic, then the full437 unit tests passed; lint0errors5warnings, normal assemble succeeded. This generic engine is NOT wired to the Android provider paths, and production foreign-cart replacement remains absent. The report records the required observation/approval/native-prompt/empty-seed protocol without inventing an adapter or context.
+
+Normal local candidate SHA A718E554EDFF04CAE5D132083F00918D16D747A267FFC17BF4001E9C0205A240, no test receiver/DemoCatalog, same published signing certificate. NOT installed, pushed, published, emulator-tested or device-tested. Default build output is UNRELEASED using version1.3.9/code17; verified published asset remains `work/published-1-3-9.apk`, SHAda36a4cf..., sourceac565f5,427unit+21emulator UI tests. Do not overwrite published1.3.9 or repeat its notification. Any future authorized release needs new version/code/tag and checks.
+
+NO DEVICE ACTIONS until human explicitly reconnects, even if ADB sees the phone. No push/release absent new human authorization. Remaining actual gates: capture/strict notes reader, normal fresh-both initially-empty Compare/full rows/totals/handoffs/retry, real replacement adapter, address/branch/modifiers/scrolling carts. Historical Kudo totals do not apply to the Fatera draft.
+
 ## CURRENT checkpoint 2026-10-26 07:44 Riyadh — published preview plus LOCAL rejection fix
 
 Read `docs/verification/2026-10-25/offline-notes-stop-classification.json`. Private1.3.9/versionCode17 WAS PUBLISHED at07:37 after explicit human preview request, commitac565f5,427 unit+21 emulator UI tests; downloaded CI APK/stable cert verified, SHAda36a4cf... User already informed; do NOT poll or notify publication again. This supersedes older no-publication notes below. Full real journey remains incomplete.

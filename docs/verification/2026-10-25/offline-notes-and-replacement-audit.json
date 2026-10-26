@@ -1,0 +1,88 @@
+{
+  "checkpointLocal": "2026-10-26T08:22:30+03:00",
+  "scope": "Offline evidence inventory and replacement-architecture audit only; no device actions, push or publication",
+  "deviceActions": 0,
+  "historicalEvidenceInventory": {
+    "directories": [
+      "work/device-20261025",
+      "../device",
+      "../device-20261021",
+      "../device-20261022",
+      "../trace-20261022",
+      "../generalization-before"
+    ],
+    "boundedFormats": [
+      "json",
+      "xml",
+      "tsv"
+    ],
+    "maximumFileBytes": 4000000,
+    "filesChecked": 136,
+    "keetaNamedFilesChecked": 35,
+    "actualKeetaNotesSheetFound": false,
+    "editorMatch": "Only an old Keeta search XML had an editable field; no matching notes/product structure.",
+    "notesAnchorMatches": "Two HungerStation cart captures, not a Keeta product notes sheet.",
+    "privacy": "Reported inventory/schema only. No raw personal labels copied, no source fixtures modified.",
+    "conclusion": "No evidence to admit Fatera notes-product reading or Add under Keeta3.13.203. Existing older synthetic3.12 notes examples are not native3.13 evidence. Screenshot remains insufficient.",
+    "totalMegabytesRounded": 4.84
+  },
+  "replacementArchitectureAudit": {
+    "actualAndroidPath": "CatalogNavigator shared plain preparation steps. They do not implement ComparisonCoordinator/CartPreparationPort.",
+    "existingConsent": "ExistingQuantityConsent is full-request/time-bound permission for requested plain rows only, not foreign-cart deletion/replacement.",
+    "currentLimit": "Keeta basket titles are restored only from requested names in known drawer title slots. This is not complete observation of arbitrary foreign rows.",
+    "testReset": "KeetaOwnedCartClearCommand is only used in guarded device-tools fixture reset. No follow-up unknown confirmation authority; it is not production replacement.",
+    "genericFinding": "CartReconciler could request approval before rejecting an unsupported restaurant/branch; after exact approval, a null restaurant could reach Matched or SetQuantity. Unknown restaurant must block before any approval or edit.",
+    "productionContract": [
+      "Observe complete actual old cart and its real provider/version/context; never substitute desired draft for observed contents.",
+      "Read-only public food title extraction must be separate from requested-product Add parsing. Unknown/omitted options or scrolling rows prevent complete observation.",
+      "Bind any consent to exact observed cart, full desired request, provider/version/account-local context and comparison session; revoke on any change, expiry or stop.",
+      "Use captured native replacement/clear prompt structure to create one consumed command. No production selector may be invented from the manually dismissed test reset.",
+      "After replacement observe known empty/new menu before first Add, or a separately evidenced native atomic replacement protocol. Do not pass a nonempty cart into the current empty-seed factory.",
+      "Retain full request through all seeds/edits; independently acknowledge every row, fresh final review and handoff. Unknown address/branch does not become equality through consent."
+    ],
+    "productionReplacementImplemented": false,
+    "genericFoundationIsAndroidProof": false
+  },
+  "tests": {
+    "state": "BUILD SUCCESSFUL; full unit suite, normal APK assemble and lint completed offline",
+    "unitTotal": 437,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "newRegressionTests": 5,
+    "beforeFix": {
+      "targetedTests": 17,
+      "failedNewTests": 5
+    },
+    "newTestScope": "Synthetic generic reconciler/engine regressions, not provider Android compatibility or a live cart/review test.",
+    "lintErrors": 0,
+    "lintWarnings": 5
+  },
+  "publishedPreviewUnchanged": {
+    "version": "1.3.9",
+    "versionCode": 17,
+    "sourceCommit": "ac565f5569b820a6e0d6c74688d251a8242db423",
+    "sha256": "da36a4cfb91f5e8f8204d5a4d5c1e781bdcad646c4ae261cee9b62595a0d0bc3"
+  },
+  "fullJourneyReady": false,
+  "next": "No phone actions until human explicitly reconnects. Capture native notes shape then implement guarded reading; actual normal fresh-both empty Compare/handoffs/retry and replacement/context verification remain pending. No push/release absent new human authorization.",
+  "localSourceFix": {
+    "file": "app/src/main/java/app/octopus/local/automation/CartReconciler.kt",
+    "change": "Require an observed nonblank restaurant and correct known branch before Matched, quantity edits, or requesting contents approval. Missing restaurant is RESTAURANT_UNKNOWN; wrong/missing branch and wrong restaurant block before asking for unusable consent.",
+    "appliesTo": "Generic foundation and its fake test ports. Main Android CatalogNavigator still uses its separate shared provider steps. This is not new production foreign-cart replacement support."
+  },
+  "localCandidate": {
+    "sha256": "A718E554EDFF04CAE5D132083F00918D16D747A267FFC17BF4001E9C0205A240",
+    "normalWithoutTestReceiver": true,
+    "noDemoCatalog": true,
+    "matchesPublishedSigningCertificate": true,
+    "installed": false,
+    "pushed": false,
+    "published": false,
+    "emulatorUiTested": false,
+    "realDeviceTested": false,
+    "version": "1.3.9",
+    "versionCode": 17,
+    "warning": "UNRELEASED same-version local candidate; do not distribute as published1.3.9 or overwrite existing release. Future authorized release requires new identity."
+  }
+}
