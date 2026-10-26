@@ -17,14 +17,19 @@ data class CatalogFrame(val nodes: List<CatalogNode>, val complete: Boolean) {
         return nodes.filter { it.index in found }
     }
 }
+enum class CatalogOrigin { MANUAL, PUBLIC }
+
 data class LiveRestaurant(val name: String, val description: String?, val searchQuery: String,
-    val source: ProviderId = ProviderId.HUNGERSTATION)
+    val source: ProviderId = ProviderId.HUNGERSTATION, val origin: CatalogOrigin = CatalogOrigin.MANUAL) {
+    val catalogKey: String get() = "${source.name}:${origin.name}:$name"
+}
 data class LiveMenuItem(val name: String, val listedPrice: Long?, val selector: String)
 data class LiveMenu(val restaurant: LiveRestaurant, val items: List<LiveMenuItem>, val capturedAtMillis: Long,
     val reachedEnd: Boolean)
 data class LiveCatalogState(
     val finalTotals: Map<ProviderId, FinalTotalReading> = emptyMap(),
     val selectedRestaurant: String? = null,
+    val selectedCatalogOrigin: CatalogOrigin? = null,
     val comparisonRunning: Boolean = false,
     val comparisonProgress: Map<ProviderId, app.octopus.local.automation.CartComparisonProgress> = emptyMap(),
     val previews: List<MenuCostPreview> = emptyList(),

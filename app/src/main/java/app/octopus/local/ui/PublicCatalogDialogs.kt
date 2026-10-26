@@ -13,6 +13,14 @@ import app.octopus.local.catalog.*
 import app.octopus.local.domain.DraftChange
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.*
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 @Composable
 fun CatalogAreaDialog(graph: AppGraph, onDismiss: () -> Unit) {
@@ -23,15 +31,115 @@ fun CatalogAreaDialog(graph: AppGraph, onDismiss: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val locator = remember(context) { CurrentAreaLocator(context) }
+    var cities by remember { mutableStateOf<List<AreaEntry>>(emptyList()) }
+    var districts by remember { mutableStateOf<List<AreaEntry>>(emptyList()) }
+    var selectedCity by remember { mutableStateOf<AreaEntry?>(null) }
+    var selectedDistrict by remember { mutableStateOf<AreaEntry?>(null) }
+    var loadingCities by remember { mutableStateOf(false) }
+    var loadingDistricts by remember { mutableStateOf(false) }
+    var reload by remember { mutableIntStateOf(0) }
+    val loading = loadingCities || loadingDistricts
+    var locating by remember { mutableStateOf(false) }
+    var hint by remember { mutableStateOf<CurrentAreaHint?>(null) }
+    var locateJob by remember { mutableStateOf<Job?>(null) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    fun locate() {
+        locateJob?.cancel()
+        locateJob = scope.launch {
+            locating = true; error = null
+            try {
+                val found = locator.locate()
+                hint = found
+                city = found.city; district = found.district.orEmpty()
+                val nextCity = AreaNameSearch.exact(cities, found.city)
+                selectedDistrict = if (nextCity == selectedCity) AreaNameSearch.exact(districts, district) else null
+                selectedCity = nextCity
+                selectedCity?.let { city = it.title }
+                selectedDistrict?.let { district = it.title }
+                error = if (selectedCity == null) "حدد المدينة المطابقة من الاقتراحات، ثم اختر الحي." else null
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { error = failure.message ?: "تعذر تحديد الموقع؛ اختر المنطقة من الاقتراحات." }
+            finally { locating = false }
+        }
+    }
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+        if (grants.values.any { it }) locate()
+        else error = "لم تسمح بالموقع؛ يمكنك اختيار المدينة والحي من الاقتراحات."
+    }
+    LaunchedEffect(reload) {
+        loadingCities = true
+        try {
+            cities = withContext(Dispatchers.IO) { graph.areaDirectory.cities() }
+            selectedCity = AreaNameSearch.exact(cities, city)
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) {
+            publicState.area?.takeIf { publicState.directory.isNotEmpty() }?.let { known ->
+                cities = listOf(AreaEntry(known.citySlug))
+                selectedCity = AreaNameSearch.exact(cities, city)
+            }
+            error = "تعذر تحديث أسماء المدن من المصدر؛ يمكنك إعادة التحميل أو إبقاء المنطقة المحفوظة."
+        }
+        finally { loadingCities = false }
+    }
+    LaunchedEffect(selectedCity, reload) {
+        val chosen = selectedCity
+        districts = emptyList(); selectedDistrict = null
+        if (chosen != null) {
+            loadingDistricts = true
+            try {
+                districts = withContext(Dispatchers.IO) { graph.areaDirectory.districts(chosen) }
+                selectedDistrict = AreaNameSearch.exact(districts, district)
+                selectedDistrict?.let { district = it.title }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) {
+                publicState.area?.takeIf { it.citySlug == chosen.slug && publicState.directory.isNotEmpty() }?.let { known ->
+                    districts = listOf(AreaEntry(known.districtSlug))
+                    selectedDistrict = AreaNameSearch.exact(districts, district)
+                }
+                error = "تعذر تحديث أسماء الأحياء من المصدر؛ أعد التحميل أو أبقِ الحي المحفوظ."
+            }
+            finally { loadingDistricts = false }
+        }
+    }
+    DisposableEffect(Unit) { onDispose { locateJob?.cancel() } }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) locateJob?.cancel() }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     AlertDialog(onDismissRequest = { if (!saving) onDismiss() }, title = { Text("منطقة قائمة المطاعم") },
-        text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("اكتب المدينة والحي كما يظهران في هنقرستيشن. يُحفظ الاختيار للتحديث التلقائي؛ لا يحتاج صلاحية الموقع.")
-            OutlinedTextField(city,{city=it.take(100)},label={Text("المدينة")},singleLine=true,enabled=!saving)
-            OutlinedTextField(district,{district=it.take(100)},label={Text("الحي")},singleLine=true,enabled=!saving)
-            Text("هذه منطقة الاستعراض. يُتحقق من عنوان التوصيل الفعلي داخل التطبيقين عند المقارنة.",style=MaterialTheme.typography.bodySmall)
+        text = { Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("حدد موقعك أو ابحث واختر من أسماء المدن والأحياء. الاقتراحات تساعدك حتى لو أخطأت في الكتابة.")
+            OutlinedButton(enabled = !saving && !loading && !locating, onClick = {
+                if (locator.permitted()) locate()
+                else permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+            }, modifier = Modifier.fillMaxWidth()) { Text(if (locating) "جارٍ تحديد موقعك…" else "استخدم موقعي الحالي") }
+            if (loading || locating) LinearProgressIndicator(Modifier.fillMaxWidth())
+            OutlinedTextField(city,{
+                city = it.take(100); selectedCity = null; selectedDistrict = null; districts = emptyList(); hint = null
+            }, label={Text("ابحث عن المدينة")},singleLine=true,enabled=!saving && !locating)
+            if (selectedCity == null) AreaNameSearch.rank(cities, city).forEach { candidate ->
+                TextButton(onClick = {
+                    city = candidate.title; selectedCity = candidate; selectedDistrict = null; error = null
+                }, enabled = !saving && !locating) { Text(candidate.title) }
+            }
+            if (selectedCity != null) {
+                OutlinedTextField(district, { district = it.take(100); selectedDistrict = null; hint = null },
+                    label={Text("ابحث عن الحي")},singleLine=true,enabled=!saving && !loading && !locating)
+                if (selectedDistrict == null) AreaNameSearch.rank(districts, district).forEach { candidate ->
+                    TextButton(onClick = { district = candidate.title; selectedDistrict = candidate; error = null },
+                        enabled = !saving && !locating) { Text(candidate.title) }
+                }
+            }
+            hint?.let { Text("راجع المدينة والحي المقترحين قبل الحفظ. تحديد الموقع لا يغيّر عنوان التوصيل في التطبيقين.",style=MaterialTheme.typography.bodySmall) }
+            Text("تُحفظ المنطقة لتحديث المطاعم؛ يُتحقق من عنوان التوصيل والفرع داخل التطبيقين عند المقارنة.",style=MaterialTheme.typography.bodySmall)
             error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
-        } }, confirmButton = { TextButton(enabled=!saving,onClick={
-            val area = runCatching { CatalogArea(city.trim(),district.trim()) }.getOrNull()
+            if (error != null) TextButton(enabled = !loading && !locating && !saving,
+                onClick = { error = null; reload++ }) { Text("إعادة تحميل أسماء المناطق") }
+        } }, confirmButton = { TextButton(enabled=!saving && !loading && !locating && selectedCity != null && selectedDistrict != null,onClick={
+            val area = runCatching { CatalogArea(selectedCity!!.slug,selectedDistrict!!.slug) }.getOrNull()
             if (area == null) error="أدخل اسم مدينة وحي صحيحين، دون روابط أو علامات مسار."
             else {
                 saving=true

@@ -10,6 +10,7 @@ import app.octopus.local.diagnostics.DiagnosticRecorder
 import app.octopus.local.diagnostics.InspectionRecorder
 import app.octopus.local.providers.*
 import app.octopus.local.automation.LiveCatalogBridge
+import app.octopus.local.automation.BasketMutationJournal
 import app.octopus.local.catalog.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -22,7 +23,8 @@ class OctopusApplication : Application() {
     override fun onCreate() { super.onCreate(); graph = AppGraph(this) }
 }
 
-class AppGraph(private val app: Application) {
+class AppGraph(private val app: Application, publicClient: PublicCatalogClient = PublicCatalogHttpClient(),
+    areaNames: AreaDirectory? = null) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     val settingsStore = SettingsStore(app)
     val settings = settingsStore.flow.stateIn(scope, SharingStarted.Eagerly, UserSettings())
@@ -38,6 +40,8 @@ class AppGraph(private val app: Application) {
     val orders = OrderRepository(orderDatabase.orders())
     val draft = MutableStateFlow<CanonicalCart?>(null)
     val existingQuantityConsent = MutableStateFlow<ExistingQuantityConsent?>(null)
+    val basketMutationJournal = BasketMutationJournal(
+        AtomicBasketJournalStore(app.filesDir.resolve("basket-mutations.properties")))
     fun approveExistingMatchingQuantity() { existingQuantityConsent.value=draft.value?.let {ExistingQuantityConsent(it.fingerprint,System.currentTimeMillis())} }
     val draftReady = MutableStateFlow(false)
     val draftStorageError = MutableStateFlow<String?>(null)
@@ -54,17 +58,20 @@ class AppGraph(private val app: Application) {
     val catalogReady = MutableStateFlow(false)
     private val publicDatabase = Room.databaseBuilder(app, PublicCatalogDatabase::class.java, "octopus_public_catalog.db").build()
     private val publicCache = RoomPublicCatalogCache(publicDatabase.pages())
+    val areaDirectory = areaNames ?: AreaDirectory(app.filesDir.resolve("area-directory"))
     val publicMealSelection = MutableStateFlow<Pair<PublicMenu, PublicMeal>?>(null)
-    val publicCatalog = PublicCatalogController(scope, PublicCatalogHttpClient(), publicCache,
+    val publicCatalog = PublicCatalogController(scope, publicClient, publicCache,
         directoryChanged = { rows ->
             // The native adapters currently identify restaurants by name. Same-name branches
             // cannot safely inherit one another's menu or become a guessed match.
             val unambiguous = rows.groupBy { IdentityText.clean(it.name) }.filterValues { it.size == 1 }
                 .values.map { it.single().live() }
-            catalog.value = catalog.value.copy(restaurants = unambiguous)
+            catalog.value = catalog.value.copy(restaurants =
+                CatalogSources.restaurants(unambiguous, catalogLibrary.value.restaurants.map { it.restaurant }))
         },
         menuChanged = { menu ->
-            if (!catalog.value.busy && !catalog.value.comparisonRunning && catalog.value.selectedRestaurant == menu.restaurant.name)
+            if (!catalog.value.busy && !catalog.value.comparisonRunning && !catalog.value.manualCaptureActive &&
+                catalog.value.selectedCatalogOrigin == CatalogOrigin.PUBLIC && catalog.value.selectedRestaurant == menu.restaurant.name)
                 catalog.value = catalog.value.copy(menu = menu.live(), product = null, error = null)
         })
     val installations = MutableStateFlow<List<ProviderInstallation>>(emptyList())
@@ -180,10 +187,12 @@ class AppGraph(private val app: Application) {
             update.product != null -> next.menu(update.product.source.provider, update.product.restaurant)
             else -> catalog.value.menu
         }
-        catalog.value = catalog.value.copy(restaurants = next.restaurants.map { it.restaurant },
+        catalog.value = catalog.value.copy(restaurants = CatalogSources.restaurants(
+            publicCatalog.state.value.directory.map { it.live() }, next.restaurants.map { it.restaurant }),
             menu = displayedMenu,
             product = if (listing || update.menu != null) null else update.product ?: catalog.value.product,
             selectedRestaurant = update.menu?.restaurant?.name ?: update.product?.restaurant ?: catalog.value.selectedRestaurant,
+            selectedCatalogOrigin = CatalogOrigin.MANUAL,
             message = "حُفظت البيانات المقروءة؛ اختر منها داخل الأخطبوط. السعر والتوفر يتحققان عند المقارنة.")
     }
 
@@ -202,9 +211,8 @@ class AppGraph(private val app: Application) {
         if (!catalogReady.value || catalog.value.busy || catalog.value.comparisonRunning) return false
         publicCatalog.leaveMenu()
         publicMealSelection.value = null
-        val all = if (publicCatalog.state.value.area != null) publicCatalog.state.value.directory
-            .groupBy { IdentityText.clean(it.name) }.filterValues { it.size == 1 }.values.map { it.single().live() }
-            else catalogLibrary.value.restaurants.map { it.restaurant }
+        val all = CatalogSources.restaurants(publicCatalog.state.value.directory.map { it.live() },
+            catalogLibrary.value.restaurants.map { it.restaurant })
         catalog.value = catalog.value.copy(menu = null, product = null, error = null,
             restaurants = all.filter { query.isBlank() || it.name.contains(query.trim(), ignoreCase = true) })
         return true
@@ -213,24 +221,30 @@ class AppGraph(private val app: Application) {
     fun showLocalMenu(restaurant: LiveRestaurant): Boolean {
         if (catalog.value.busy || catalog.value.comparisonRunning) return false
         publicMealSelection.value = null
-        if (publicCatalog.state.value.area != null) {
+        if (restaurant.origin == CatalogOrigin.PUBLIC) {
             val row = publicCatalog.state.value.directory.singleOrNull { it.name == restaurant.name } ?: return false
-            catalog.value = catalog.value.copy(selectedRestaurant = restaurant.name, menu = null, product = null, error = null)
+            catalog.value = catalog.value.copy(selectedRestaurant = restaurant.name, selectedCatalogOrigin = CatalogOrigin.PUBLIC,
+                menu = null, product = null, error = null)
             return publicCatalog.openMenu(row)
         }
+        publicCatalog.leaveMenu()
         val menu = catalogLibrary.value.menu(restaurant.source, restaurant.name)
-        catalog.value = catalog.value.copy(selectedRestaurant = restaurant.name, menu = menu, product = null,
+        catalog.value = catalog.value.copy(selectedRestaurant = restaurant.name, selectedCatalogOrigin = CatalogOrigin.MANUAL,
+            menu = menu, product = null,
             error = if (menu == null) "قائمة هذا المطعم غير محفوظة. افتحها بنفسك في هنقرستيشن ثم اضغط «احفظ وارجع للأخطبوط»." else null)
         return menu != null
     }
 
     fun showLocalProduct(restaurant: LiveRestaurant, item: LiveMenuItem): Boolean {
         if (catalog.value.busy || catalog.value.comparisonRunning) return false
+        if (restaurant.origin == CatalogOrigin.PUBLIC) {
         publicCatalog.currentMenu?.takeIf { it.restaurant.name == restaurant.name }?.let { menu ->
             val meal = menu.meals.singleOrNull { it.selector(menu.restaurant.id) == item.selector && it.name == item.name } ?: return false
             catalog.value = catalog.value.copy(product = null, error = null)
             publicMealSelection.value = menu to meal
             return true
+        }
+        return false
         }
         val product = catalogLibrary.value.configuredProduct(restaurant.source, restaurant.name, item.selector)
             ?.takeIf { it.product.title == item.name }

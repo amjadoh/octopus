@@ -1,0 +1,86 @@
+{
+  "date": "2026-10-26",
+  "status": "local_candidate_not_published",
+  "versionName": "1.3.11-diagnostic",
+  "versionCode": 19,
+  "baseCommit": "b6ff50c85c56693ecce08c6f2ce77d035e1f7ad8",
+  "humanScope": "Implement the reviewed location, manual-menu and repeated-Compare fixes. Human chose local testing without phone.",
+  "changes": {
+    "catalog": [
+      "Explicit MANUAL/PUBLIC origins and source-specific selection; selected area no longer overrides a manual menu.",
+      "Public directory refresh merges independent origins and cannot replace the selected manual menu.",
+      "Manual product selection no longer resolves through a same-name public menu.",
+      "Session completion reports observed restaurant/meal counts, including names-only and zero-data outcomes."
+    ],
+    "location": [
+      "Foreground-only explicit current-location request via Android LocationManager and Arabic Geocoder; no background location permission or retained coordinates.",
+      "Canonical provider city/district links; fuzzy Arabic suggestions never silently select a different place.",
+      "Bounded public-name cache, cancellation, permission-denial fallback and explicit retry; verified saved area remains available when name refresh fails."
+    ],
+    "basket": [
+      "Current HS and Keeta 3.13.203 main Compare now share complete known-cart reconciliation for one/two plain lines.",
+      "App-private AtomicFile journal commits hashed pending actions before Add or basket-quantity dispatch.",
+      "Restart, cancellation and failed dispatch do not erase unresolved mutations; complete matching rows are required to recover.",
+      "A previously known nonempty cart with a missing footer is not treated as a new empty cart.",
+      "Single-item HungerStation legacy mutation loop removed; handoffs use read-only complete-row path."
+    ]
+  },
+  "verification": {
+    "unit": {
+      "tests": 455,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "emulator": {
+      "target": "emulator-5582",
+      "isolatedFreshAvd": true,
+      "androidApi": 36,
+      "tests": 26,
+      "failures": 0,
+      "liveNetworkTestsExcluded": true,
+      "log": "work/regression-1311-all-ui.txt",
+      "newCases": [
+        "Manual menu absent from selected public area remains visible/selectable.",
+        "Same-name public menu cannot intercept a saved manual product.",
+        "Misspelled city/district input selects canonical suggestions through actual Compose UI.",
+        "Pending action survives actual AtomicFile reopen; corrupt storage fails closed.",
+        "Denied location permission fails before GPS access and offers manual selection."
+      ]
+    },
+    "lint": {
+      "errors": 0,
+      "warnings": 5
+    },
+    "apk": {
+      "file": "work/octopus-1.3.11-local.apk",
+      "bytes": 64816287,
+      "sha256": "425d81a0b23a9a55f399365c004c46bd47b29f98885e751152feba8cc892f3b2",
+      "signingCertificateSha256": "842ebe50a04e11219671b951a4bf77259974fbc47c298a56c90bada6f67dc56d",
+      "testReceiverPresent": false,
+      "backgroundLocationPermission": false
+    },
+    "liveAreaIndexFetchFromComputer": {
+      "result": "HTTP 403 Forbidden",
+      "bypassed": false
+    },
+    "phoneActions": false,
+    "liveProviderCartActions": false,
+    "orderOrPaymentConfirmed": false
+  },
+  "remaining": [
+    "No live GPS/geocoder verification on Honor; approximate location may not meet the current 500m accuracy bound.",
+    "No fresh provider repeated-Compare/empty-both/handoff journey on this changed APK; emulator fixtures are not that proof.",
+    "First-ever empty-menu inference still depends on existing recorded provider layouts; the new journal closes restart/known-cart ambiguity, not a universal positive-empty reader.",
+    "If a previously known cart was genuinely emptied outside Octopus, the missing-footer guard deliberately blocks a new first Add until a positive empty-cart recovery is implemented/verified.",
+    "City/district index requests from this computer returned 403; live Android access and canonical GPS mapping remain unverified.",
+    "Foreign-cart replacement, arbitrary options/modifiers/scrolling baskets and true address/branch equivalence retain prior gaps."
+  ],
+  "publication": {
+    "pushed": false,
+    "published": false,
+    "inAppAvailable": false,
+    "latestPublished": "1.3.10-alpha",
+    "note": "Release workflow still pins 1.3.10; do not push this auto-publishing branch casually."
+  }
+}

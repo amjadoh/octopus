@@ -14,6 +14,13 @@ class PlainBasketSeedTest {
     private fun menu()=CatalogFrame(listOf(node(0,"menuBackButton"),node(1,"menuSearchButton"),node(2,"","كودو")),true)
     private fun seed(f:CatalogFrame=menu())=PlainBasketSeed.create(request,a,ProviderId.HUNGERSTATION,version,900,f,1000)
     private fun basket()=BasketEvidence(ProviderId.HUNGERSTATION,"كودو",listOf(BasketLineEvidence(a.name,emptyList(),3,2700)),2700,true)
+    @Test fun onePlainLineUsesTheSameCompleteAcknowledgementAsTwoLines() {
+        val single = request.copy(items = listOf(a))
+        val token = PlainBasketSeed.create(single, a, ProviderId.HUNGERSTATION, version, 900, menu(), 1000)!!
+        assertTrue(token.consumeAdd(single, version, 1001))
+        assertTrue(token.acknowledge(single, basket(), version, 1002))
+        assertNotNull(PlainBasketPreparationSession.create(single, basket(), version))
+    }
     @Test fun firstAddPreservesFullRequestAndRequiresCompleteActualAcknowledgement() {
         val s=seed()!!
         assertFalse(s.consumeAdd(request.copy(items=listOf(a)),version,1001))
