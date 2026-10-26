@@ -59,6 +59,9 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
     var allowMatchingQuantity by remember(draft?.fingerprint) { mutableStateOf(false) }
     var showProduct by remember(state.product?.source?.screenFingerprint) { mutableStateOf(true) }
     var localError by remember { mutableStateOf<String?>(null) }
+    var manageCarts by remember { mutableStateOf(false) }
+    var cartToDelete by remember { mutableStateOf<CanonicalCart?>(null) }
+    var deleteError by remember { mutableStateOf<String?>(null) }
     var quoteTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(15_000); quoteTime = System.currentTimeMillis() } }
     val currentQuoteTime = maxOf(quoteTime, System.currentTimeMillis())
@@ -171,6 +174,13 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
         }
         }
         storageError?.let { item { Text(it, color = MaterialTheme.colorScheme.error) } }
+        if (comparisonOnly) item {
+            OutlinedButton(onClick = { localError = null; manageCarts = true }, enabled = !state.busy && !changing,
+                modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Outlined.DeleteOutline, null)
+                Spacer(Modifier.width(8.dp)); Text("إدارة السلال وحذفها")
+            }
+        }
         if (comparisonOnly) draft?.let { cart ->
             if (!ComparisonRequestSelection.matches(state.selectedRestaurant, cart)) {
                 item {
@@ -385,6 +395,47 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
         item { Text("اختر المطعم والوجبة. تُقبل الخيارات عند اكتمال قراءتها؛ التجهيز يدعم صنفًا واحدًا أو صنفين دون خيارات أو ملاحظات ضمن الشاشات المدعومة. الأصناف والتوصيل لا يمثلان الإجمالي النهائي مع الرسوم.", fontSize = 11.sp, color = OctopusPalette.Muted) }
     }
     if (areaDialog) CatalogAreaDialog(graph, onDismiss = { areaDialog = false })
+    if (manageCarts) AlertDialog(onDismissRequest = { manageCarts = false },
+        title = { Text("إدارة السلال") },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("يمكنك حذف طلب الأخطبوط هنا. لتفريغ سلة منصة التوصيل، افتح تطبيقها واحذفها بنفسك؛ ستُلغى نتيجة مقارنتها القديمة.")
+            OutlinedButton(onClick = {
+                deleteError = null; cartToDelete = draft; manageCarts = false
+            }, enabled = draft != null && ready && !state.busy && !changing,
+                modifier = Modifier.fillMaxWidth()) { Text("حذف سلة الأخطبوط") }
+            ProviderId.entries.forEach { provider ->
+                OutlinedButton(onClick = {
+                    finishManualReading()
+                    if (graph.openProviderCartManagement(provider)) manageCarts = false
+                    else localError = "تعذر فتح ${provider.title}؛ تحقق من تثبيته وانتهاء العملية الحالية."
+                }, enabled = !state.busy && !changing, modifier = Modifier.fillMaxWidth()) {
+                    Text("فتح ${provider.title} لحذف سلته")
+                }
+            }
+            localError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        } }, confirmButton = { TextButton(onClick = { manageCarts = false }) { Text("رجوع") } })
+    cartToDelete?.let { target ->
+        AlertDialog(onDismissRequest = { if (!changing) cartToDelete = null },
+            title = { Text("حذف سلة الأخطبوط؟") },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("سيُحذف طلب ${target.restaurant} (${target.items.sumOf { it.quantity }} وجبة) ونتائج مقارنته من الأخطبوط. تبقى سلال كيتا وهنقرستيشن داخل تطبيقاتها.")
+                deleteError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            } },
+            confirmButton = { TextButton(enabled = !changing && !state.busy, onClick = {
+                finishManualReading(); changing = true; deleteError = null
+                graph.scope.launch {
+                    try {
+                        when (val result = graph.deleteActiveCart(target.fingerprint)) {
+                            is DraftChange.Changed -> { cartToDelete = null; localError = null }
+                            is DraftChange.Rejected -> deleteError = result.reason
+                            else -> deleteError = "تعذر حذف السلة."
+                        }
+                    } catch (_: Exception) { deleteError = "تعذر حفظ حذف السلة؛ حاول مجددًا." }
+                    finally { changing = false }
+                }
+            }) { Text("احذف سلة الأخطبوط") } },
+            dismissButton = { TextButton(enabled = !changing, onClick = { cartToDelete = null }) { Text("إلغاء") } })
+    }
     publicMeal?.let { (menu, meal) -> PublicMealDialog(graph, menu, meal,
         onDismiss = { graph.publicMealSelection.value = null }) }
     if (!comparisonOnly) draft?.takeIf { ComparisonRequestSelection.matches(state.selectedRestaurant, it) }?.let { cart ->
