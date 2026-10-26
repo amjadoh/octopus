@@ -14,3 +14,9 @@ object KeetaHeaderScroll {
         return HeaderSwipe((left+right)/2,top+height/5,top+height*3/4)
     }
 }
+
+/** Same verified menu-only bounds, upward stroke to reveal later food rows. Never a tap. */
+object KeetaMenuScroll {
+    fun plan(view:HeaderViewport,window:HeaderViewport,footerTop:Int?):HeaderSwipe? =
+        KeetaHeaderScroll.plan(view,window,footerTop)?.let {HeaderSwipe(it.x,it.toY,it.fromY)}
+}

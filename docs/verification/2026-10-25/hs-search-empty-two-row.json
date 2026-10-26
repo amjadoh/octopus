@@ -1,0 +1,52 @@
+{
+  "checkpointLocal": "2026-10-26 06:45 Asia/Riyadh",
+  "installedSha256": "A4C22A720F0BFB78CEEE5F798A153D618CB313447CB41B5BF98D693DE783B23C",
+  "source": "DUMP-protected prepare_multi_hs_review; NOT normal UI Compare",
+  "request": {
+    "restaurant": "كودو",
+    "items": [
+      {
+        "name": "جبنة الناتشوز",
+        "quantity": 2
+      },
+      {
+        "name": "بطاطس وسط",
+        "quantity": 3
+      }
+    ],
+    "additions": []
+  },
+  "actual": {
+    "recordedAt": 1792986280966,
+    "stage": "COMPLETE",
+    "dispatchedAdds": 2,
+    "observedRows": 2,
+    "itemSubtotalHalala": 5300,
+    "finalTotalHalala": 5579,
+    "finalCapturedAt": 1792986280893,
+    "completeBasket": true
+  },
+  "meaning": "One seed Add and one missing-row Add, with full-row acknowledgement and owned quantity adjustments. Successful same-run HS preparation from observed empty native menu, full request retained. New actual final total; old55.39 is historical only. No known provider intervention during command.",
+  "searchLifecycle": {
+    "nachosPriceHalala": 1300,
+    "optionsComplete": true,
+    "capturedAt": 1792986143175,
+    "returnedToMenu": true,
+    "basketEdits": 0
+  },
+  "pancakeReadOnly": {
+    "priceHalala": 1800,
+    "optionsComplete": false,
+    "returnedToMenu": true,
+    "basketEdits": 0,
+    "reason": "Actual max4 optional grammar with free sade is not supported; no Add admission broadened."
+  },
+  "tests": 422,
+  "lintErrors": 0,
+  "lintWarnings": 5,
+  "keetaCurrentMatchingCartVerified": false,
+  "normalBothEmptyCompareVerified": false,
+  "addressBranchEqualityVerified": false,
+  "orderOrPaymentConfirmed": false,
+  "published": false
+}

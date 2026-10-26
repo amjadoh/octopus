@@ -3,7 +3,7 @@ package app.octopus.local.automation
 import app.octopus.local.domain.CanonicalCart
 import app.octopus.local.providers.*
 
-enum class HungerMenuSearchAction { OPEN, TYPE, CLOSE }
+enum class HungerMenuSearchAction { OPEN, TYPE, OPEN_RESULT, CLOSE }
 
 /** Read-only search inside an observed restaurant. No Add/payment/quantity operation exists. */
 class HungerMenuSearchSession private constructor(
@@ -22,20 +22,21 @@ class HungerMenuSearchSession private constructor(
         return when(action) {
             HungerMenuSearchAction.OPEN -> if(stage==0 && f==initial)f.nodes.singleOrNull {it.id=="menuSearchButton" && it.clickable && it.enabled} else null
             HungerMenuSearchAction.TYPE -> if(stage==1 && searchFrame(f))f.nodes.single {it.id=="menuSearchInput"} else null
-            HungerMenuSearchAction.CLOSE -> if(stage in 1..2 && searchFrame(f))f.nodes.single {it.id=="menuSearchCloseButton"} else null
+            HungerMenuSearchAction.OPEN_RESULT -> candidates(f,cart,version,now).singleOrNull()?.node
+            HungerMenuSearchAction.CLOSE -> if(stage in 1..3 && searchFrame(f))f.nodes.single {it.id=="menuSearchCloseButton"} else null
         }
     }
     fun consume(action:HungerMenuSearchAction,f:CatalogFrame,node:CatalogNode,cart:CanonicalCart,version:String?,now:Long):Boolean {
         if(target(action,f,cart,version,now)!=node)return false
-        stage=when(action) {HungerMenuSearchAction.OPEN->1;HungerMenuSearchAction.TYPE->2;HungerMenuSearchAction.CLOSE->3}
+        stage=when(action) {HungerMenuSearchAction.OPEN->1;HungerMenuSearchAction.TYPE->2;HungerMenuSearchAction.OPEN_RESULT->3;HungerMenuSearchAction.CLOSE->4}
         return true
     }
     fun results(f:CatalogFrame,cart:CanonicalCart,version:String?,now:Long):Boolean=stage==2 && valid(cart,version,now) && searchFrame(f)
     data class Candidate(val node:CatalogNode,val item:LiveMenuItem)
-    /** Data observations only. Opening or adding a candidate still needs its own typed command. */
+    /** Recomputed from the full fresh search frame. Nested Add controls are never candidates. */
     fun candidates(f:CatalogFrame,cart:CanonicalCart,version:String?,now:Long):List<Candidate> {
         if(!results(f,cart,version,now))return emptyList()
-        return f.nodes.mapNotNull {node->HungerStationCatalog.menuItem(node)?.takeIf {it.name==query}?.let {Candidate(node,it)}}
+        return f.nodes.filter {it.id.isEmpty() && it.className=="android.view.View" && it.clickable && it.enabled && !it.editable && !it.scrollable}.mapNotNull {node->HungerStationCatalog.menuItem(node)?.takeIf {it.name==query}?.let {Candidate(node,it)}}
     }
     companion object {
         fun create(menu:CatalogFrame,cart:CanonicalCart,query:String,version:String?,now:Long):HungerMenuSearchSession? {

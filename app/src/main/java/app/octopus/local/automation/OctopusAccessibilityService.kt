@@ -46,6 +46,7 @@ object LiveCatalogBridge {
     fun endManualCatalog() { navigator.get()?.endManualCatalog() }
     fun compareDraft(): Boolean = navigator.get()?.compareDraft() ?: false
     fun compareAndPrepare(): Boolean = navigator.get()?.compareAndPrepare() ?: false
+    fun inspectKeetaMenuForVerification():Boolean = navigator.get()?.inspectKeetaMenuForVerification() ?: false
     fun inspectHungerMenuSearchForVerification(query:String):Boolean = navigator.get()?.inspectHungerMenuSearchForVerification(query) ?: false
     fun preparePlainHungerForVerification(readReview:Boolean=false,showCart:Boolean=false): Boolean = navigator.get()?.preparePlainHungerForVerification(readReview,showCart) ?: false
     fun preparePlainKeetaForVerification(readReview:Boolean=false,clearTestCart:Boolean=false): Boolean = navigator.get()?.preparePlainKeetaForVerification(readReview,clearTestCart) ?: false

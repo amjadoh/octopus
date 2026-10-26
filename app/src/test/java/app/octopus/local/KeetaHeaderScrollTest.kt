@@ -21,4 +21,15 @@ class KeetaHeaderScrollTest {
         val swipe=KeetaHeaderScroll.plan(HeaderViewport(-100,-100,2000,3000),window,null)!!
         assertTrue(swipe.x in 0..1060 && swipe.fromY>=0 && swipe.toY<2079)
     }
+    @Test fun laterFoodRowsUseUpwardStrokeInsideVerifiedMenuAndAboveFooter() {
+        val view=HeaderViewport(0,365,1060,2290)
+        val window=HeaderViewport(0,0,1060,2376)
+        val swipe=KeetaMenuScroll.plan(view,window,2110)!!
+        assertTrue(swipe.fromY>swipe.toY+100)
+        assertTrue(swipe.fromY<2110-32 && swipe.toY>view.top)
+        assertEquals(530,swipe.x)
+        assertNull(KeetaMenuScroll.plan(HeaderViewport(0,1900,1060,2300),window,2110))
+        assertNull(KeetaMenuScroll.plan(HeaderViewport(0,0,100,2300),window,2110))
+    }
+
 }

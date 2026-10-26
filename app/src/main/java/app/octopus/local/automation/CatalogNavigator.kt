@@ -504,32 +504,65 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         multiReadStage="HS_NAVIGATE"
         val restaurant=LiveRestaurant(desired.restaurant,null,desired.restaurant)
         check(!navigateToRestaurant(restaurant)) { "المطعم غير متاح للطلب في القراءة الحالية." }
-        val (menu,item)=locateHungerPlainLine(await {HungerStationCatalog.screen(it)==CatalogScreen.MENU},line)
-        act(menu,CatalogAction.OPEN_PRODUCT,{HungerStationCatalog.menuItem(it)==item})
+        val opened=openHungerPlainProduct(await {HungerStationCatalog.screen(it)==CatalogScreen.MENU},desired,line)
+        val item=opened.item
         multiReadStage="HS_READ_PRODUCT"
-        val details=readHungerProduct(restaurant,item).details
+        val read=readHungerProduct(restaurant,item)
+        val details=read.details
         multiReadStage="HS_VALIDATE_PRODUCT"
         check(details.product.title==line.name && details.optionsComplete && details.product.available &&
             MenuSelectionValidator().selectConfigured(details,ProductSelection(details.product.id,emptyMap(),1),System.currentTimeMillis()) is SelectionResult.Accepted) {
             "خيارات الصنف غير مكتملة؛ لم أستخدم سعرًا ناقصًا."
         }
-        return details.product.listedPriceHalala ?: error("سعر الصنف غير مقروء.")
+        val price=details.product.listedPriceHalala ?: error("سعر الصنف غير مقروء.")
+        if(opened.search!=null) {
+            act(read.lastFrame,CatalogAction.RETURN_TO_CATALOG,{it.id=="pdpCloseButton"})
+            closeHungerMenuSearch(opened.search,desired)
+        }
+        return price
     }
 
-    private suspend fun locateHungerPlainLine(initial:CatalogFrame,line:CanonicalItem):Pair<CatalogFrame,LiveMenuItem> {
-        var menu=initial
-        var selected: LiveMenuItem?=null
-        multiReadStage="HS_FIND_ITEM"
-        for(page in 0 until 30) {
-            val matches=HungerStationCatalog.menuItems(menu).filter {it.name==line.name}
-            check(matches.size<=1) { "الصنف غير فريد؛ توقفت القراءة." }
-            if(matches.size==1) {selected=matches.single();break}
-            val before=HungerStationCatalog.menuItems(menu).toString()
-            if(!act(menu,CatalogAction.SCROLL_MENU,{it.scrollable && it.className=="android.widget.ScrollView"},allowNoOp=true))break
-            menu=await {HungerStationCatalog.screen(it)==CatalogScreen.MENU && HungerStationCatalog.menuItems(it).toString()!=before}
+    private data class OpenedHungerPlainProduct(val menu:CatalogFrame,val item:LiveMenuItem,val search:HungerMenuSearchSession?)
+
+    /** Search moves only through controls scoped to the entire active request. No Add authority. */
+    private suspend fun openHungerPlainProduct(menu:CatalogFrame,cart:CanonicalCart,line:CanonicalItem):OpenedHungerPlainProduct {
+        val direct=HungerStationCatalog.menuItems(menu).filter {it.name==line.name}
+        check(direct.size<=1) {"الصنف غير فريد؛ لم أختر بديلًا."}
+        if(direct.size==1) {
+            val item=direct.single()
+            act(menu,CatalogAction.OPEN_PRODUCT,{HungerStationCatalog.menuItem(it)==item})
+            return OpenedHungerPlainProduct(menu,item,null)
         }
-        val item=selected ?: error("لم يظهر الصنف المطابق؛ لم أستبدله.")
-        return menu to item
+        multiReadStage="HS_SEARCH_REQUESTED_ITEM"
+        val session=HungerMenuSearchSession.create(menu,cart,line.name,HungerStationCatalog.TESTED_VERSION,System.currentTimeMillis())
+            ?: error("لم تثبت قائمة المطعم لبحث الصنف المطلوب.")
+        performHungerMenuSearch(session,HungerMenuSearchAction.OPEN,menu,cart)
+        val input=await {session.target(HungerMenuSearchAction.TYPE,it,cart,HungerStationCatalog.TESTED_VERSION,System.currentTimeMillis())!=null}
+        performHungerMenuSearch(session,HungerMenuSearchAction.TYPE,input,cart)
+        val results=await {session.candidates(it,cart,HungerStationCatalog.TESTED_VERSION,System.currentTimeMillis()).isNotEmpty()}
+        val candidate=session.candidates(results,cart,HungerStationCatalog.TESTED_VERSION,System.currentTimeMillis()).singleOrNull()
+            ?: error("نتائج الصنف متعددة؛ لم أختر بينها بالاسم فقط.")
+        performHungerMenuSearch(session,HungerMenuSearchAction.OPEN_RESULT,results,cart)
+        return OpenedHungerPlainProduct(menu,candidate.item,session)
+    }
+
+    private suspend fun closeHungerMenuSearch(session:HungerMenuSearchSession,cart:CanonicalCart):CatalogFrame {
+        val search=await {session.target(HungerMenuSearchAction.CLOSE,it,cart,HungerStationCatalog.TESTED_VERSION,System.currentTimeMillis())!=null}
+        performHungerMenuSearch(session,HungerMenuSearchAction.CLOSE,search,cart)
+        return await {HungerStationCatalog.screen(it)==CatalogScreen.MENU}
+    }
+
+    /** An Add is never repeated. Close only our own surviving search before full cart observation. */
+    private suspend fun hungerMenuAfterAdd(opened:OpenedHungerPlainProduct,cart:CanonicalCart):CatalogFrame {
+        val search=opened.search
+        val after=await {HungerStationCatalog.screen(it)==CatalogScreen.MENU ||
+            search?.target(HungerMenuSearchAction.CLOSE,it,cart,HungerStationCatalog.TESTED_VERSION,System.currentTimeMillis())!=null}
+        val menu=if(HungerStationCatalog.screen(after)==CatalogScreen.MENU)after else {
+            performHungerMenuSearch(checkNotNull(search),HungerMenuSearchAction.CLOSE,after,cart)
+            await {HungerStationCatalog.screen(it)==CatalogScreen.MENU}
+        }
+        check(menu.hasId("FlutterMenu_goToCartButton")) {"لم يظهر عداد السلة بعد الإضافة؛ لم أكررها."}
+        return menu
     }
 
     private suspend fun readCompleteHungerBasket(menu:CatalogFrame,desired:CanonicalCart):Pair<CatalogFrame,BasketEvidence> {
@@ -570,7 +603,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         return await {HungerStationCatalog.screen(it)==CatalogScreen.MENU}
     }
 
-    /** Opt-in device probe: current known menu only, reads search results, no cart edits. */
+    /** Opt-in device probe: restaurant search -> exact food PDP -> known menu, no cart edits. */
     fun inspectHungerMenuSearchForVerification(query:String):Boolean {
         if(!BuildConfig.DEBUG || !BuildConfig.VERSION_NAME.endsWith("-device-tools") || active || graph.session.value.active)return false
         val cart=graph.draft.value ?: return false
@@ -578,6 +611,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         return begin(operation=CatalogOperation.COMPARE_MENU,returnOnSuccess=false) {
             provider=ProviderId.HUNGERSTATION;requestFingerprint=cart.fingerprint
             phase="فحص البحث عن الوجبة داخل المطعم"
+            val restaurant=LiveRestaurant(cart.restaurant,null,cart.restaurant)
+            check(!navigateToRestaurant(restaurant)) {"المطعم غير متاح للقراءة."}
             val menu=await {HungerStationCatalog.screen(it)==CatalogScreen.MENU}
             val session=HungerMenuSearchSession.create(menu,cart,query,HungerStationCatalog.TESTED_VERSION,System.currentTimeMillis())
                 ?: error("لم تثبت قائمة المطعم المحدد لبحث الوجبة؛ لم أغير السلة.")
@@ -591,7 +626,19 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     .put("recordedAt",System.currentTimeMillis()).put("query",query)
                     .put("frame",JSONObject(com.google.gson.Gson().toJson(results))).toString(),Charsets.UTF_8)
             }
-            graph.catalog.value=graph.catalog.value.copy(message="قرأت شاشة نتائج بحث الوجبة فقط؛ لم أضف أو أعدل سلة.")
+            val candidate=session.candidates(results,cart,HungerStationCatalog.TESTED_VERSION,System.currentTimeMillis()).singleOrNull()
+                ?: error("نتيجة الصنف ليست فريدة؛ لم أفتح بديلًا.")
+            performHungerMenuSearch(session,HungerMenuSearchAction.OPEN_RESULT,results,cart)
+            val read=readHungerProduct(restaurant,candidate.item)
+            check(read.details.product.title==query) {"تغير الصنف بعد فتح النتيجة."}
+            act(read.lastFrame,CatalogAction.RETURN_TO_CATALOG,{it.id=="pdpCloseButton"})
+            closeHungerMenuSearch(session,cart)
+            withContext(Dispatchers.IO) {
+                service.filesDir.resolve("hs-menu-search-product-result.json").writeText(JSONObject()
+                    .put("recordedAt",System.currentTimeMillis()).put("details",JSONObject(com.google.gson.Gson().toJson(read.details)))
+                    .put("returnedToMenu",true).put("basketEdits",0).toString(),Charsets.UTF_8)
+            }
+            graph.catalog.value=graph.catalog.value.copy(message="قرأت خيارات الصنف وعدت إلى القائمة؛ لم أضف أو أعدل سلة.")
         }
     }
 
@@ -627,6 +674,26 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         } finally {@Suppress("DEPRECATION") root.recycle()}
     }
 
+    /** Development-only public menu capture; known menu only, never review/account/payment screens. */
+    fun inspectKeetaMenuForVerification():Boolean {
+        if(!BuildConfig.DEBUG || !BuildConfig.VERSION_NAME.endsWith("-device-tools") || active || graph.session.value.active)return false
+        val cart=graph.draft.value ?: return false
+        val line=PlainMenuReadPlan.create(cart,ProviderId.KEETA,"3.13.203")?.lines?.firstOrNull() ?: return false
+        if(!matchesSelectedRestaurant())return false
+        return begin(operation=CatalogOperation.COMPARE_MENU,returnOnSuccess=false) {
+            provider=ProviderId.KEETA;bindKeetaRequest(cart,line);targetSeen=false
+            val launch=service.packageManager.getLaunchIntentForPackage(provider.packageName) ?: error("كيتا غير مثبت.")
+            service.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            val frame=openKeetaRequest()
+            check(keetaMenu.menu(frame)) {"الشاشة ليست قائمة المطعم؛ لم أصورها أو أحفظها."}
+            withContext(Dispatchers.IO) {
+                service.filesDir.resolve("keeta-public-menu-shape.json").writeText(JSONObject()
+                    .put("recordedAt",System.currentTimeMillis()).put("frame",JSONObject(com.google.gson.Gson().toJson(frame)))
+                    .toString(),Charsets.UTF_8)
+            }
+        }
+    }
+
     private class PlainPreparationProgress(var stage:String="START",var adds:Int=0,var rows:Int=0)
 
     /** Reusable provider steps retain the full request; callers own session lifetime. */
@@ -644,11 +711,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         if(menu.nodes.none {it.id=="FlutterMenu_goToCartButton"}) {
             check(!readOnly) {"السلة أصبحت فارغة؛ أعد المقارنة. لم أضف أثناء التسليم."}
             val first=PlainMenuReadPlan.create(desired,provider,HungerStationCatalog.TESTED_VERSION)!!.lines.first()
-            val found=locateHungerPlainLine(menu,first)
-            val empty=found.first
             val observedAt=System.currentTimeMillis()
-            act(empty,CatalogAction.OPEN_PRODUCT,{HungerStationCatalog.menuItem(it)==found.second})
-            val read=readHungerProduct(restaurant,found.second)
+            val opened=openHungerPlainProduct(menu,desired,first)
+            val empty=opened.menu
+            val read=readHungerProduct(restaurant,opened.item)
             val permit=RidanCartProgram.createForSeed(read.details,ProductSelection(read.details.product.id,emptyMap(),1),
                 empty,desired,first,System.currentTimeMillis(),observedAt) ?: error("لم تثبت سلة فارغة وصنف أول مطابق؛ لم أضف.")
             var product=read.lastFrame
@@ -666,7 +732,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             act(product,CatalogAction.ADD_RIDAN,{it==add},ridanProgram=permit.first)
             progress.adds++
             seed=permit.second
-            menu=await {HungerStationCatalog.screen(it)==CatalogScreen.MENU && it.hasId("FlutterMenu_goToCartButton")}
+            menu=hungerMenuAfterAdd(opened,desired)
         }
         var (cart,evidence)=readCompleteHungerBasket(menu,desired)
         seed?.let {check(it.acknowledge(graph.draft.value ?: desired,evidence,HungerStationCatalog.TESTED_VERSION,System.currentTimeMillis())) {
@@ -714,9 +780,6 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     // Reset via known read-only restaurant search, then re-observe all rows before Add.
                     check(!navigateToRestaurant(restaurant)) {"المطعم غير متاح؛ لم أضف الصنف الناقص."}
                     menu=await {HungerStationCatalog.screen(it)==CatalogScreen.MENU}
-                    val found=locateHungerPlainLine(menu,edit.line)
-                    menu=found.first
-                    val item=found.second
                     // Re-observe every row immediately before opening the missing product.
                     progress.stage="RECHECK_BASELINE"
                     val checked=readCompleteHungerBasket(menu,desired)
@@ -724,8 +787,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     check((owner.next(desired,checked.second,HungerStationCatalog.TESTED_VERSION,System.currentTimeMillis()) as? PlainBasketPreparationSession.Step.Change)?.edit===edit)
                     menu=leaveCompleteHungerBasket(checked.first,checked.second)
                     progress.stage="READ_MISSING_PRODUCT"
-                    act(menu,CatalogAction.OPEN_PRODUCT,{HungerStationCatalog.menuItem(it)==item})
-                    val read=readHungerProduct(restaurant,item)
+                    val opened=openHungerPlainProduct(menu,desired,edit.line)
+                    val read=readHungerProduct(restaurant,opened.item)
                     val selection=ProductSelection(read.details.product.id,emptyMap(),1)
                     val program=RidanCartProgram.createForOwnedAddition(read.details,selection,menu,desired,evidence,owner,edit,System.currentTimeMillis())
                         ?: error("لم يتأكد تصريح إضافة الصنف إلى السلة المملوكة؛ لم أضفه.")
@@ -735,7 +798,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     act(read.lastFrame,CatalogAction.ADD_RIDAN,{it==add},ridanProgram=program)
                     progress.adds++
                     progress.stage="OBSERVE_ADDED_CART"
-                    menu=await {HungerStationCatalog.screen(it)==CatalogScreen.MENU && it.hasId("FlutterMenu_goToCartButton")}
+                    menu=hungerMenuAfterAdd(opened,desired)
                     val after=readCompleteHungerBasket(menu,desired)
                     check(owner.acknowledge(edit,graph.draft.value ?: desired,after.second,HungerStationCatalog.TESTED_VERSION,System.currentTimeMillis())) {
                         "لم تتطابق جميع صفوف السلة بعد الإضافة؛ توقفت ولم أكررها."
@@ -1482,6 +1545,50 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         } finally { @Suppress("DEPRECATION") root.recycle() }
     }
 
+    /** Fallback only after a rejected structured scroll on the same complete known food menu. */
+    private suspend fun scrollKeetaMenuGesture(previous:CatalogFrame):Boolean {
+        checkSession()
+        val root=service.rootInActiveWindow ?: throw UserInterrupted("اختفت قائمة الطعام؛ توقفت.")
+        val plan:HeaderSwipe
+        val windowId=root.windowId
+        val quantity=keetaBasket.menuQuantity(previous)
+        try {
+            check(provider==ProviderId.KEETA);requireProviderWindow(root)
+            val fresh=capture(root)
+            if(fresh!=previous)throw ScreenChangedBeforeAction()
+            check(fresh.complete && keetaMenu.menu(fresh) && fresh.nodes.none {it.editable})
+            val list=fresh.nodes.single {it.scrollable && it.className=="androidx.recyclerview.widget.RecyclerView"}
+            val node=locateKeetaNode(root,list) ?: throw ScreenChangedBeforeAction()
+            val view=Rect();val window=Rect()
+            try {
+                check(node.refresh() && node.isVisibleToUser && node.isEnabled && node.isScrollable && !node.isPassword &&
+                    !(android.os.Build.VERSION.SDK_INT>=34 && node.isAccessibilityDataSensitive))
+                node.getBoundsInScreen(view);root.getBoundsInScreen(window)
+            } finally {node.recycle()}
+            val footerNodes=root.findAccessibilityNodeInfosByText("إتمام الدفع")
+            val footerTop=try {footerNodes.filter {it.text?.toString()=="إتمام الدفع"}.minOfOrNull {
+                val r=Rect();it.getBoundsInScreen(r);r.top
+            }} finally {footerNodes.forEach {it.recycle()}}
+            plan=KeetaMenuScroll.plan(HeaderViewport(view.left,view.top,view.right,view.bottom),
+                HeaderViewport(window.left,window.top,window.right,window.bottom),footerTop)
+                ?: error("مساحة قائمة الطعام غير متحققة؛ لم أنفذ إيماءة.")
+        } finally {root.recycle()}
+        val path=Path().apply {moveTo(plan.x.toFloat(),plan.fromY.toFloat());lineTo(plan.x.toFloat(),plan.toY.toFloat())}
+        val gesture=GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path,0,450)).build()
+        val done=withTimeout(3_000) {suspendCancellableCoroutine<Boolean> {continuation->
+            checkSession();verifyActiveFrame(previous,windowId)
+            val accepted=service.dispatchGesture(gesture,object:AccessibilityService.GestureResultCallback() {
+                override fun onCompleted(gestureDescription:GestureDescription?) {if(continuation.isActive)continuation.resume(true)}
+                override fun onCancelled(gestureDescription:GestureDescription?) {if(continuation.isActive)continuation.resume(false)}
+            },null)
+            if(!accepted && continuation.isActive)continuation.resume(false)
+        }}
+        check(done) {"لم تكتمل إيماءة قائمة الطعام؛ توقفت."}
+        val after=await {keetaMenu.menu(it) && it.nodes!=previous.nodes}
+        check(quantity==null || keetaBasket.menuQuantity(after)==quantity) {"تغير عدد السلة أثناء قراءة القائمة؛ توقفت."}
+        return true
+    }
+
     private suspend fun openKeetaPreviewProduct(previous: CatalogFrame) {
         var frame = previous
         var previousBody: List<CatalogNode>? = null
@@ -1490,6 +1597,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         repeat(80) {
             currentCoroutineContext().ensureActive(); checkSession()
             val root = service.rootInActiveWindow ?: throw UserInterrupted("اختفت قائمة كيتا؛ توقفت المقارنة.")
+            var rejectedScroll=false
             try {
                 check(provider == ProviderId.KEETA)
                 requireProviderWindow(root)
@@ -1507,8 +1615,16 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 check(keetaMenu.menu(fresh) && fresh.nodes != previousBody) { "الوجبة المطابقة غير ظاهرة في قائمة كيتا." }
                 previousBody = fresh.nodes
                 val list = fresh.nodes.single { it.scrollable && it.className == "androidx.recyclerview.widget.RecyclerView" }
-                check(performKeetaReadAction(root, list, AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) { "وصلت إلى نهاية الجزء المقروء دون الوجبة المطلوبة." }
+                rejectedScroll=!performKeetaReadAction(root, list, AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
             } finally { @Suppress("DEPRECATION") root.recycle() }
+            if(rejectedScroll) {
+                // A provider can return false after a real scroll. Observe before considering fallback.
+                delay(350)
+                val checkRoot=service.rootInActiveWindow ?: throw UserInterrupted("اختفت قائمة الطعام؛ توقفت.")
+                val current=try {requireProviderWindow(checkRoot);capture(checkRoot)} finally {checkRoot.recycle()}
+                check(keetaMenu.menu(current)) {"تغيرت شاشة القائمة؛ لم أنفذ إيماءة."}
+                if(current==frame)scrollKeetaMenuGesture(frame)
+            }
             frame = await { keetaMenu.menu(it) && it.nodes != previousBody }
         }
         error("لم أجد الوجبة المطابقة ضمن مهلة التصفح؛ لم أستبدلها.")

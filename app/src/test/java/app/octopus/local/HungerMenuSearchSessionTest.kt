@@ -64,4 +64,30 @@ class HungerMenuSearchSessionTest {
         assertTrue(s.candidates(frame,cart.copy(items=cart.items.map {it.copy(quantity=2)}),version,1300).isEmpty())
         assertNotNull(s.target(HungerMenuSearchAction.CLOSE,frame,cart,version,1300))
     }
+    private fun actualResults()=com.google.gson.Gson().fromJson(javaClass.getResource("/recorded-hs/hs-8.0.303-in-menu-search-blue-redacted.json")!!.readText(),CatalogFrame::class.java)
+    private fun typedSession():HungerMenuSearchSession=session().also {
+        assertTrue(it.consume(HungerMenuSearchAction.OPEN,menu,menu.nodes[1],cart,version,1100))
+        assertTrue(it.consume(HungerMenuSearchAction.TYPE,search,search.nodes[1],cart,version,1200))
+    }
+    @Test fun uniqueFoodOpenIsConsumedOnceAndSearchCloseRemainsScoped() {
+        val s=typedSession();val result=actualResults()
+        val food=s.target(HungerMenuSearchAction.OPEN_RESULT,result,cart,version,1300)!!
+        assertEquals(15,food.index)
+        assertTrue(s.consume(HungerMenuSearchAction.OPEN_RESULT,result,food,cart,version,1300))
+        assertNull(s.target(HungerMenuSearchAction.OPEN_RESULT,result,cart,version,1400))
+        assertFalse(s.results(result,cart,version,1400))
+        val close=s.target(HungerMenuSearchAction.CLOSE,result,cart,version,1500)!!
+        assertTrue(s.consume(HungerMenuSearchAction.CLOSE,result,close,cart,version,1500))
+        assertNull(s.target(HungerMenuSearchAction.CLOSE,result,cart,version,1600))
+    }
+    @Test fun duplicateNameChangedRequestStaleAndNestedAddCannotOpen() {
+        val result=actualResults();val s=typedSession()
+        val food=s.candidates(result,cart,version,1300).single().node
+        assertNull(s.target(HungerMenuSearchAction.OPEN_RESULT,result.copy(nodes=result.nodes+food.copy(index=30)),cart,version,1300))
+        assertFalse(s.consume(HungerMenuSearchAction.OPEN_RESULT,result,result.nodes.single{it.id=="menuItemActionSingleButtonAdd"},cart,version,1300))
+        assertNull(s.target(HungerMenuSearchAction.OPEN_RESULT,result,cart.copy(items=cart.items.map{it.copy(quantity=2)}),version,1300))
+        assertNull(s.target(HungerMenuSearchAction.OPEN_RESULT,result,cart,version,91_001))
+        assertNotNull(s.target(HungerMenuSearchAction.OPEN_RESULT,result,cart,version,1400))
+    }
+
 }
