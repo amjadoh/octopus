@@ -5,7 +5,7 @@
   "realTwoProviderComparisonVerified": false,
   "realSelectedCartHandoffVerified": false,
   "providersVerified": [],
-  "note": "Oct26: historical normal UI Kudo existing-cart two-row comparison/quantity/handoffs succeeded; later same-run fresh HS two-row preparation/review succeeded. New normal build both-initially-empty end-to-end journey and arbitrary restaurant/options/address/branch equivalence remain unverified. Human explicitly requests current-work preview publication; full-release gate remains false.",
+  "note": "Oct26: historical Kudo component comparisons succeeded; the changed APK has not completed a new live journey. Human explicitly requests a normal GitHub release of current fixes. Release classification does not change actual comparison/cart/handoff verification, which remains false.",
   "componentEvidence": [
     "verification/2026-10-19/honor-menu-offers.json",
     "verification/2026-10-19/honor-basket-validation.json",
