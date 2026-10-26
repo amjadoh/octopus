@@ -16,6 +16,14 @@ enum class ProposedAction { CLICK, SCROLL, INPUT_TEXT, GESTURE, GLOBAL_ACTION, C
 enum class CatalogAction { CLOSE_HUNGER_VARIANT, OPEN_BROWSE, CLOSE_BROWSE_PROMO, CLOSE_SPIN_PROMO, SCROLL_RESTAURANTS, OPEN_SEARCH, SET_QUERY, SELECT_SUGGESTION, OPEN_RESTAURANT, VIEW_MENU_NOTICE, SCROLL_MENU, OPEN_PRODUCT, SCROLL_PRODUCT, RETURN_TO_CATALOG, ADD_RIDAN, OPEN_BASKET, ADJUST_RIDAN_QUANTITY }
 
 class SafetyGuard {
+    fun allowsHungerMenuSearch(action:app.octopus.local.automation.HungerMenuSearchAction,
+        session:app.octopus.local.automation.HungerMenuSearchSession,frame:CatalogFrame,node:CatalogNode,
+        cart:app.octopus.local.domain.CanonicalCart,foregroundPackage:String?,version:String?,
+        consent:Boolean,active:Boolean,now:Long):Boolean = consent && active && frame.complete &&
+        foregroundPackage==ProviderId.HUNGERSTATION.packageName && version==HungerStationCatalog.TESTED_VERSION &&
+        frame.nodes.none {ProviderAccessRestrictions.detect(it.label)!=null} &&
+        session.target(action,frame,cart,version,now)==node
+
     fun allowsSpinPromoClose(frame: CatalogFrame, node: CatalogNode, foregroundPackage: String?,
         version: String?, consent: Boolean, active: Boolean): Boolean =
         consent && active && foregroundPackage == ProviderId.HUNGERSTATION.packageName &&

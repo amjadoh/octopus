@@ -1,3 +1,7 @@
+# Latest checkpoint 2026-10-26 06:20 Riyadh
+
+FIRST read `docs/verification/2026-10-25/hs-in-menu-search-read-only.json` and `docs/development/in-menu-search-runtime-status.md`. A new guarded native in-restaurant search worked on the phone (Brown Blue Lagoon, one20 SAR listing,20 nodes). It is NOT wired into main Compare or preparation yet.420 tests/lint0errors5warnings. Installed device-tools hash764AA40D13ABF2A6E268E1DB278AAB129634B40361C64D3F07CA55DC72B7907E; newer candidate-reader build on disk only. Current draft Brown Blue1/EnglishCake1; carts still unmatched historical Kudo. No new pair, no new cart edits or publication. Earlier normal APK output was overwritten and is not installed. User was notified deadline missed; continue implementation independently, no repeated user tests.
+
 # Latest checkpoint 2026-10-26 05:42 Riyadh — supersedes older draft/install notes
 
 Read `docs/verification/2026-10-25/open-restaurant-search.json` FIRST. User gave approximately04:42–05:42 to continue independently and prepare an update; no completed new same-request comparison was achieved in that period. All newer restaurant tests stopped before preparation, with no new pair accepted. Physical carts remain historical Kudo Keeta fries3/nachos2 and HS fries3 ONLY; current full draft Fawal tamees10 + cheese tamees5 differs. Latest Fawal attempt05:38: Keeta product SKU metadata unsupported; HS unavailable. Do not repeat it or use stale totals.
