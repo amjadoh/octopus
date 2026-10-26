@@ -1,10 +1,11 @@
 {
-  "version": "1.3.8",
-  "versionCode": 16,
-  "tag": "v1.3.8-alpha",
+  "version": "1.3.9",
+  "versionCode": 17,
+  "tag": "v1.3.9-alpha",
   "scope": "preview_current_work",
   "userRequestedPreview": true,
   "realComparisonComplete": false,
   "prerelease": true,
-  "note": "Explicit user request on 2026-10-25: save current work and publish a new experimental update before disconnecting the phone. Keeta final review total was read, but complete two-provider comparison remains unverified."
+  "note": "Explicit human request2026-10-26 after incomplete status disclosure: انشر خلني اجرب. Publish current work as private experimental update; do not label complete or use phone after disconnect.",
+  "verificationReport": "verification/2026-10-25/offline-read-timeout-isolation.json"
 }

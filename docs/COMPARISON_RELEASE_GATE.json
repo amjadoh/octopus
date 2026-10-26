@@ -5,11 +5,14 @@
   "realTwoProviderComparisonVerified": false,
   "realSelectedCartHandoffVerified": false,
   "providersVerified": [],
-  "note": "Oct25: actual Keeta basket3 feta/no additions and review total3063 halala verified as components. HS quantity3/final total, equivalent address/branch, two-provider comparison and selected-cart handoff remain unverified. User explicitly requested a current-work experimental release.",
+  "note": "Oct26: historical normal UI Kudo existing-cart two-row comparison/quantity/handoffs succeeded; later same-run fresh HS two-row preparation/review succeeded. New normal build both-initially-empty end-to-end journey and arbitrary restaurant/options/address/branch equivalence remain unverified. Human explicitly requests current-work preview publication; full-release gate remains false.",
   "componentEvidence": [
     "verification/2026-10-19/honor-menu-offers.json",
     "verification/2026-10-19/honor-basket-validation.json",
     "verification/2026-10-20/honor-final-device.json",
-    "verification/2026-10-25/physical-phone-components.json"
+    "verification/2026-10-25/physical-phone-components.json",
+    "verification/2026-10-25/normal-two-row-ui-comparison.json",
+    "verification/2026-10-25/hs-search-empty-two-row.json",
+    "verification/2026-10-25/offline-read-timeout-isolation.json"
   ]
 }
