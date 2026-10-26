@@ -15,7 +15,7 @@ class CatalogTestReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (!BuildConfig.DEBUG || intent.action != "app.octopus.local.TEST_CATALOG") return
         val mode = intent.getStringExtra("mode") ?: "snapshot"
-        if (mode !in setOf("snapshot", "stop", "public_menu", "public_add", "draft_quantity", "search", "browse", "open_menu", "open_product",
+        if (mode !in setOf("snapshot", "stop", "inspect_hs_menu_search", "public_menu", "public_add", "draft_quantity", "search", "browse", "open_menu", "open_product",
                 "compare_menu", "compare_total", "resume_draft", "prepare_hs", "prepare_keeta", "prepare_multi_keeta", "clear_owned_keeta_test", "show_owned_hs_cart", "prepare_multi_hs", "prepare_multi_hs_review", "prepare_multi_keeta_review", "handoff_hs", "handoff_keeta")) return
         val query = intent.getStringExtra("query")?.takeIf { it.isNotBlank() && it.length <= 100 }
         val item = intent.getStringExtra("item")?.takeIf { it.isNotBlank() && it.length <= 100 }
@@ -53,6 +53,7 @@ class CatalogTestReceiver : BroadcastReceiver() {
                     withTimeout(7000) { graph.serviceConnected.first { it } }
                     check(graph.settings.value.catalogConsent)
                     started = when (mode) {
+                        "inspect_hs_menu_search" -> query?.let(LiveCatalogBridge::inspectHungerMenuSearchForVerification) ?: false
                         "resume_draft" -> graph.draft.value?.let { cart ->
                             graph.catalog.value = graph.catalog.value.copy(selectedRestaurant = cart.restaurant); true
                         } ?: false

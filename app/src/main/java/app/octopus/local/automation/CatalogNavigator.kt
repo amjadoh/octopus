@@ -570,6 +570,63 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         return await {HungerStationCatalog.screen(it)==CatalogScreen.MENU}
     }
 
+    /** Opt-in device probe: current known menu only, reads search results, no cart edits. */
+    fun inspectHungerMenuSearchForVerification(query:String):Boolean {
+        if(!BuildConfig.DEBUG || !BuildConfig.VERSION_NAME.endsWith("-device-tools") || active || graph.session.value.active)return false
+        val cart=graph.draft.value ?: return false
+        if(cart.items.none {it.name==query} || !matchesSelectedRestaurant())return false
+        return begin(operation=CatalogOperation.COMPARE_MENU,returnOnSuccess=false) {
+            provider=ProviderId.HUNGERSTATION;requestFingerprint=cart.fingerprint
+            phase="فحص البحث عن الوجبة داخل المطعم"
+            val menu=await {HungerStationCatalog.screen(it)==CatalogScreen.MENU}
+            val session=HungerMenuSearchSession.create(menu,cart,query,HungerStationCatalog.TESTED_VERSION,System.currentTimeMillis())
+                ?: error("لم تثبت قائمة المطعم المحدد لبحث الوجبة؛ لم أغير السلة.")
+            performHungerMenuSearch(session,HungerMenuSearchAction.OPEN,menu,cart)
+            val input=await {session.target(HungerMenuSearchAction.TYPE,it,cart,HungerStationCatalog.TESTED_VERSION,System.currentTimeMillis())!=null}
+            performHungerMenuSearch(session,HungerMenuSearchAction.TYPE,input,cart)
+            val results=await {session.results(it,cart,HungerStationCatalog.TESTED_VERSION,System.currentTimeMillis()) &&
+                it.nodes.any {n->!n.editable && n.label.contains(query)}}
+            withContext(Dispatchers.IO) {
+                service.filesDir.resolve("hs-in-menu-search-result.json").writeText(JSONObject()
+                    .put("recordedAt",System.currentTimeMillis()).put("query",query)
+                    .put("frame",JSONObject(com.google.gson.Gson().toJson(results))).toString(),Charsets.UTF_8)
+            }
+            graph.catalog.value=graph.catalog.value.copy(message="قرأت شاشة نتائج بحث الوجبة فقط؛ لم أضف أو أعدل سلة.")
+        }
+    }
+
+    private suspend fun performHungerMenuSearch(session:HungerMenuSearchSession,action:HungerMenuSearchAction,
+        previous:CatalogFrame,cart:CanonicalCart) {
+        currentCoroutineContext().ensureActive();checkSession()
+        val root=service.rootInActiveWindow ?: throw UserInterrupted("اختفت شاشة بحث الوجبة؛ توقفت.")
+        try {
+            requireProviderWindow(root)
+            val fresh=capture(root)
+            if(fresh!=previous)throw ScreenChangedBeforeAction()
+            val now=System.currentTimeMillis()
+            val current=graph.draft.value ?: error("اختفى الطلب.")
+            check(current.fingerprint==cart.fingerprint)
+            @Suppress("DEPRECATION")
+            val version=service.packageManager.getPackageInfo(provider.packageName,0).versionName
+            val target=session.target(action,fresh,current,version,now) ?: error("لم يتحدد عنصر بحث وجبة موثوق.")
+            check(SafetyGuard().allowsHungerMenuSearch(action,session,fresh,target,current,
+                root.packageName?.toString(),version,graph.settings.value.catalogConsent,currentCoroutineContext().isActive,now))
+            // This indexed lookup uses the same privacy-pruned traversal as capture for either provider.
+            val node=locateKeetaNode(root,target) ?: throw ScreenChangedBeforeAction()
+            try {
+                check(node.refresh() && node.isVisibleToUser && node.isEnabled && !node.isPassword &&
+                    !(android.os.Build.VERSION.SDK_INT>=34 && node.isAccessibilityDataSensitive) &&
+                    node.viewIdResourceName.orEmpty()==target.id && node.className?.toString()==target.className)
+                verifyActiveFrame(fresh,root.windowId);checkSession()
+                check(session.consume(action,fresh,target,current,version,System.currentTimeMillis()))
+                val accepted=if(action==HungerMenuSearchAction.TYPE)node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT,Bundle().apply {
+                    putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,session.query)
+                }) else node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                check(accepted) {"تعذر تنفيذ بحث الوجبة؛ لم أكرر الإجراء."}
+            } finally {@Suppress("DEPRECATION") node.recycle()}
+        } finally {@Suppress("DEPRECATION") root.recycle()}
+    }
+
     private class PlainPreparationProgress(var stage:String="START",var adds:Int=0,var rows:Int=0)
 
     /** Reusable provider steps retain the full request; callers own session lifetime. */

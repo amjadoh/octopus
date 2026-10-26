@@ -57,8 +57,10 @@
       "skipped": 0
     },
     "lintErrors": 0,
-    "lintWarnings": 5
+    "lintWarnings": 5,
+    "artifactOverwrittenByLaterDeviceToolsBuild": true
   },
   "currentPairAvailable": false,
-  "next": "Do not repeat closed/unavailable Fawal or use old totals. Need actual same-run full HS empty2row build+review, normal UI with both carts initially empty, handoffs and retry before full-journey publication. Improve provider product identity/options matching rather than accepting same name or ignoring unknown SKU labels. Native current device tools receiver available; normal APK exists on disk only. No new public release."
+  "next": "Do not repeat closed/unavailable Fawal or use old totals. Need actual same-run full HS empty2row build+review, normal UI with both carts initially empty, handoffs and retry before full-journey publication. Improve provider product identity/options matching rather than accepting same name or ignoring unknown SKU labels. Native current device tools receiver available; normal APK exists on disk only. No new public release.",
+  "supersededBy": "docs/verification/2026-10-25/hs-in-menu-search-read-only.json"
 }

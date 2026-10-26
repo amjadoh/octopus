@@ -1,0 +1,34 @@
+# In-restaurant search — actual checkpoint 2026-10-26 06:20 Riyadh
+
+Read `docs/verification/2026-10-25/hs-in-menu-search-read-only.json` first. This is a successful new read-only device path, not a completed comparison. The one-hour deadline was missed and the user was explicitly told at05:43. Do not repeat that unchanged notification. Nothing was published.
+
+## Actual proof and current installation
+
+- Installed DEVICE-TOOLS APK hash764AA40D13ABF2A6E268E1DB278AAB129634B40361C64D3F07CA55DC72B7907E. The newer candidate-reader build is on disk only (see report hash).420 tests pass, lint0errors/5warnings.
+- Native HS8.0.303 Brown menu was observed manually. `menuSearchButton` and `menuBackButton` are clickable ImageView anchors. `menuSearchInput` is an EditText and `menuSearchCloseButton` is a clickable ImageView. No invented selector.
+- Protected `inspect_hs_menu_search --es query 'بلو لاقون'` at06:06 entered Arabic via ACTION_SET_TEXT, independently reached one food result at20 SAR in20 complete nodes. Actual fixture is tracked. Row15 is clickable android.view.View, empty id, full public name/description/currency/price; child17 is nonclickable Button `menuItemActionSingleButtonAdd` and is NOT the food candidate. Existing `HungerStationCatalog.menuItem` parses that row directly (the wrapper `menuItems(frame)` currently requires MENU).
+- No Add, quantity mutation, review, order or payment. Phone was cleaned up at06:19 by manually closing only our own exact query through its observed Close control, after foreground checks. Expected native Brown menu now; always recapture.
+- Current saved draft: Brown Coffee Blue Lagoon x1 + English Cake x1, no additions. Physical carts still old Kudo Keeta fries3/nachos2 and HS fries3 only. No current paired prices.
+- Earlier normal APK hash4A01... was never installed; default build output was overwritten by subsequent device-tools builds. Rebuild normal deliberately before testing; no normal test receiver.
+
+## Source implemented
+
+`HungerMenuSearchSession`: complete MENU with exact restaurant, full request fingerprint, selected-line query, version8.0.303,90-second lifetime, consumed OPEN/TYPE/CLOSE stages. Shared SafetyGuard additionally requires real provider foreground, enabled consent and active operation. Authentication/payment fields and second editors fail. Runtime `performHungerMenuSearch` rereads exact source/window and consumes before node dispatch. New `candidates` is DATA ONLY; no authority to open/add a result. Dev wrapper explicitly guarded by DEBUG/device-tools suffix and DUMP receiver. Main Compare still uses old scan and is not wired to this prototype.
+
+## Next actual implementation
+
+1. Add typed OPEN_RESULT to this session. Recompute candidates from the fresh search frame, admit ONLY one exact-name food row (never child Add), consume once, bind full request/version/window/time. If multiple exact results, do not pick the first name: compare full configuration/profile or stop ambiguous. Preserve all payment/protected-screen checks.
+2. Prove read-only lifecycle in one run: known MENU -> open search -> set exact line -> unique food row -> existing `readHungerProduct` on known PDP -> known PDP close -> search Close -> MENU. Capture full actual ConfiguredProduct/options. Search-result20 SAR is a LISTING price, never final total or evidence of matching options.
+3. Wire that reusable lifecycle into `readHungerPlainLine`; replace long30-page scans only once result identity/options are validated. Do not shrink the full draft. Matching by name alone already opened a Herfy combo instead of a sandwich; do not repeat that error.
+4. Reuse the SAME opened-product lifecycle for `prepareOwnedHungerSteps` seed and missing row. Retain actual complete origin MENU (empty or ownership-bound prior contents) and observation time. Inspect `RidanCartProgram.createForSeed/createForOwnedAddition` requirements before modifying. Never invent an empty BasketEvidence or menu-to-cart receipt.
+5. After one Add, the provider may return to SEARCH, not MENU. Admit only known search Close, then read the actual MENU footer and complete CART before ownership acknowledgement. Never wait for MENU blindly then repeat Add. Existing quantity/complete-cart/review guards remain unchanged. Session may need a bounded longer read-only lifetime for full product-option reads; this cannot relax cart/seed freshness.
+6. Actual required gates remain: one-run FULL HS empty two-row build+review; actual NORMAL UI Compare starting with BOTH baskets empty; both handoffs and safe retry. Historical successful existing-cart Kudo comparisons are not these new proofs. No publishing before those required live checks.
+7. Keeta SKU identity still needs work. Brown Blue Lagoon has an unrecognized sole SKU label; do not silently ignore it or infer size/default equivalence. Public __NEXT_DATA__ vendorMenu items contain only id/name/calories/price/group_id/description/image in the inspected local sample, NO variant/modifier metadata. Read actual configured product data and compare full choices/size. No fake APIs or blanket optional-choice admission.
+
+## Device/tool details
+
+USB AWRT025716005112. Always use escalated execution for ADB in this environment; un-escalated ADB sees a different/failed server and is not evidence that phone disconnected. Actual observed launcher components from public package metadata: HS `com.hungerstation.android.web/.hungeractivities.MainActivity`; Keeta `com.sankuai.sailor.afooddelivery/com.sankuai.sailor.shell.SplashActivity`. Generic adb MAIN/LAUNCHER package resolution returned none here; explicit observed activities worked. HS explicit launcher brought Home. No private app files, sessions or protection overrides used.
+
+Do not use Arabic `adb input text`: it failed NullPointerException in the Android keyboard mapping. ACTION_SET_TEXT through the scoped service worked. Python output should explicitly use UTF-8 for SAR glyphs. Do not run uiautomator or instrumentation during an active app automation job.
+
+Saved public-capture files are ignored under `work/device-20261025`. The tracked search fixture contains only food and control metadata, not account/address/payment data. No screenshots or full dumps of payment/review screens.
