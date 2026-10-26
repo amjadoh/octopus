@@ -312,7 +312,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                     (query.isBlank() || it.name.contains(query.trim(), ignoreCase = true))
             }
             if (visible.isEmpty()) item { Text("لا توجد مطاعم تطابق البحث في الصفحات المحمّلة. حدّث القائمة أو حمّل مطاعم إضافية.", fontSize = 13.sp) }
-            items(visible, key = { it.name }) { restaurant ->
+            items(visible, key = { it.catalogKey }) { restaurant ->
                 Card(onClick = {
                     finishManualReading(); localError = null
                     if (!LiveCatalogBridge.openMenu(restaurant)) localError = graph.catalog.value.error
@@ -334,7 +334,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                             Text(restaurant.name, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                             restaurant.description?.let { Text(it, color = OctopusPalette.Muted, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
-                            Text(if (publicState.area == null) "هنقرستيشن • القائمة المحفوظة" else "موقع هنقرستيشن • قائمة عامة", fontSize = 11.sp, color = OctopusPalette.Petrol)
+                            Text(if (restaurant.origin == CatalogOrigin.MANUAL) "هنقرستيشن • قراءة يدوية محفوظة" else "موقع هنقرستيشن • قائمة عامة", fontSize = 11.sp, color = OctopusPalette.Petrol)
                         }
                         Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, Modifier.size(18.dp), tint = OctopusPalette.Petrol)
                     }

@@ -23,7 +23,7 @@ data class CatalogArea(val city: String, val district: String) {
 }
 
 data class PublicRestaurant(val id: Long, val name: String, val categories: String, val url: String, val status: String) {
-    fun live() = LiveRestaurant(name, categories, name)
+    fun live() = LiveRestaurant(name, categories, name, origin = CatalogOrigin.PUBLIC)
 }
 data class PublicDirectory(val area: CatalogArea, val restaurants: List<PublicRestaurant>, val page: Int,
     val pages: Int, val observedAt: Long)

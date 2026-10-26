@@ -30,7 +30,7 @@ class PlainBasketSeed private constructor(
         fun create(request:CanonicalCart,line:CanonicalItem,provider:ProviderId,version:String?,unit:Long,
             emptyMenu:CatalogFrame,now:Long):PlainBasketSeed? {
             val plan=PlainMenuReadPlan.create(request,provider,version.orEmpty()) ?: return null
-            if(plan.lines.size!=2 || line !in plan.lines || unit<0 || now<0 || !emptyMenu.complete)return null
+            if(plan.lines.size !in 1..2 || line !in plan.lines || unit<0 || now<0 || !emptyMenu.complete)return null
             val qty=when(provider) {
                 ProviderId.HUNGERSTATION -> {
                     if(version!=HungerStationCatalog.TESTED_VERSION || HungerStationCatalog.screen(emptyMenu)!=CatalogScreen.MENU ||

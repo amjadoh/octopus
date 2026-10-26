@@ -61,6 +61,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private var overlay: View? = null
     private var manualJob: Job? = null
     private val manualCollector = ManualCatalogCollector()
+    private var manualSummary = ManualCaptureSummary()
     private var comparisonEpoch = 0L
     private var stepInterrupted: String? = null
     private var targetSeen = false
@@ -98,12 +99,27 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             preparedBaskets = graph.catalog.value.preparedBaskets.invalidate(id))
     }
 
-    private fun rememberPrepared(desired: CanonicalCart, evidence: BasketEvidence, version: String) {
+    private suspend fun rememberPrepared(desired: CanonicalCart, evidence: BasketEvidence, version: String) {
         check(graph.draft.value?.fingerprint == desired.fingerprint) { "تغير طلبك؛ لم أحتفظ بسلة لطلب سابق." }
         val record = PreparedBasketRecord.create(desired, evidence, version, System.currentTimeMillis())
             ?: error("السلة المقروءة لا تطابق الطلب؛ لا توجد سلة جاهزة للتسليم.")
+        observeBasketMutation(desired, evidence)
         graph.catalog.value = graph.catalog.value.copy(preparedBasket = evidence,
             preparedBaskets = graph.catalog.value.preparedBaskets.record(record))
+    }
+
+    private suspend fun observeBasketMutation(desired: CanonicalCart, evidence: BasketEvidence) {
+        withContext(Dispatchers.IO) { graph.basketMutationJournal.observe(desired, evidence) }
+    }
+
+    private suspend fun requireFirstBasketAdd(desired: CanonicalCart) {
+        withContext(Dispatchers.IO) { graph.basketMutationJournal.requireFirstAdd(provider, desired) }
+    }
+
+    private suspend fun recordBasketMutation() {
+        val desired = graph.draft.value ?: error("اختفى الطلب؛ لم أعدل السلة.")
+        check(desired.fingerprint == requestFingerprint) { "تغير الطلب قبل تعديل السلة." }
+        withContext(Dispatchers.IO) { graph.basketMutationJournal.beforeDispatch(provider, desired) }
     }
 
     fun stop(message: String = "أوقفت العملية. راجع السلة إن بدأ تجهيزها.") {
@@ -126,7 +142,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         if (!graph.settings.value.catalogConsent || provider !in graph.settings.value.allowed ||
             graph.installations.value.none { it.provider == provider && it.installed && it.version == HungerStationCatalog.TESTED_VERSION }) return false
         val launch = service.packageManager.getLaunchIntentForPackage(provider.packageName) ?: return false
+        graph.publicCatalog.leaveMenu()
+        graph.publicMealSelection.value = null
         manualCollector.reset()
+        manualSummary = ManualCaptureSummary()
         catalogStop = CatalogStopState()
         operation = CatalogOperation.BROWSE
         priorRecognizedScreen = null
@@ -161,7 +180,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 // No timeout or interruption is allowed to pull the user back into Octopus.
                 if (generation == token && manualJob === currentCoroutineContext()[Job] && graph.catalog.value.manualCaptureActive) {
                     graph.catalog.value = graph.catalog.value.copy(manualCaptureActive = false,
-                        message = "انتهت القراءة اليدوية. بيانات المطاعم التي أمكن قراءتها محفوظة محليًا.")
+                        message = manualSummary.message)
                     hideStop()
                 }
             }
@@ -179,6 +198,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         val update = manualCollector.observe(capture(root), System.currentTimeMillis(),
             library.restaurants.map { it.restaurant }, library.menus.map { it.menu })
         if (update.hasData) graph.saveCatalogObservation(update) { generation == token && graph.catalog.value.manualCaptureActive }
+        if (generation == token) manualSummary.record(update)
         if (generation == token) update.reason?.let { graph.catalog.value = graph.catalog.value.copy(message = it) }
     }
 
@@ -187,7 +207,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         manualJob?.cancel(); manualJob = null
         manualCollector.reset()
         hideStop()
-        graph.catalog.value = graph.catalog.value.copy(manualCaptureActive = false)
+        graph.catalog.value = graph.catalog.value.copy(manualCaptureActive = false, message = manualSummary.message)
     }
 
     fun captureManualCatalog(): Boolean {
@@ -244,7 +264,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     },
                     available = { id -> graph.catalog.value.previews.any { it.provider == id && it.itemSubtotal != null && it.fresh(desired, System.currentTimeMillis()) } },
                     prepare = { id ->
-                        val started = if(PlainComparisonSupport.existingTwoRow(desired))
+                        val started = if(id == ProviderId.HUNGERSTATION ||
+                            graph.installations.value.any { it.provider == ProviderId.KEETA && it.version == "3.13.203" })
                             begin(operation=CatalogOperation.BUILD_CART,timeoutMillis=600_000) {
                                 val progress=PlainPreparationProgress()
                                 if(id==ProviderId.HUNGERSTATION) prepareOwnedHungerSteps(desired,true,progress)
@@ -588,7 +609,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                         .put("scrollable",n.scrollable)})).toString(),Charsets.UTF_8)
             }
         }
-        return frame to (evidence ?: error("لم تتطابق جميع وحدات السلة ومبالغها مع القائمة؛ لم أعدلها."))
+        val complete = evidence ?: error("لم تتطابق جميع وحدات السلة ومبالغها مع القائمة؛ لم أعدلها.")
+        observeBasketMutation(desired, complete)
+        return frame to complete
     }
 
     private suspend fun leaveCompleteHungerBasket(frame:CatalogFrame,evidence:BasketEvidence):CatalogFrame {
@@ -714,6 +737,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         var seed:PlainBasketSeed?=null
         if(menu.nodes.none {it.id=="FlutterMenu_goToCartButton"}) {
             check(!readOnly) {"السلة أصبحت فارغة؛ أعد المقارنة. لم أضف أثناء التسليم."}
+            requireFirstBasketAdd(desired)
             val first=PlainMenuReadPlan.create(desired,provider,HungerStationCatalog.TESTED_VERSION)!!.lines.first()
             val observedAt=System.currentTimeMillis()
             val opened=openHungerPlainProduct(menu,desired,first)
@@ -925,6 +949,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         }
         if(!keetaMenu.basketDrawer(frame) && keetaBasket.emptyMenu(frame)) {
             check(!readOnly) {"سلة كيتا أصبحت فارغة؛ أعد المقارنة. لم أضف أثناء التسليم."}
+            requireFirstBasketAdd(desired)
             val empty=frame
             val observedAt=System.currentTimeMillis()
             openKeetaPreviewProduct(frame)
@@ -959,6 +984,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             }
         }
         var evidence=keetaBasket.evidence(frame) ?: error("لم تثبت قراءة سلة كيتا كاملة؛ لم أعدلها.")
+        observeBasketMutation(desired, evidence)
         seed?.let {check(it.acknowledge(graph.draft.value ?: desired,evidence,keetaMenu.VERSION,System.currentTimeMillis())) {
             "لم تتطابق سلة كيتا كاملة بعد أول إضافة؛ لم أكررها."
         }}
@@ -1014,6 +1040,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                         "لم تتطابق جميع صفوف السلة بعد إجراء واحد؛ توقفت دون تكراره."
                     }
                     evidence=observed
+                    observeBasketMutation(desired, evidence)
                     progress.rows=evidence.lines.size
                 }
             }
@@ -1136,7 +1163,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     fun prepareComparedKeeta(handoff: Boolean = false): Boolean {
         if (!matchesSelectedRestaurant()) return false
         val desired = graph.draft.value ?: return false
-        if(handoff && PlainComparisonSupport.existingTwoRow(desired))return openOwnedPlainHandoff(ProviderId.KEETA,desired)
+        if(handoff && (PlainComparisonSupport.existingTwoRow(desired) ||
+            graph.installations.value.any { it.provider == ProviderId.KEETA && it.version == "3.13.203" }))
+            return openOwnedPlainHandoff(ProviderId.KEETA,desired)
         if (!PreviewEvidence.supports(desired)) return false
         if (handoff) {
             val saved = graph.catalog.value.preparedBaskets.forRequest(desired, ProviderId.KEETA)?.evidence ?: return false
@@ -1170,6 +1199,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     frame = restoreKeetaHeader(frame)
                 if (keetaBasket.emptyMenu(frame)) {
                     check(!handoff) { "سلة كيتا أصبحت فارغة؛ أعد تجهيزها." }
+                    requireFirstBasketAdd(desired)
                     val preview = graph.catalog.value.previews.single { it.provider == ProviderId.KEETA }
                     val expectedUnit = preview.itemSubtotal!! / desired.items.single().quantity
                     openKeetaPreviewProduct(frame)
@@ -1183,6 +1213,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 frame = await { keetaMenu.basketDrawer(it) }
             }
             var evidence = keetaBasket.evidence(frame) ?: error("سلة كيتا ليست وجبة المطعم المختار الواحدة المقروءة بالكامل؛ لم أغيرها.")
+            observeBasketMutation(desired, evidence)
             val quantity = desired.items.single().quantity
             if (handoff) check(evidence.lines.single().quantity == quantity) { "تغيرت الكمية؛ أعد تجهيز السلة." }
             var changes = 0
@@ -1199,6 +1230,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 val expected = before + if (increase) 1 else -1
                 frame = await { keetaBasket.evidence(it)?.lines?.singleOrNull()?.quantity == expected }
                 evidence = keetaBasket.evidence(frame) ?: error("تعذرت إعادة قراءة السلة بعد تعديل واحد؛ توقفت دون إعادة الإجراء.")
+                observeBasketMutation(desired, evidence)
             }
             check(graph.draft.value?.fingerprint == desired.fingerprint)
             rememberPrepared(desired, evidence, keetaMenu.VERSION)
@@ -1217,6 +1249,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             val frame = capture(root)
             val target = selector(frame) ?: error("تعذر إثبات زر السلة أو الكمية؛ لم أنفذ الإجراء.")
             check(target.label != "إتمام الدفع" && target.label != "تفريغ السلة")
+            val mutation = target.label == "إضافة إلى السلة" ||
+                keetaBasket.quantityTarget(frame, true) == target || keetaBasket.quantityTarget(frame, false) == target
+            if (mutation) recordBasketMutation()
             // One dispatch only, then await the exact resulting quantity. Never retry a mutation.
             check(performKeetaReadAction(root, target, AccessibilityNodeInfo.ACTION_CLICK)) { "تعذر تنفيذ إجراء السلة؛ لم أكرره." }
         } finally { @Suppress("DEPRECATION") root.recycle() }
@@ -1710,161 +1745,12 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
 
     /** Explicit UI request only. Never replaces a nonmatching basket or opens checkout. */
     fun prepareRidan(details: ConfiguredProduct, selection: ProductSelection, desiredQuantity: Int = selection.quantity): Boolean {
-        if (!RidanCartProgram.supports(details, selection, System.currentTimeMillis())) return false
-        if (desiredQuantity !in 1..99 || graph.draft.value?.items?.singleOrNull()?.quantity != desiredQuantity) return false
         val desired = graph.draft.value ?: return false
-        if (!PreviewEvidence.supports(desired) || desired.restaurant != details.restaurant ||
-            desired.items.single().name != details.product.title) return false
-        val priorMenu = graph.catalog.value.menu
+        if (!RidanCartProgram.supports(details, selection, System.currentTimeMillis()) ||
+            !PreviewEvidence.supports(desired) || desired.restaurant != details.restaurant ||
+            desired.items.single().name != details.product.title || desired.items.single().quantity != desiredQuantity) return false
         return begin(operation = CatalogOperation.BUILD_CART) {
-            requestFingerprint = desired.fingerprint
-            forgetPrepared(ProviderId.HUNGERSTATION)
-            phase = "تجهيز سلة المطعم المختار"
-            val restaurant = LiveRestaurant(details.restaurant, null, details.restaurant)
-            check(!navigateToRestaurant(restaurant)) { "المطعم المختار غير متاح للطلب حاليًا." }
-            var menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
-            val hasBasket = menu.nodes.any { it.id == "FlutterMenu_goToCartButton" }
-            if (!hasBasket) {
-                var item: CatalogNode? = null
-                var previousMenuBody: String? = null
-                for (page in 0 until 30) {
-                    val matches = menu.nodes.filter { node -> HungerStationCatalog.menuItem(node)?.let {
-                        it.name == details.product.title && it.selector == details.product.id } == true }
-                    check(matches.size <= 1) { "الوجبة المختارة غير فريدة؛ لم تتغير السلة." }
-                    if (matches.size == 1) { item = matches.single(); break }
-                    val body = HungerStationCatalog.menuItems(menu).toString()
-                    if (body == previousMenuBody) break
-                    previousMenuBody = body
-                    if (!act(menu, CatalogAction.SCROLL_MENU, { it.scrollable && it.className == "android.widget.ScrollView" }, allowNoOp = true)) break
-                    menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
-                }
-                val selected = item ?: error("الوجبة المختارة غير ظاهرة؛ لم تُستبدل بصنف آخر.")
-                val program = RidanCartProgram.create(details, selection, menu, System.currentTimeMillis(), desiredQuantity)
-                    ?: error("تعذر إثبات سلة المطعم المختار الفارغة؛ لم تتغير السلال.")
-                act(menu, CatalogAction.OPEN_PRODUCT, { it == selected })
-                val read = readHungerProduct(restaurant, LiveMenuItem(details.product.title, details.product.listedPriceHalala, details.product.id))
-                var product = read.lastFrame
-                val current = read.details
-                check(RidanCartProgram.supports(current, selection, System.currentTimeMillis())) { "تغيرت خيارات الوجبة؛ توقفت الإضافة." }
-                val unit = current.product.listedPriceHalala ?: error("تعذر قراءة سعر الوحدة.")
-                if (desiredQuantity != 1) {
-                    var changes=0
-                    while (HungerStationProductQuantityCommand.observed(product,details.product.title,unit)!=desiredQuantity) {
-                        check(++changes<=98)
-                        val command=HungerStationProductQuantityCommand.next(product,details.product.title,unit,
-                            desiredQuantity,HungerStationCatalog.TESTED_VERSION,System.currentTimeMillis())
-                            ?: error("لم يظهر تحكم كمية موثوق في صفحة الوجبة؛ لم أضغط إضافة.")
-                        act(product,CatalogAction.ADJUST_RIDAN_QUANTITY,{it==command.target},productQuantityCommand=command)
-                        product=await {HungerStationProductQuantityCommand.observed(it,details.product.title,unit)==command.expectedAfter}
-                    }
-                }
-                val add = product.nodes.singleOrNull { it.id == "flutterAddButton" }
-                    ?: error("لم يظهر زر إضافة واحد موثوق.")
-                // Consume before dispatch. Timeout/failure must never repeat the add.
-                act(product, CatalogAction.ADD_RIDAN, { it == add }, ridanProgram = program)
-                menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU && it.hasId("FlutterMenu_goToCartButton") }
-            }
-            val existingCount=menu.nodes.singleOrNull{it.id=="FlutterMenu_goToCartQuantity"}?.label?.trim()?.let {app.octopus.local.pricing.MoneyParser.parse(it)?.div(100)?.toInt()}
-            if (hasBasket && existingCount != desiredQuantity && graph.existingQuantityConsent.value?.permits(desired,System.currentTimeMillis())==true) {
-                val unit=details.product.listedPriceHalala ?: error("تعذر قراءة سعر الوحدة.")
-                var previousBody:String?=null
-                for(page in 0 until 30) {
-                    if(HungerStationMenuQuantityCommand.observedQuantity(menu,details.restaurant,details.product.title,unit)!=null)break
-                    val body=menu.nodes.toString()
-                    if(body==previousBody)break
-                    previousBody=body
-                    if(!act(menu,CatalogAction.SCROLL_MENU,{it.scrollable && it.className=="android.widget.ScrollView"},allowNoOp=true))break
-                    menu=await{HungerStationCatalog.screen(it)==CatalogScreen.MENU}
-                }
-                var sheet=menu
-                var menuChanges=0
-                while(HungerStationExistingVariant.read(sheet,details.product.title)==null &&
-                    HungerStationMenuQuantityCommand.observedQuantity(sheet,details.restaurant,details.product.title,unit)!=desiredQuantity) {
-                    check(++menuChanges<=98 && graph.existingQuantityConsent.value?.permits(desired,System.currentTimeMillis())==true)
-                    val command=HungerStationMenuQuantityCommand.next(sheet,details.restaurant,details.product.title,unit,
-                        desiredQuantity,HungerStationCatalog.TESTED_VERSION,matchingQuantityAuthorized=true,System.currentTimeMillis())
-                        ?: error("لم يظهر تحكم كمية الوجبة كاملًا؛ لم أكرر الإضافة.")
-                    act(sheet,CatalogAction.ADJUST_RIDAN_QUANTITY,{it==command.target},menuQuantityCommand=command)
-                    sheet=await {HungerStationExistingVariant.read(it,details.product.title)!=null ||
-                        HungerStationMenuQuantityCommand.observedQuantity(it,details.restaurant,details.product.title,unit)==command.expectedAfter}
-                }
-                if(HungerStationExistingVariant.read(sheet,details.product.title)!=null) {
-                var observed=HungerStationExistingVariant.read(sheet,details.product.title)
-                    ?: error("لم تظهر نسخة السلة المطابقة؛ لم أضف صنفًا جديدًا.")
-                check(observed.quantity==existingCount && observed.unit==unit){"تغيرت نسخة الصنف؛ لم أعدلها."}
-                var changes=0
-                while(observed.quantity!=desiredQuantity) {
-                    check(++changes<=98 && graph.existingQuantityConsent.value?.permits(desired,System.currentTimeMillis())==true)
-                    val command=HungerStationVariantQuantityCommand.next(sheet,details.product.title,unit,desiredQuantity,HungerStationCatalog.TESTED_VERSION,System.currentTimeMillis())
-                        ?: error("تعذر تحديد زر كمية النسخة المطابقة.")
-                    act(sheet,CatalogAction.ADJUST_RIDAN_QUANTITY,{it==command.target},variantQuantityCommand=command)
-                    sheet=await {HungerStationExistingVariant.read(it,details.product.title)?.let {r->r.quantity==command.expectedAfter && r.unit==unit}==true}
-                    observed=HungerStationExistingVariant.read(sheet,details.product.title)!!
-                }
-                act(sheet,CatalogAction.CLOSE_HUNGER_VARIANT,{it==observed.close},variantTitle=details.product.title)
-                menu=await{HungerStationCatalog.screen(it)==CatalogScreen.MENU}
-                } else menu=sheet
-            }
-            val count = menu.nodes.singleOrNull { it.id == "FlutterMenu_goToCartQuantity" }?.label?.trim()
-            val menuCount = count?.let { app.octopus.local.pricing.MoneyParser.parse(it)?.div(100)?.toInt() }
-            check(menuCount in 1..99) { "تعذرت قراءة كمية السلة؛ لم أعدلها أو أكرر الإضافة." }
-            val target = HungerStationBasketControls.openTarget(menu) ?: run {
-                if (BuildConfig.VERSION_NAME.endsWith("-device-tools")) {
-                    val row=menu.nodes.singleOrNull { HungerStationCatalog.menuItem(it)?.name==details.product.title }
-                    val publicIds=(row?.let {menu.descendants(it.index)}.orEmpty()+
-                        menu.nodes.filter {it.id=="FlutterMenu_goToCartButton"}.flatMap {menu.descendants(it.index)})
-                        .map {it.index}.toSet()
-                    val safe=menu.nodes.map {n->JSONObject().put("index",n.index).put("parent",n.parent)
-                        .put("id",n.id).put("className",n.className).put("clickable",n.clickable).put("enabled",n.enabled)
-                        .put("editable",n.editable).put("scrollable",n.scrollable)
-                        .put("label",if(n.index in publicIds || n.label==details.restaurant)n.label else "")}
-                    withContext(Dispatchers.IO) {service.filesDir.resolve("live-hs-menu-quantity.json")
-                        .writeText(JSONObject().put("complete",menu.complete).put("nodes",JSONArray(safe)).toString(),Charsets.UTF_8)}
-                }
-                if (BuildConfig.VERSION_NAME.endsWith("-device-tools")) {
-                    val anchor = menu.nodes.singleOrNull { it.id == "FlutterMenu_goToCartButton" }
-                    val data = anchor?.let { menu.descendants(it.index) }.orEmpty()
-                    service.filesDir.resolve("live-hs-basket-anchor.json").writeText(JSONArray(data.map { n ->
-                        JSONObject().put("index",n.index).put("parent",n.parent).put("id",n.id)
-                            .put("label",n.label).put("className",n.className).put("clickable",n.clickable)
-                            .put("editable",n.editable).put("enabled",n.enabled)
-                    }).toString(), Charsets.UTF_8)
-                }
-                error(if (menu.nodes.any { it.id == "FlutterMenu_goToCartButton" } &&
-                    menu.nodes.none { it.clickable && it.enabled && it.label.startsWith("عرض السلة") })
-                    "زر السلة غير متاح للكمية التي اخترتها؛ قد لا يبلغ الطلب الحد الأدنى. لم أزد الكمية عن طلبك."
-                    else "تعذر تحديد زر السلة الموثوق.")
-            }
-            val command = BasketOpenCommand(menu, target, System.currentTimeMillis())
-            act(menu, CatalogAction.OPEN_BASKET, { it == target }, basketCommand = command)
-            var cart = await { HungerStationCatalog.screen(it) == CatalogScreen.CART }
-            // The fixed footer's count is one, and exactly one fully parsed row must agree.
-            var evidence = BasketEvidenceReader.hungerStation(cart, endOfCartObserved = false)
-            check(evidence.restaurant == details.restaurant && evidence.lines.size == 1 &&
-                cart.nodes.count { it.id == "FlutterCart_cartItem" } == 1 && evidence.lines.single().let {
-                    it.name == details.product.title && it.quantity == menuCount && it.choices.isEmpty() }) {
-                "لم تتطابق السلة المقروءة مع الوجبة؛ لا توجد إضافة أخرى أو تأكيد طلب."
-            }
-            var changes = 0
-            while (evidence.lines.single().quantity != desiredQuantity) {
-                check(++changes <= 98 && graph.draft.value?.fingerprint == desired.fingerprint)
-                val before = evidence.lines.single().quantity!!
-                val increase = before < desiredQuantity
-                val command = RidanQuantityCommand(before, increase, System.currentTimeMillis(), details.restaurant, details.product.title)
-                val targetQuantity = RidanQuantityCommand.target(cart, before, increase, details.restaurant, details.product.title) ?: error("تعذر تحديد زر كمية الوجبة؛ لم أعدله.")
-                act(cart, CatalogAction.ADJUST_RIDAN_QUANTITY, { it == targetQuantity }, quantityCommand = command)
-                val expected = before + if (increase) 1 else -1
-                cart = await { HungerStationCatalog.screen(it) == CatalogScreen.CART &&
-                    BasketEvidenceReader.hungerStation(it, false).lines.singleOrNull()?.quantity == expected }
-                evidence = BasketEvidenceReader.hungerStation(cart, false)
-                check(evidence.restaurant == details.restaurant && evidence.lines.singleOrNull()?.name == details.product.title &&
-                    evidence.lines.single().choices.isEmpty()) { "تغيرت الوجبة؛ توقفت دون إعادة الإجراء." }
-            }
-            rememberPrepared(desired, evidence, HungerStationCatalog.TESTED_VERSION)
-            graph.catalog.value = graph.catalog.value.copy(menu = priorMenu,
-                message = "تم التحقق من سلة المطعم المختار: ${details.product.title}، الكمية $desiredQuantity. لم يُؤكد طلب أو دفع. سعر الأصناف ليس إجمالي التوصيل.",
-                preparedBasket = evidence)
-            if (comparisonJob?.isActive == true) readFinalTotal(desired)
+            prepareOwnedHungerSteps(desired, comparisonJob?.isActive == true, PlainPreparationProgress())
         }
     }
 
@@ -2090,7 +1976,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     fun openPreparedRidanBasket(): Boolean {
         if (!matchesSelectedRestaurant()) return false
         val draft = graph.draft.value ?: return false
-        if(PlainComparisonSupport.existingTwoRow(draft))return openOwnedPlainHandoff(ProviderId.HUNGERSTATION,draft)
+        if(PreviewEvidence.supports(draft) || PlainComparisonSupport.existingTwoRow(draft))
+            return openOwnedPlainHandoff(ProviderId.HUNGERSTATION,draft)
         val saved = graph.catalog.value.preparedBaskets.forRequest(draft, ProviderId.HUNGERSTATION)?.evidence ?: return false
         if (!PreviewEvidence.supports(draft) || draft.restaurant != saved.restaurant ||
             draft.items.size != 1 || draft.items.single().let { it.name != saved.lines.singleOrNull()?.name || it.quantity !in 1..99 || it.options.isNotEmpty() }) return false
@@ -2535,6 +2422,12 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 }) { "العنصر لا يدعم الإجراء المطلوب." }
                 verifyActiveFrame(fresh, root.windowId)
                 currentCoroutineContext().ensureActive(); checkSession()
+                if (action == CatalogAction.ADD_RIDAN ||
+                    (action == CatalogAction.ADJUST_RIDAN_QUANTITY && productQuantityCommand == null)) {
+                    recordBasketMutation()
+                    verifyActiveFrame(fresh, root.windowId)
+                    currentCoroutineContext().ensureActive(); checkSession()
+                }
                 val success = if (text != null) target.performAction(androidAction, Bundle().apply {
                     putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
                 }) else target.performAction(androidAction)

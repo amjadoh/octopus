@@ -6,12 +6,12 @@ import java.net.URI
 fun interface PublicCatalogClient { fun get(url: String): String }
 
 /** Only unauthenticated public HTML. Does not share the update WebView's cookie/session jar. */
-class PublicCatalogHttpClient : PublicCatalogClient {
+class PublicCatalogHttpClient(private val allowed: (String) -> Boolean = PublicCatalogUrls::allowed) : PublicCatalogClient {
     override fun get(url: String): String {
-        require(PublicCatalogUrls.allowed(url))
+        require(allowed(url))
         var next = url
         repeat(4) {
-            require(PublicCatalogUrls.allowed(next))
+            require(allowed(next))
             val connection = URI(next).toURL().openConnection() as HttpURLConnection
             try {
                 connection.instanceFollowRedirects = false
@@ -20,7 +20,7 @@ class PublicCatalogHttpClient : PublicCatalogClient {
                 val code = connection.responseCode
                 if (code in listOf(301,302,303,307,308)) {
                     next = URI(next).resolve(connection.getHeaderField("Location") ?: error("Redirect missing")).toString()
-                    require(PublicCatalogUrls.allowed(next)) { "Public source redirected outside its supported pages" }
+                    require(allowed(next)) { "Public source redirected outside its supported pages" }
                 } else {
                     check(code == 200 && connection.contentType?.substringBefore(';')?.trim() == "text/html") { "Public source unavailable" }
                     require(connection.contentLengthLong <= HungerStationPublicParser.MAX_HTML_BYTES)
