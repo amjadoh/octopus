@@ -59,7 +59,11 @@ class PlainBasketPreparationSession private constructor(
         private fun quantities(actual:BasketEvidence):Map<String,Int>? {
             if(!actual.complete || actual.lines.isEmpty() || actual.lines.map {it.name}.distinct().size!=actual.lines.size ||
                 actual.lines.any {it.quantity !in 1..99 || it.choices.isNotEmpty() || it.lineAmount==null || it.lineAmount<0} ||
-                actual.subtotal?.let {it<0}==true) return null
+                actual.subtotal == null || actual.subtotal < 0) return null
+            val sum = runCatching { actual.lines.fold(0L) { total, row ->
+                Math.addExact(total, row.lineAmount!!)
+            } }.getOrNull() ?: return null
+            if (sum != actual.subtotal) return null
             return actual.lines.associate {it.name to it.quantity!!}
         }
         fun create(request:CanonicalCart,actual:BasketEvidence,version:String):PlainBasketPreparationSession? {

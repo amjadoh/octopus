@@ -11,7 +11,7 @@ class PlainBasketPreparationSessionTest {
     private val request=CanonicalCart("كودو",null,listOf(first,second))
     private fun basket(a:Int=3,b:Int?=null)=BasketEvidence(ProviderId.KEETA,"كودو",
         listOf(BasketLineEvidence(first.name,emptyList(),a,900L*a))+
-            if(b==null)emptyList() else listOf(BasketLineEvidence(second.name,emptyList(),b,1300L*b)),null,true)
+            if(b==null)emptyList() else listOf(BasketLineEvidence(second.name,emptyList(),b,1300L*b)),900L*a+1300L*(b?:0),true)
     private fun edit(session:Session, actual:BasketEvidence, now:Long=1000)=
         (session.next(request,actual,"v",now) as Session.Step.Change).edit
     @Test fun missingLineAddsOneThenAdjustsOnlyItsQuantityAndVerifiesAllRows() {
@@ -61,5 +61,26 @@ class PlainBasketPreparationSessionTest {
         val other=Session.create(request,basket(),"v")!!;val next=edit(other,basket())
         assertTrue(other.consume(next,request,"v",1100))
         assertFalse(other.acknowledge(next,request,basket(b=2),"v",1200))
+    }
+    @Test fun unknownOrInconsistentMoneyCannotAuthorizeAnyEdit() {
+        assertNull(Session.create(request,basket().copy(subtotal=null),"v"))
+        assertNull(Session.create(request,basket().copy(subtotal=1),"v"))
+        val overflow=basket(b=1).copy(lines=listOf(
+            BasketLineEvidence(first.name,emptyList(),3,Long.MAX_VALUE),
+            BasketLineEvidence(second.name,emptyList(),1,1)),subtotal=Long.MIN_VALUE)
+        assertNull(Session.create(request,overflow,"v"))
+    }
+    @Test fun mismatchedPostEditMoneyBlocksAcknowledgementAndRetry() {
+        val session=Session.create(request,basket(),"v")!!
+        val add=edit(session,basket())
+        assertTrue(session.consume(add,request,"v",1100))
+        assertFalse(session.acknowledge(add,request,basket(b=1).copy(subtotal=1),"v",1200))
+        assertEquals(Session.Step.Blocked,session.next(request,basket(),"v",1300))
+    }
+    @Test fun repeatedMatchedBasketNeverCreatesAnAddOrQuantityCommand() {
+        repeat(5) {
+            val session=Session.create(request,basket(b=2),"v")!!
+            assertEquals(Session.Step.Ready,session.next(request,basket(b=2),"v",1000))
+        }
     }
 }

@@ -7,6 +7,19 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CartComparisonFlowTest {
+    @Test fun showsReadStageBeforeAnyPreparationAndStopsWhenContextChangesDuringRead() = runBlocking {
+        var unchanged=true
+        val progress=mutableListOf<CartComparisonProgress>()
+        var edits=0
+        try {
+            CartComparisonFlow().run({
+                assertEquals(ProviderId.entries.toSet(),progress.map {it.provider}.toSet())
+                assertTrue(progress.all {it.step==CartComparisonStep.READING_MENU})
+                unchanged=false
+            },{true},{edits++;null},{unchanged},progress::add)
+            fail("Changed region or order must stop before preparation")
+        } catch (_:IllegalStateException) { assertEquals(0,edits) }
+    }
     @Test fun preparationDoesNotBecomeAReadTotalWithoutTheExplicitReadingSignal() = runBlocking {
         val results = mutableListOf<CartComparisonProgress>()
         CartComparisonFlow().run({}, { true }, { null }, { true }, results::add,

@@ -47,6 +47,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
     var areaDialog by remember { mutableStateOf(false) }
     val state = observedState.copy(busy = observedState.busy || observedState.comparisonRunning)
     val settings by graph.settings.collectAsStateWithLifecycle()
+    val installations by graph.installations.collectAsStateWithLifecycle()
     val connected by graph.serviceConnected.collectAsStateWithLifecycle()
     val draft by graph.draft.collectAsStateWithLifecycle()
     val ready by graph.draftReady.collectAsStateWithLifecycle()
@@ -180,6 +181,8 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
             }
         }
         if (comparisonOnly) draft?.let { cart ->
+            val preflightFailure = app.octopus.local.automation.ComparisonPreflight.failure(
+                cart, settings.catalogConsent, settings.allowed, installations)
             if (!ComparisonRequestSelection.matches(state.selectedRestaurant, cart)) {
                 item {
                     Card(colors = CardDefaults.cardColors(containerColor = OctopusPalette.Soft)) {
@@ -238,9 +241,14 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                             if(allowMatchingQuantity) graph.approveExistingMatchingQuantity() else graph.existingQuantityConsent.value=null
                             if (!LiveCatalogBridge.compareAndPrepare()) localError = graph.catalog.value.error
                                 ?: "تعذر بدء تجهيز السلتين؛ تحقق من اتصال خدمة الأخطبوط."
-                        }, enabled = !state.busy && !changing && (PreviewEvidence.supports(cart) || PlainComparisonSupport.existingTwoRow(cart)),
+                        }, enabled = !state.busy && !changing && connected && preflightFailure == null,
                             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                             Icon(Icons.Outlined.CompareArrows, null); Spacer(Modifier.width(8.dp)); Text("قارن الإجمالي وجهّز السلتين")
+                        }
+                        if (!state.busy && !connected) TextButton(onClick = onSetup) { Text("ربط خدمة الأخطبوط لتشغيل المقارنة") }
+                        if (!state.busy && preflightFailure != null) {
+                            Text(preflightFailure, fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                            TextButton(onClick = onProviders) { Text("مراجعة إعدادات المنصات") }
                         }
                         if (PlainComparisonSupport.existingTwoRow(cart)) Text("المقارنة الحالية تدعم صنفين دون خيارات. يفحص التطبيق السلة أولًا؛ السلة المختلفة لا تُستبدل تلقائيًا.",fontSize=12.sp,color=OctopusPalette.Muted)
                         if (!PreviewEvidence.supports(cart) && !PlainComparisonSupport.existingTwoRow(cart)) Text("حُفظ طلبك. التجهيز يدعم صنفًا واحدًا، أو صنفين دون خيارات من سلة موجودة؛ بقية الطلبات تحتاج دعمًا إضافيًا.", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)

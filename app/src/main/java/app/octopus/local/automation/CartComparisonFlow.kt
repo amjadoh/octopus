@@ -22,6 +22,8 @@ class CartComparisonFlow {
             check(unchanged()) { "تغير الطلب؛ توقفت المقارنة دون تعديل سلة أخرى." }
         }
         checkRequest()
+        ProviderId.entries.forEach { progress(CartComparisonProgress(it, CartComparisonStep.READING_MENU,
+            "التحقق من أسعار الأصناف وخياراتها قبل تجهيز السلتين؛ لم يبدأ تعديل السلة.")) }
         readMenus()
         for (provider in ProviderId.entries) {
             checkRequest()

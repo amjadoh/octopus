@@ -34,14 +34,7 @@ class CurrentAreaLocator(private val context: Context) {
             .filter { runCatching { manager.isProviderEnabled(it) }.getOrDefault(false) }
         check(providers.isNotEmpty()) { "لا يتوفر مصدر لتحديد الموقع؛ اختر المنطقة من الاقتراحات." }
         val location = withTimeoutOrNull(25_000) {
-            coroutineScope {
-                val result = CompletableDeferred<Location>()
-                val jobs = providers.map { provider -> launch {
-                    val found = runCatching { current(provider) }.getOrNull()
-                    if (found != null && usable(found)) result.complete(found)
-                } }
-                try { result.await() } finally { jobs.forEach { it.cancel() } }
-            }
+            firstUsableLocation(providers.map { provider -> suspend { current(provider) } }, ::usable)
         } ?: error("لم يتحدد موقع حديث بدقة كافية؛ حاول قرب نافذة أو اختر المنطقة من الاقتراحات.")
         val geocoder = Geocoder(context, Locale.forLanguageTag("ar-SA"))
         val addresses = withTimeoutOrNull(15_000) {

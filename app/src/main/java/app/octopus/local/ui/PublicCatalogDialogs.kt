@@ -145,10 +145,10 @@ fun CatalogAreaDialog(graph: AppGraph, onDismiss: () -> Unit) {
                 saving=true
                 scope.launch {
                     try {
-                        graph.settingsStore.setCatalogArea(area)
-                        if (current == area) graph.refreshPublicRestaurants()
+                        graph.changeCatalogArea(area)
                         onDismiss()
-                    } catch (_: Exception) { error="تعذر حفظ المنطقة." }
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                    catch (failure: Exception) { error=failure.message ?: "تعذر حفظ المنطقة." }
                     finally { saving=false }
                 }
             }

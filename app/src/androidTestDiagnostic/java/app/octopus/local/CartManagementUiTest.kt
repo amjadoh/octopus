@@ -29,6 +29,19 @@ class CartManagementUiTest {
         compose.onNodeWithText("إدارة السلال وحذفها").performClick()
         return graph.draft.value!!
     }
+    @Test fun disconnectedComparisonExplainsSetupBeforeAnyProviderMovement() {
+        val request=setup()
+        compose.onNodeWithText("رجوع").performClick()
+        compose.runOnIdle { graph.serviceConnected.value=false }
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("قارن الإجمالي وجهّز السلتين"))
+        compose.onNodeWithText("قارن الإجمالي وجهّز السلتين").assertIsNotEnabled()
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("ربط خدمة الأخطبوط لتشغيل المقارنة"))
+        compose.onNodeWithText("ربط خدمة الأخطبوط لتشغيل المقارنة").assertIsDisplayed()
+        compose.runOnIdle {
+            assertEquals(request,graph.draft.value)
+            assertFalse(graph.catalog.value.comparisonRunning)
+        }
+    }
     @Test fun cancelPreservesCartAndConfirmationDeletesOnlyActiveDraft() {
         val request = setup()
         compose.onNodeWithText("حذف سلة الأخطبوط").performClick()
