@@ -122,7 +122,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                     publicState.updatedAt?.let { time -> Text("آخر تحديث: " +
                         java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale("ar")).format(java.util.Date(time)), fontSize = 12.sp) }
                     publicState.error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
-                    Text("المطاعم بحسب المدينة والحي المختارين. السعر والتوفر وعنوان التوصيل يتحقق منها أثناء المقارنة.", fontSize = 12.sp, color = OctopusPalette.Muted)
+                    Text("المطاعم بحسب المدينة والحي المختارين. يُعاد فحص السعر والتوفر أثناء المقارنة؛ تطابق عنوان التوصيل والفرع يحتاج مراجعتك داخل التطبيقين.", fontSize = 12.sp, color = OctopusPalette.Muted)
                     if (state.manualCaptureActive) {
                         Text("القراءة اليدوية نشطة؛ يمكنك إنهاؤها والاختيار من البيانات المحفوظة.", fontSize = 12.sp)
                         TextButton(onClick = { finishManualReading() }) { Text("إنهاء القراءة اليدوية") }
@@ -153,7 +153,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
         item {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 Icon(Icons.Outlined.LocationOn, null, Modifier.size(18.dp), tint = OctopusPalette.Petrol)
-                Text(publicState.area?.title ?: "من قائمة محفوظة؛ يُتحقق من العنوان عند المقارنة", fontSize = 12.sp, color = OctopusPalette.Muted)
+                Text(publicState.area?.title ?: "من قائمة محفوظة؛ راجع تطابق عنوان التوصيل في التطبيقين", fontSize = 12.sp, color = OctopusPalette.Muted)
             }
         }
         item {
@@ -238,7 +238,8 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                             finishManualReading()
                             localError = null
                             if(allowMatchingQuantity) graph.approveExistingMatchingQuantity() else graph.existingQuantityConsent.value=null
-                            if (!LiveCatalogBridge.compareAndPrepare()) localError = "تعذر بدء تجهيز السلتين؛ تحقق من الخدمة والطلب."
+                            if (!LiveCatalogBridge.compareAndPrepare()) localError = graph.catalog.value.error
+                                ?: "تعذر بدء تجهيز السلتين؛ تحقق من اتصال خدمة الأخطبوط."
                         }, enabled = !state.busy && !changing && (PreviewEvidence.supports(cart) || PlainComparisonSupport.existingTwoRow(cart)),
                             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                             Icon(Icons.Outlined.CompareArrows, null); Spacer(Modifier.width(8.dp)); Text("قارن الإجمالي وجهّز السلتين")

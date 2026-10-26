@@ -245,10 +245,11 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             graph.catalog.value = graph.catalog.value.copy(error = "توجد عملية نشطة؛ أوقفها قبل بدء مقارنة جديدة.")
             return false
         }
-        if (!PreviewEvidence.supports(desired) && !PlainComparisonSupport.existingTwoRow(desired)) {
-            graph.catalog.value = graph.catalog.value.copy(error =
-                if (desired.items.size > 1) "طلبك محفوظ كاملًا (${desired.items.size} أصناف). عدد الأصناف أو خياراتها خارج مسار التجهيز المدعوم؛ لم تبدأ المقارنة ولم تتغير السلال."
-                else "لم يبدأ تجهيز السلة: خيارات الوجبة أو حجمها أو ملاحظتها غير مدعومة في مسار التجهيز الحالي. احتُفظ بطلبك كاملًا.")
+        graph.refreshInstallations()
+        val preflightFailure = ComparisonPreflight.failure(desired, graph.settings.value.catalogConsent,
+            graph.settings.value.allowed, graph.installations.value)
+        if (preflightFailure != null) {
+            graph.catalog.value = graph.catalog.value.copy(error = preflightFailure)
             return false
         }
         graph.catalog.value = graph.catalog.value.copy(comparisonRunning = true, comparisonProgress = emptyMap(), finalTotals = emptyMap(), error = null)
@@ -315,29 +316,22 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             requestFingerprint = desired.fingerprint
             comparedProduct = null
             graph.catalog.value = graph.catalog.value.copy(previews = emptyList())
-            val hunger = try {
+            val hunger = MenuReadTimeoutBoundary.read(onTimeout = {
+                failedMenuPreview(ProviderId.HUNGERSTATION, desired,
+                    "انتهت مهلة قراءة الوجبة في هنقرستيشن؛ لم أغير السلة وسأكمل قراءة كيتا.")
+            }) { try {
                 phase = "قراءة سعر هنقرستيشن وعروضه"
                 val restaurant = LiveRestaurant(desired.restaurant, null, desired.restaurant)
                 check(!navigateToRestaurant(restaurant)) { "المطعم غير متاح للطلب في القراءة الحالية." }
                 phase = "قراءة الوجبة في هنقرستيشن"
-                var menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
+                val menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
                 val offerLabels = PreviewEvidence.offers(menu)
-                var previousItems: String? = null
-                for (page in 0 until 30) {
-                    if (HungerStationCatalog.menuItems(menu).any { it.name == desired.items.single().name }) break
-                    val visible = HungerStationCatalog.menuItems(menu).toString()
-                    if (visible == previousItems) break
-                    previousItems = visible
-                    if (!act(menu, CatalogAction.SCROLL_MENU,
-                            { it.scrollable && it.className == "android.widget.ScrollView" }, allowNoOp = true)) break
-                    menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU &&
-                        HungerStationCatalog.menuItems(it).toString() != visible }
-                }
-                val item = HungerStationCatalog.menuItems(menu).singleOrNull { it.name == desired.items.single().name }
-                    ?: error("لم تظهر الوجبة المطابقة في هنقرستيشن؛ لم أستبدلها بوجبة أخرى.")
-                act(menu, CatalogAction.OPEN_PRODUCT, { HungerStationCatalog.menuItem(it) == item })
+                // Single- and multi-item comparisons use the same observed native menu
+                // search. The old single-item scroll-only path missed off-screen products.
+                val opened = openHungerPlainProduct(menu, desired, desired.items.single())
                 phase = "قراءة خيارات هنقرستيشن"
-                val details = readHungerProduct(restaurant, item).details
+                val read = readHungerProduct(restaurant, opened.item)
+                val details = read.details
                 graph.catalog.value = graph.catalog.value.copy(product = details)
                 check(details.optionsComplete && details.product.available && details.product.listedPriceHalala != null) {
                     "لم يكتمل التحقق من الوجبة في هنقرستيشن؛ لا توجد مقارنة مؤكدة."
@@ -347,6 +341,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     "تحتاج الوجبة خيارات إلزامية؛ لم أستخدم سعرًا لطلب ناقص."
                 }
                 comparedProduct = details
+                if (opened.search != null) {
+                    act(read.lastFrame, CatalogAction.RETURN_TO_CATALOG, { it.id == "pdpCloseButton" })
+                    closeHungerMenuSearch(opened.search, desired)
+                }
                 MenuCostPreview(ProviderId.HUNGERSTATION, desired.fingerprint,
                     Math.multiplyExact(details.product.listedPriceHalala!!, desired.items.single().quantity.toLong()), offerLabels, System.currentTimeMillis(), HungerStationCatalog.TESTED_VERSION,
                     deliveryBeforeOffers = PreviewEvidence.hungerComponent(menu, "رسوم التوصيل"),
@@ -360,8 +358,12 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 failedMenuPreview(ProviderId.HUNGERSTATION, desired,
                     menuFailure(failure, "تعذرت قراءة الوجبة وخياراتها في هنقرستيشن أثناء: $phase؛ سأكمل قراءة كيتا."))
             }
+            }
             graph.catalog.value = graph.catalog.value.copy(previews = listOf(hunger), message = "انتهت محاولة هنقرستيشن؛ جارٍ قراءة كيتا دون تغيير السلال…")
-            val keeta = try {
+            val keeta = MenuReadTimeoutBoundary.read(onTimeout = {
+                failedMenuPreview(ProviderId.KEETA, desired,
+                    "انتهت مهلة قراءة الوجبة في كيتا؛ لم أغير السلة واحتُفظ بنتيجة هنقرستيشن المتاحة.")
+            }) { try {
                 bindKeetaRequest(desired)
                 // An unsupported installation is a preflight failure, never a coupon-read fallback.
                 provider = ProviderId.KEETA
@@ -461,6 +463,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             catch (failure: Exception) {
                 failedMenuPreview(ProviderId.KEETA, desired,
                     menuFailure(failure, "تعذرت قراءة الوجبة المطابقة في كيتا أثناء: $phase؛ احتُفظ بنتيجة هنقرستيشن المتاحة."))
+            }
             }
             check(graph.draft.value?.fingerprint == desired.fingerprint) { "تغير طلبك؛ أعد المقارنة." }
             graph.catalog.value = graph.catalog.value.copy(previews = listOf(hunger, keeta),
