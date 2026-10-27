@@ -21,6 +21,9 @@ class PreparedReviewAdmission private constructor(
             ReviewNavigationGuard.target(id,frame,cart,observedVersion,this,now)==target && used.compareAndSet(false,true)
     companion object {
         fun create(id:ProviderId,cart:CanonicalCart,record:PreparedBasketRecord,source:CatalogFrame,version:String,now:Long):PreparedReviewAdmission? {
+            // The ledger can retain configured evidence, but these navigation
+            // executors are verified only for plain requests.
+            if(cart.items.any { it.size!=null || it.options.isNotEmpty() || !it.note.isNullOrBlank() }) return null
             val multiple=cart.items.size>1
             val directSingle=id==ProviderId.KEETA && PreviewEvidence.supports(cart) &&
                 KeetaVersionProfile.resolve(version)?.allowsDirectDrawerReview==true

@@ -101,7 +101,14 @@ object BasketItemMatcher {
         if (!actual.complete) issues += BasketItemMismatch.PARTIAL
         if (actual.restaurant == null || IdentityText.clean(actual.restaurant) != IdentityText.clean(desired.restaurant)) issues += BasketItemMismatch.RESTAURANT
         val remaining = actual.lines.toMutableList()
-        val wanted = desired.items.groupBy(CartIdentity::itemKey).values.map { group -> group.first().copy(quantity = group.sumOf { it.quantity }) }
+        val wanted = desired.items.groupBy(CartIdentity::itemKey).values.mapNotNull { group ->
+            val quantity = group.sumOf { it.quantity.toLong() }
+            if (quantity !in 1L..99L) {
+                issues += BasketItemMismatch.QUANTITY
+                null
+            } else group.first().copy(quantity = quantity.toInt())
+        }
+        if (desired.items.isEmpty()) issues += BasketItemMismatch.ITEM
         for (item in wanted) {
             if (!item.note.isNullOrBlank()) issues += BasketItemMismatch.NOTES_UNKNOWN
             val expected = (listOfNotNull(item.size) + item.options.map { it.value }).map(IdentityText::clean).sorted()

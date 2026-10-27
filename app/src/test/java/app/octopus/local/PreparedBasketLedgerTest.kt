@@ -11,6 +11,55 @@ class PreparedBasketLedgerTest {
         listOf(BasketLineEvidence(cart.items.single().name, emptyList(), 1, 700)), 700, false)
     private fun record(id: ProviderId) = PreparedBasketRecord.create(cart, evidence(id), "observed-version", 1000)!!
 
+    private fun configuredCart() = cart.copy(items=listOf(cart.items.single().copy(
+        size="وسط", options=listOf(CartOption("إضافات", "شيبس")), quantity=3)))
+    private fun configuredEvidence() = evidence(ProviderId.HUNGERSTATION).copy(complete=true,
+        lines=listOf(BasketLineEvidence(cart.items.single().name,
+            listOf(BasketChoiceEvidence("وسط",null), BasketChoiceEvidence("شيبس",1)),3,3900)),subtotal=3900)
+
+    @Test fun completeConfiguredContentsCanBeRecordedWithoutDiscardingOptions() {
+        val request=configuredCart(); val observed=configuredEvidence()
+        val record=PreparedBasketRecord.create(request,observed,"v",1000)
+        assertNotNull(record)
+        assertEquals(observed,record!!.evidence)
+        assertFalse(record.matches(request.copy(items=listOf(request.items.single().copy(options=emptyList())))))
+    }
+    @Test fun configuredRecordsRejectPartialUnknownMissingAndExtraOptions() {
+        val request=configuredCart(); val observed=configuredEvidence(); val row=observed.lines.single()
+        val variants=listOf(observed.copy(complete=false),
+            observed.copy(lines=listOf(row.copy(choices=row.choices.dropLast(1)))),
+            observed.copy(lines=listOf(row.copy(choices=row.choices + BasketChoiceEvidence("صلصة",1)))),
+            observed.copy(lines=listOf(row.copy(choices=row.choices.map { it.copy(quantity=null) }))),
+            observed.copy(lines=listOf(row.copy(quantity=6))), observed.copy(subtotal=3901))
+        variants.forEach { assertNull(PreparedBasketRecord.create(request,it,"v",1000)) }
+    }
+    @Test fun sameProductWithDifferentOptionsRequiresDistinctExactlyMatchingRows() {
+        val first=configuredCart().items.single()
+        val second=first.copy(options=listOf(CartOption("إضافات","صلصة")),quantity=1)
+        val request=configuredCart().copy(items=listOf(first,second))
+        val observed=configuredEvidence().copy(lines=configuredEvidence().lines +
+            BasketLineEvidence(first.name,listOf(BasketChoiceEvidence("وسط",null),BasketChoiceEvidence("صلصة",1)),1,900),subtotal=4800)
+        assertNotNull(PreparedBasketRecord.create(request,observed,"v",1000))
+        assertNull(PreparedBasketRecord.create(request,observed.copy(lines=listOf(observed.lines.first().copy(quantity=4))),"v",1000))
+    }
+    @Test fun configuredNotesAndRepeatedOptionAmountsRemainUnsupported() {
+        val request=configuredCart(); val row=request.items.single()
+        assertNull(PreparedBasketRecord.create(request.copy(items=listOf(row.copy(note="بدون ملح"))),configuredEvidence(),"v",1000))
+        assertNull(PreparedBasketRecord.create(request.copy(items=listOf(row.copy(options=listOf(row.options.single().copy(quantity=2))))),configuredEvidence(),"v",1000))
+    }
+    @Test fun configuredLedgerDoesNotAuthorizePlainReviewExecutor() {
+        val request=configuredCart().copy(items=configuredCart().items + CanonicalItem("ماء",null,emptyList(),1))
+        val observed=configuredEvidence().copy(lines=configuredEvidence().lines + BasketLineEvidence("ماء",emptyList(),1,100),subtotal=4000)
+        val record=PreparedBasketRecord.create(request,observed,HungerStationCatalog.TESTED_VERSION,1000)!!
+        assertNull(app.octopus.local.safety.PreparedReviewAdmission.create(ProviderId.HUNGERSTATION,
+            request,record,CatalogFrame(emptyList(),true),HungerStationCatalog.TESTED_VERSION,1000))
+    }
+    @Test fun duplicateConfiguredRowsCannotBeMistakenForOnePreparedVariant() {
+        val observed=configuredEvidence()
+        assertNull(PreparedBasketRecord.create(configuredCart(),
+            observed.copy(lines=observed.lines + observed.lines,subtotal=7800),"v",1000))
+    }
+
     @Test fun completePlainMultiItemRecordRequiresEveryRequestedLineAndQuantity() {
         val multi = cart.copy(items=cart.items + CanonicalItem("ماء",null,emptyList(),2))
         val full = evidence(ProviderId.KEETA).copy(complete=true,
