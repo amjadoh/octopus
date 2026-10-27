@@ -44,6 +44,13 @@ class BasketEvidenceTest {
         assertFalse(read.recognizedOrderReview)
         assertTrue(BasketItemMatcher.compare(desired,read).matches)
     }
+    @Test fun parsedHungerSizeAndRiceReachLedgerOnlyWithCompleteMatchingEvidence() {
+        val read=BasketEvidenceReader.hungerStation(hs(),true)
+        val record=PreparedBasketRecord.create(desired,read,"recorded-shape",1000)
+        assertNotNull(record)
+        assertNull(PreparedBasketRecord.create(desired,BasketEvidenceReader.hungerStation(hs(),false),"recorded-shape",1000))
+        assertNull(PreparedBasketRecord.create(desired,BasketEvidenceReader.hungerStation(hs(options="1x رز شعبي, نص"),true),"recorded-shape",1000))
+    }
     @Test fun keetaRowAncestryExcludesMenuPricesAndPreservesUnknownOptionCount() {
         val read=BasketEvidenceReader.keeta(keeta(),"المضياف العربي",true)
         assertTrue(read.complete)

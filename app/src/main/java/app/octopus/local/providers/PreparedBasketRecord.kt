@@ -17,15 +17,24 @@ data class PreparedBasketRecord private constructor(
             if (version.isBlank() || at < 0 || evidence.restaurant != cart.restaurant) return null
             // This ledger retains observed rows; it does not enable provider actions
             // or infer address/branch identity.
-            if (cart.items.any { it.size != null || it.options.isNotEmpty() || !it.note.isNullOrBlank() }) return null
-            val wanted = cart.items.groupBy { it.name }.mapValues { (_, lines) -> lines.sumOf { it.quantity } }
-            if (wanted.values.any { it !in 1..99 } || evidence.lines.size != wanted.size ||
-                evidence.lines.map { it.name }.distinct().size != evidence.lines.size) return null
-            // Existing single-row records preserve their visible-only completeness flag.
-            // More than one row requires an explicit full-cart observation from its reader.
-            if (wanted.size > 1 && !evidence.complete) return null
-            if (evidence.lines.any { it.name !in wanted || it.quantity == null || it.quantity != wanted[it.name] || it.choices.isNotEmpty() ||
-                    it.lineAmount?.let { amount -> amount < 0 } == true } ||
+            val configured = cart.items.any { it.size != null || it.options.isNotEmpty() }
+            if (cart.items.isEmpty() || cart.items.any { !it.note.isNullOrBlank() }) return null
+            if (configured) {
+                // Configured variants require complete observed choices, not just a
+                // matching name. This records evidence only; executor admission stays separate.
+                if (!BasketItemMatcher.compare(cart, evidence).matches) return null
+            } else {
+                val wanted = cart.items.groupBy { it.name }.mapValues { (_, lines) ->
+                    lines.sumOf { it.quantity.toLong() }
+                }
+                if (wanted.values.any { it !in 1L..99L } || evidence.lines.size != wanted.size ||
+                    evidence.lines.map { it.name }.distinct().size != evidence.lines.size) return null
+                // Preserve historical single-row visible-only records without promoting them.
+                if (wanted.size > 1 && !evidence.complete) return null
+                if (evidence.lines.any { it.name !in wanted || it.quantity?.toLong() != wanted[it.name] ||
+                        it.choices.isNotEmpty() }) return null
+            }
+            if (evidence.lines.any { it.quantity !in 1..99 || it.lineAmount?.let { amount -> amount < 0 } == true } ||
                 evidence.subtotal?.let { it < 0 } == true) return null
             // Complete contents need complete money evidence as well. Never accept an
             // inconsistent subtotal or let integer overflow turn it into a matching record.
