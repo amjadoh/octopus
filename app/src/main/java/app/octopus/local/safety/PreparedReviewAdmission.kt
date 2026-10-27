@@ -21,7 +21,10 @@ class PreparedReviewAdmission private constructor(
             ReviewNavigationGuard.target(id,frame,cart,observedVersion,this,now)==target && used.compareAndSet(false,true)
     companion object {
         fun create(id:ProviderId,cart:CanonicalCart,record:PreparedBasketRecord,source:CatalogFrame,version:String,now:Long):PreparedReviewAdmission? {
-            if(cart.items.size<2 || !record.matches(cart) || record.providerVersion!=version || record.evidence.provider!=id ||
+            val multiple=cart.items.size>1
+            val directSingle=id==ProviderId.KEETA && PreviewEvidence.supports(cart) &&
+                KeetaVersionProfile.resolve(version)?.allowsDirectDrawerReview==true
+            if((!multiple && !directSingle) || !record.matches(cart) || record.providerVersion!=version || record.evidence.provider!=id ||
                 !record.evidence.complete || !source.complete || now<record.observedAtMillis || now-record.observedAtMillis>15_000 ||
                 !BasketItemMatcher.compare(cart,record.evidence).matches)return null
             val actual=when(id) {
@@ -30,7 +33,7 @@ class PreparedReviewAdmission private constructor(
                     BasketEvidenceReader.hungerStation(source,true)
                 }
                 ProviderId.KEETA -> {
-                    if(version!="3.13.203")return null
+                    if(KeetaVersionProfile.resolve(version)?.allowsReview(multipleItems=multiple)!=true)return null
                     val reader=KeetaMenuReader(cart.restaurant,cart.items.first().name,version)
                     KeetaBasketReader(reader,cart.items.map {it.name}.toSet()).evidence(source) ?: return null
                 }

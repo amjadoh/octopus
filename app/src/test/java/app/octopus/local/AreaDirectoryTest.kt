@@ -25,6 +25,22 @@ class AreaDirectoryTest {
             <a href="/sa-ar/restaurants/regions/مكة-المكرمة/البحيرات/مطعم-123">مطعم</a>"""
         assertEquals(listOf(AreaEntry("البحيرات")), AreaDirectory.parse(html, AreaEntry("مكة-المكرمة")))
     }
+    @Test fun observedCompoundDistrictKeepsParenthesesAndOffersGpsSubstringWithoutAutoSelecting() {
+        // Public canonical link observed in the phone's cached directory on 2026-10-27.
+        val slug = "الحمراء-وأم-الجود(الزايدي)"
+        val html = """<a href="/sa-ar/restaurants/regions/مكة-المكرمة/$slug">الحي</a>"""
+        val rows = AreaDirectory.parse(html, AreaEntry("مكة-المكرمة"))
+        assertEquals(listOf(AreaEntry(slug)), rows)
+        assertEquals(slug, AreaNameSearch.rank(rows, "أم الجود").first().slug)
+        assertNull(AreaNameSearch.exact(rows, "أم الجود"))
+        val area = CatalogArea("مكة-المكرمة", rows.single().slug)
+        assertTrue(PublicCatalogUrls.allowed(area.url))
+        assertEquals("/sa-ar/restaurants/regions/مكة-المكرمة/$slug", java.net.URI(area.url).path)
+        listOf("a/b", "a\\b", "a%2fb", "a?b", "a#b", "../b").forEach { invalid ->
+            assertTrue(runCatching { CatalogArea("مكة-المكرمة", invalid) }.isFailure)
+        }
+    }
+
     @Test fun indexNetworkPolicyDoesNotPermitRestaurantsCookiesOrExternalRedirects() {
         assertTrue(AreaDirectory.allowed(AreaDirectory.ROOT))
         assertTrue(AreaDirectory.allowed(AreaDirectory.ROOT + "/مكة-المكرمة"))

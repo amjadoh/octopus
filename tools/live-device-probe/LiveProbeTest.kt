@@ -16,6 +16,52 @@ import org.junit.runner.RunWith
 /** Shell-invoked, structure-only live probe. Standard runner initializes Application before this. */
 @RunWith(AndroidJUnit4::class)
 class LiveProbeTest {
+    /** Read-only known recommendation sheet; no click, Back, input or scrolling. */
+    @Test fun captureHungerRecommendations() {
+        val i=InstrumentationRegistry.getInstrumentation()
+        val pkg="com.hungerstation.android.web"
+        @Suppress("DEPRECATION")
+        val version=i.targetContext.packageManager.getPackageInfo(pkg,0).versionName
+        check(version=="8.0.303") {"Unsupported HungerStation version"}
+        val a=i.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+        a.serviceInfo=a.serviceInfo.apply { flags=flags or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
+            AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS }
+        runCatching {a.waitForIdle(650,4000)}
+        val root=a.rootInActiveWindow ?: error("No active window")
+        val headings=setOf("لا تفوت الفرصة!\nعادةً ما يضيف الأشخاص هذه العناصر",
+            "لا تفوت الفرصة!\nفرصتك لإضافة المزيد لطلبك")
+        val footer="اذهب للدفع"
+        val nodes=mutableListOf<app.octopus.local.providers.CatalogNode>()
+        try {
+            check(root.packageName?.toString()==pkg) {"HungerStation is not foreground"}
+            fun walk(n:android.view.accessibility.AccessibilityNodeInfo,parent:Int,depth:Int) {
+                check(depth<=35 && nodes.size<1800 && n.childCount<=200) {"Incomplete recommendation structure"}
+                if(!n.isVisibleToUser)return
+                val id=n.viewIdResourceName.orEmpty()
+                check(!n.isEditable && !n.isPassword &&
+                    !app.octopus.local.diagnostics.InspectionRedactor.privateSubtree(id) &&
+                    !Regex("checkout|payment|credit|bank|cvv",RegexOption.IGNORE_CASE).containsMatchIn(id) &&
+                    !(android.os.Build.VERSION.SDK_INT>=34 && n.isAccessibilityDataSensitive)) {"Protected or non-recommendation content"}
+                val raw=(n.text ?: n.contentDescription)?.toString().orEmpty().trim()
+                val label=raw.takeIf {it in headings || it==footer}.orEmpty()
+                val index=nodes.size
+                nodes+=app.octopus.local.providers.CatalogNode(index,parent,id,label,n.className?.toString().orEmpty(),
+                    n.isClickable,false,n.isScrollable,n.isEnabled,omittedText=raw.isNotEmpty() && label.isEmpty())
+                for(k in 0 until n.childCount)n.getChild(k)?.let {try{walk(it,index,depth+1)}finally{it.recycle()}}
+            }
+            walk(root,-1,0)
+            check(nodes.count {it.label in headings}==1) {"Known recommendation heading missing or ambiguous"}
+            check(nodes.singleOrNull {it.label==footer}?.let {it.enabled && it.clickable &&
+                it.className=="android.widget.Button"}==true) {"Known single review navigation button missing"}
+            check(nodes.any {it.id=="menuItemActionSingleButtonAdd"}) {"Recommendation Add anchors missing"}
+            val frame=app.octopus.local.providers.CatalogFrame(nodes,true)
+            val output=JSONObject().put("provider","HUNGERSTATION").put("version",version)
+                .put("capturedAt",System.currentTimeMillis()).put("actionsPerformed",0)
+                .put("catalogFrame",JSONObject(com.google.gson.Gson().toJson(frame)))
+            i.targetContext.filesDir.resolve("live-hs-recommendations.json").writeText(output.toString(),Charsets.UTF_8)
+        } finally {root.recycle()}
+    }
+
     @Test fun inspectHungerProductQuantity() {
         val i=InstrumentationRegistry.getInstrumentation()
         val a=i.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
@@ -198,14 +244,26 @@ class LiveProbeTest {
         }
         windows.filter { it.isActive }.forEach { window ->
             val root = window.root
-            try { if (root?.packageName?.toString() == expected) inspectControls(root) }
+            try { if (root?.packageName?.toString() == expected) {
+                inspectControls(root)
+                val snapshot = app.octopus.local.automation.SnapshotReader().read(root)
+                val quote = app.octopus.local.pricing.QuoteExtractor().extract(snapshot)
+                result.put("safeQuote", JSONObject()
+                    .put("capturedAt", System.currentTimeMillis())
+                    .put("sensitive", snapshot.sensitiveScreen)
+                    .put("truncated", snapshot.truncated)
+                    .put("fields", JSONObject(quote.fields.mapKeys { it.key.name })))
+            } }
             finally { @Suppress("DEPRECATION") root?.recycle() }
         }
         result.put("functionalControls", controls)
         result.put("publicCartControls", publicCartControls)
         result.put("pricingOnly", pricingOnly)
         instrumentation.targetContext.filesDir.resolve("live-structure.json").writeText(result.toString(), Charsets.UTF_8)
-        instrumentation.sendStatus(0, Bundle().apply { putString("liveCapture", result.toString()) })
+        instrumentation.sendStatus(0, Bundle().apply {
+            putBoolean("liveCaptured", captured != null)
+            putString("safeQuote", result.optJSONObject("safeQuote")?.toString())
+        })
         check(captured != null) { "Expected provider foreground window unavailable" }
     }
 }

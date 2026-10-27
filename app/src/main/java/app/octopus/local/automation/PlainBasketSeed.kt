@@ -39,7 +39,9 @@ class PlainBasketSeed private constructor(
                     line.quantity
                 }
                 ProviderId.KEETA -> {
-                    if(version!="3.13.203" || !KeetaBasketReader(KeetaMenuReader(request.restaurant,line.name,version),plan.lines.map {it.name}.toSet()).emptyMenu(emptyMenu))return null
+                    val profile=KeetaVersionProfile.resolve(version) ?: return null
+                    if(!profile.allowsOwnedPlainPreparation || !profile.allowsPreparation(plan.lines.size>1) ||
+                        !KeetaBasketReader(KeetaMenuReader(request.restaurant,line.name,profile.version),plan.lines.map {it.name}.toSet()).emptyMenu(emptyMenu))return null
                     1
                 }
             }

@@ -23,7 +23,7 @@ class AreaDirectory(private val cache: File? = null,
                 parts.take(3) == listOf("sa-ar", "restaurants", "regions") &&
                 (parts.size == 3 || valid(parts.last()))
         }.getOrDefault(false)
-        private fun valid(value: String) = value.length in 1..100 && value.matches(Regex("[\\p{L}\\p{N} -]+"))
+        private fun valid(value: String) = value.length in 1..100 && value.matches(Regex("[\\p{L}\\p{N} ()-]+"))
         fun parse(html: String, city: AreaEntry? = null): List<AreaEntry> {
             require(html.toByteArray(Charsets.UTF_8).size <= HungerStationPublicParser.MAX_HTML_BYTES)
             val expected = if (city == null) 4 else 5

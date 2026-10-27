@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-27",
+  "newHeadingEvidence": "Visible screen during actual normal Compare at 12:36. No actual structured new-heading frame yet.",
+  "status": "local-fix-built-installed-live-verification-pending-user-call",
+  "captureActionsPerformed": 0,
+  "manualReviewTotalHalala": 3750,
+  "oldFrameCapturedAt": 1793094148244,
+  "failedCapture": {
+    "staleCopy": "work/device-20261027/hs-recommendations-repeat.json retains old capturedAt and is NOT new evidence.",
+    "reason": "After closing the recommendations and reopening review, the app skipped the optional sheet and reached actual review. The read-only capture refused non-recommendation content and wrote nothing."
+  },
+  "manualTotalIsNotAutomatedComparison": true,
+  "observedNewHeading": "لا تفوت الفرصة!\nفرصتك لإضافة المزيد لطلبك",
+  "actualStructuredOldFrame": "work/device-20261027/hs-recommendations-old.json",
+  "orderOrPaymentConfirmed": false
+}

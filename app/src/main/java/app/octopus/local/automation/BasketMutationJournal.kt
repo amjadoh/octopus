@@ -14,20 +14,39 @@ class BasketMutationJournal(private val store: BasketJournalStore) {
     companion object {
         const val UNRESOLVED = "لم تُحسم نتيجة تعديل سابق؛ يجب قراءة السلة كاملة قبل أي إضافة أو تعديل جديد."
         const val HIDDEN = "سبق وجود سلة لهذا المطعم لكن محتوياتها غير ظاهرة الآن؛ لم أعتبرها فارغة ولم أكرر الإضافة."
+        const val LEGACY_UNRESOLVED = "يوجد سجل قديم لسلة لم تُطابق هويتها بعد؛ يجب قراءة السلة السابقة كاملة قبل السماح بإضافة أولى جديدة."
     }
     private fun hash(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))
         .joinToString("") { "%02x".format(it) }
-    private fun seen(provider: ProviderId, restaurant: String) = "seen.${provider.name}.${hash(restaurant)}"
+    // Use the same conservative name identity as the request fingerprint. Display-only case,
+    // whitespace or direction marks must not make a previously seen cart look like a new one.
+    private fun restaurantHash(restaurant: String) = hash(IdentityText.clean(restaurant))
+    private fun seen(provider: ProviderId, restaurant: String) = "seen2.${provider.name}.${restaurantHash(restaurant)}"
+    private fun legacyKeys(provider: ProviderId, restaurant: String) =
+        setOf(hash(restaurant), restaurantHash(restaurant)).map { "seen.${provider.name}.$it" }
+    private fun pendingMatches(value: String?, restaurant: String): Boolean {
+        if (value == null) return false
+        val parts = value.split(':')
+        return when {
+            parts.size == 3 && parts[0] == "2" -> parts[1] == restaurantHash(restaurant)
+            parts.size == 2 -> parts[0] in setOf(hash(restaurant), restaurantHash(restaurant))
+            else -> false
+        }
+    }
     @Synchronized fun requireFirstAdd(provider: ProviderId, request: CanonicalCart) {
         val values = store.read()
         check(values["pending.${provider.name}"] == null) { UNRESOLVED }
         check(values[seen(provider, request.restaurant)] == null) { HIDDEN }
+        check(legacyKeys(provider, request.restaurant).none { it in values }) { HIDDEN }
+        // A legacy raw-name hash cannot be reversed to detect formatting aliases. Do not
+        // silently discard it; a complete observation of that known name migrates it below.
+        check(values.keys.none { it.startsWith("seen.${provider.name}.") }) { LEGACY_UNRESOLVED }
     }
     /** Commit before dispatch. Failed dispatch and cancellation deliberately remain unresolved. */
     @Synchronized fun beforeDispatch(provider: ProviderId, request: CanonicalCart) {
         val values = store.read().toMutableMap()
         check(values["pending.${provider.name}"] == null) { UNRESOLVED }
-        values["pending.${provider.name}"] = hash(request.restaurant) + ":" + hash(request.fingerprint)
+        values["pending.${provider.name}"] = "2:" + restaurantHash(request.restaurant) + ":" + hash(request.fingerprint)
         values[seen(provider, request.restaurant)] = "1"
         store.write(values)
     }
@@ -42,7 +61,8 @@ class BasketMutationJournal(private val store: BasketJournalStore) {
         if (sum == null || sum != evidence.subtotal) return false
         val values = store.read().toMutableMap()
         val pendingKey = "pending.${evidence.provider.name}"
-        if (values[pendingKey]?.substringBefore(':') == hash(request.restaurant)) values.remove(pendingKey)
+        if (pendingMatches(values[pendingKey], request.restaurant)) values.remove(pendingKey)
+        legacyKeys(evidence.provider, request.restaurant).forEach(values::remove)
         values[seen(evidence.provider, request.restaurant)] = "1"
         store.write(values)
         return true

@@ -3,6 +3,7 @@ package app.octopus.local.automation
 import app.octopus.local.domain.*
 import app.octopus.local.providers.HungerStationCatalog
 import app.octopus.local.providers.PreviewEvidence
+import app.octopus.local.providers.KeetaVersionProfile
 
 /** Check both installed adapters before a full comparison opens or edits either provider. */
 object ComparisonPreflight {
@@ -19,8 +20,9 @@ object ComparisonPreflight {
                 installed == null || !installed.installed -> "${id.title}: تعذر التحقق من تثبيت التطبيق."
                 id == ProviderId.HUNGERSTATION && installed.version != HungerStationCatalog.TESTED_VERSION ->
                     "${id.title}: إصدار التطبيق يحتاج تحققًا قبل تشغيل المقارنة."
-                id == ProviderId.KEETA && installed.version !in
-                    (if (twoRows) setOf("3.13.203") else setOf("3.12.501", "3.13.203")) ->
+                id == ProviderId.KEETA && KeetaVersionProfile.resolve(installed.version)?.let {
+                    it.allowsReading(twoRows) && it.allowsPreparation(twoRows) && it.allowsReview(twoRows)
+                } != true ->
                     "${id.title}: إصدار التطبيق لا يدعم مسار هذا الطلب حاليًا."
                 else -> null
             }

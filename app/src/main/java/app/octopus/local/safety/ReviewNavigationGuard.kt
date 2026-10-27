@@ -7,7 +7,8 @@ import app.octopus.local.providers.*
 object ReviewNavigationGuard {
     /** Keeta 3.13.203 review header: back image wrapper beside the exact title. */
     fun keetaReviewBackTarget(frame: CatalogFrame, version: String): CatalogNode? {
-        if (version != "3.13.203" || !frame.complete) return null
+        val profile=KeetaVersionProfile.resolve(version) ?: return null
+        if (!profile.usesCurrentLayout || !profile.allowsReview() || !frame.complete) return null
         val title = frame.nodes.singleOrNull { it.label == "إتمام الدفع" &&
             it.className == "android.widget.TextView" } ?: return null
         fun children(node: CatalogNode) = frame.nodes.filter { it.parent == node.index }
@@ -36,7 +37,8 @@ object ReviewNavigationGuard {
     /** Observed optional recommendations between the cart and review; never add a recommendation. */
     fun hungerRecommendationsTarget(frame: CatalogFrame, version: String): CatalogNode? {
         if (version != HungerStationCatalog.TESTED_VERSION || !frame.complete || frame.nodes.any { it.editable }) return null
-        if (frame.nodes.count { it.label == "لا تفوت الفرصة!\nعادةً ما يضيف الأشخاص هذه العناصر" &&
+        if (frame.nodes.count { it.label in setOf("لا تفوت الفرصة!\nعادةً ما يضيف الأشخاص هذه العناصر",
+                "لا تفوت الفرصة!\nفرصتك لإضافة المزيد لطلبك") &&
                 it.className == "android.widget.ImageView" } != 1 ||
             frame.nodes.none { it.id == "menuItemActionSingleButtonAdd" } ||
             frame.nodes.any { it.id.startsWith("FlutterCheckout") || it.label in setOf("تأكيد الطلب", "ادفع الآن", "تأكيد الدفع") }) return null
@@ -67,15 +69,22 @@ object ReviewNavigationGuard {
                     it.enabled && it.clickable && !it.editable && !it.omittedText
             }
         }
-        if (version !in setOf("3.12.501", "3.13.203")) return null
+        val profile=KeetaVersionProfile.resolve(version) ?: return null
+        if (!profile.allowsReview(multi)) return null
         val menu = KeetaMenuReader(cart.restaurant, cart.items.first().name, version)
         val expectedQuantity=if(multi)cart.items.sumOf {it.quantity} else cart.items.single().quantity
-        if (!menu.menu(frame) || KeetaBasketReader(menu).menuQuantity(frame) != expectedQuantity) return null
+        if (profile.allowsDirectDrawerReview && !multi) {
+            // Actual 3.13.301 drawer footer opens review without leaving the restaurant.
+            // Bind every row and amount to the fresh prepared record, not just a menu count.
+            val proof=admission ?: return null
+            if(!proof.validFor(provider,cart,version,now) || frame!=proof.sourceFrame ||
+                KeetaBasketReader(menu).evidence(frame)!=proof.record.evidence)return null
+        } else if (!menu.menu(frame) || KeetaBasketReader(menu).menuQuantity(frame) != expectedQuantity) return null
         val label = frame.nodes.singleOrNull { it.label == "إتمام الدفع" && it.enabled } ?: return null
         var current = label
         repeat(4) {
             if (current.clickable && !current.editable && current.enabled) {
-                if (version=="3.13.203") {
+                if (profile.usesCurrentLayout) {
                     // Current React Native footer: the labelled wrapper is clickable but its
                     // direct empty action child owns the press handler. Never guess by position
                     // unless the complete observed two-child label/action structure matches.

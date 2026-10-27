@@ -1,0 +1,93 @@
+{
+  "date": "2026-10-27",
+  "timezone": "Asia/Riyadh",
+  "status": "unpublished-local-candidate",
+  "scope": "Location selection, menu navigation position, and repeated basket-mutation safeguards. This report does not establish a complete new two-provider comparison.",
+  "changes": [
+    {
+      "component": "location picker",
+      "result": "GPS text is resolved against the selected city's canonical directory. A missing or ambiguous district explains why saving is unavailable and offers available districts. GPS retries directory loading even when the city is unchanged; equivalent city spelling preserves its loaded districts."
+    },
+    {
+      "component": "canonical district names",
+      "result": "Accepts literal parentheses in source-provided city/district names. The observed compound district الحمراء-وأم-الجود(الزايدي) can be suggested for أم الجود, without automatically choosing a broader district or deriving a new URL from GPS text.",
+      "test": "AreaDirectoryTest.observedCompoundDistrictKeepsParenthesesAndOffersGpsSubstringWithoutAutoSelecting",
+      "remaining_rejections": "Slash, backslash, percent-encoded path input, query, fragment, and traversal text remain rejected."
+    },
+    {
+      "component": "restaurant/menu navigation",
+      "result": "The menu now has a direct change-location action. The vertical list resets to the top when entering/leaving a menu or changing restaurant; updates to the same menu preserve the user's scroll position."
+    },
+    {
+      "component": "basket mutation journal",
+      "result": "Known restaurant identity now uses the same conservative normalization as the request fingerprint. Formatting aliases cannot permit a second first-Add. Unresolved legacy keys remain blocking until a matching complete basket observation can migrate them; they are not silently deleted.",
+      "limits": "This does not prove an unseen basket is empty and does not implement foreign-cart replacement."
+    },
+    {
+      "component": "Keeta mutation dispatch",
+      "result": "After suspending journal persistence, the navigator rechecks the active ownership frame, coroutine cancellation, and session before dispatching the one allowed mutation.",
+      "limits": "Source guard and regression checks are not a new live repeated-Compare test."
+    }
+  ],
+  "verification": {
+    "location_build_checkpoint": {
+      "unit_tests": 488,
+      "failures": 0,
+      "count_source": "Parent agent's completed location-build checkpoint; the unit XML directory was subsequently replaced by later compatibility checks.",
+      "build_logs": [
+        "work/location-cart-final-build-20261027.txt",
+        "work/location-probe-build-20261027.txt"
+      ],
+      "build_result": "BUILD SUCCESSFUL",
+      "lint": { "errors": 0, "warnings": 5 }
+    },
+    "isolated_emulator": {
+      "class": "app.octopus.local.CatalogSourceRegressionUiTest",
+      "tests": 10,
+      "failures": 0,
+      "duration_seconds": 42.702,
+      "normal_apk_sha256": "6C7D11729C87B1B621E2F2675BE978B8E20ED83903D72605F358FD6353C67D8B",
+      "test_apk_sha256": "D19E9DAD5908C1F76968382E9F807D95433F9BFA2F3C790136EA578A11484553",
+      "receipt": "work/location-scroll-emulator-receipt.json",
+      "log": "work/location-scroll-emulator-ui-results.txt",
+      "new_cases": [
+        "Same-city GPS recovers after an initial district-directory failure and saves the selected canonical district.",
+        "An unknown GPS district shows a reason and available choices; choosing a canonical district enables Save.",
+        "The menu's change-location button opens the location picker.",
+        "Restaurant navigation resets scroll while a refresh of the same menu preserves position."
+      ],
+      "fixture_setup_fix": "The fixture clears the public controller, while saving an already persisted area is a no-op. Explicit fixture configuration now restores the controller before GPS assertions; no arbitrary sleep is used.",
+      "no_user_phone_actions": true,
+      "no_live_probe_run": true,
+      "emulator_closed": true
+    },
+    "later_unit_results_observed_during_report": {
+      "tests": 491,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "source": "app/build/test-results/testDiagnosticDebugUnitTest/TEST-*.xml",
+      "report_file_timestamp_example_riyadh": "2026-10-27T11:31:59+03:00",
+      "context": "Includes later Keeta 3.13.301 read-only compatibility work. Do not attribute this later count or newer APK output to the emulator-tested APK above."
+    },
+    "live_location": {
+      "provenance": "Parent agent's explicit observation from the connected phone during this session.",
+      "reported_result": "Current-location lookup selected جدة / مشرفة; saving succeeded and the restaurant list refreshed with 30 restaurants.",
+      "independent_artifact_status": "No separate retained GPS/save trace was found in work/device-20261027 at report time. That folder currently contains Keeta home, results, menu, and product captures; these do not independently prove the GPS/save result.",
+      "scope_limit": "This observation does not prove the delivery address or restaurant branch agrees across providers."
+    }
+  },
+  "release": {
+    "published": false,
+    "phone_or_emulator_install_does_not_equal_publication": true,
+    "candidate_output_may_change_during_ongoing_keeta_work": true
+  },
+  "not_established_by_this_report": [
+    "A new complete comparison with two freshly prepared baskets and both current final totals.",
+    "General support for arbitrary restaurants, modifiers, notes, or scrolling baskets.",
+    "Safe automatic replacement or clearing of an unrelated provider cart.",
+    "Verified address and branch equivalence or a confirmed cheapest-provider ranking.",
+    "A live repeated-Compare run proving the journal changes on the current provider versions."
+  ],
+  "privacy": "Repository and candidate assets remain private. This report contains no coordinates, account credentials, device identifiers, payment data, or confirmation authority."
+}

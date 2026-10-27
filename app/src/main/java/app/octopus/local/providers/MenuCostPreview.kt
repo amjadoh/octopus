@@ -59,13 +59,14 @@ object PreviewEvidence {
 enum class KeetaSearchAction { OPEN_SEARCH, EDIT_QUERY, ENTER_QUERY, SUBMIT_QUERY }
 
 open class KeetaMenuReader(val restaurant: String, val title: String, val VERSION: String = "3.12.501") {
+    val profile = requireNotNull(KeetaVersionProfile.resolve(VERSION)) { "Unsupported Keeta version" }
     init { require(restaurant.isNotBlank() && title.isNotBlank() && restaurant.length <= 200 && title.length <= 300)
-        require(VERSION in setOf("3.12.501", "3.13.203")) }
+        require(profile.allowsReading()) }
     /** Only the selected product's displayed base price. No hidden header or offer eligibility inferred. */
     fun itemPreview(frame: CatalogFrame, cart: CanonicalCart, at: Long): MenuCostPreview? {
         if (at < 0 || !PreviewEvidence.supports(cart) || cart.restaurant != restaurant ||
             cart.items.single().name != title || !product(frame)) return null
-        if (VERSION == "3.13.203" && productBody(frame) == null) return null
+        if (profile.usesCurrentLayout && productBody(frame) == null) return null
         val unit = unitPrice(frame) ?: return null
         val amount = runCatching { Math.multiplyExact(unit, cart.items.single().quantity.toLong()) }.getOrNull() ?: return null
         return MenuCostPreview(ProviderId.KEETA, cart.fingerprint, amount, emptyList(), at, VERSION,
@@ -75,11 +76,11 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
         val text = raw.replace(Regex("[\\u200e\\u200f\\u061c\\u202a-\\u202e\\u2066-\\u2069]"), "").trim()
         // Observed public menu title field. Retain visible titles so scrolling past unrelated
         // cards cannot look identical after redaction. Other unknown fields stay omitted.
-        if (VERSION == "3.13.203" && resourceId == "com.sankuai.sailor.afooddelivery:id/product_name" &&
+        if (profile.usesCurrentLayout && resourceId == "com.sankuai.sailor.afooddelivery:id/product_name" &&
             text.length in 1..300 && text.any(Char::isLetter)) return text
         if (KeetaRestaurantName.matches(restaurant, text)) return restaurant
         if (KeetaAvailability.closedText(text) || KeetaAvailability.unavailableText(text) || text=="موافق") return text
-        if (VERSION == "3.13.203" && (text in setOf("معلومات غذائية", "معلومات التغذية", "مسببات الحساسية") || text.matches(Regex("[0-9٠-٩]{1,5} سعرة حرارية")))) return text
+        if (profile.usesCurrentLayout && (text in setOf("معلومات غذائية", "معلومات التغذية", "مسببات الحساسية") || text.matches(Regex("[0-9٠-٩]{1,5} سعرة حرارية")))) return text
         return if (text in setOf(restaurant, "feed shopcard", title, "homepage header searchbar", "search page box", "search page btn", "طلب خاص", "إضافة إلى السلة", "توصيل", "استلام شخصي",
                 "الاصناف الرئيسية", "الأصناف الرئيسية", "الأصناف المضافة", "تفريغ السلة", "إتمام الدفع", "قسائمي", "شروط الاستخدام", "عرض خاص", "حسنًا", "حسنا", "1", "١") || text.matches(Regex("[0-9٠-٩]{1,2}")) || PreviewEvidence.offer(text) ||
             (text.length < 40 && text.contains('﷼') && MoneyParser.parse(text) != null) ||
@@ -125,7 +126,7 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
         val card = frame.nodes.firstOrNull { it.id.endsWith(":id/dl_item_root") } ?: return null
         return frame.descendants(card.index).singleOrNull {
             it.label == "feed shopcard" && it.clickable && it.enabled &&
-                it.className in (if (VERSION == "3.13.203") setOf("android.view.ViewGroup", "android.widget.Button") else setOf("android.widget.Button"))
+                it.className in (if (profile.usesCurrentLayout) setOf("android.view.ViewGroup", "android.widget.Button") else setOf("android.widget.Button"))
         }
     }
 
@@ -144,7 +145,7 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
     }
     fun closeProduct(frame: CatalogFrame): CatalogNode? {
         if (!product(frame)) return null
-        val productContent = (if (VERSION == "3.13.203") currentReadOnlyProductBody(frame) else productBody(frame)) ?: return null
+        val productContent = (if (profile.usesCurrentLayout) currentReadOnlyProductBody(frame) else productBody(frame)) ?: return null
         val modal = ancestors(frame, productContent).firstOrNull { parent ->
             val children = frame.nodes.filter { it.parent == parent.index }
             children.size == 3 && children[0].className == "android.widget.FrameLayout" &&
@@ -158,7 +159,7 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
         return body.singleOrNull { it.clickable && it.enabled && it.className == "android.view.ViewGroup" }
     }
     fun product(frame: CatalogFrame): Boolean {
-        if (VERSION == "3.13.203") return currentReadOnlyProductBody(frame) != null
+        if (profile.usesCurrentLayout) return currentReadOnlyProductBody(frame) != null
         if (!frame.complete || frame.nodes.none { it.label == restaurant } ||
             frame.nodes.count { it.label == "إضافة إلى السلة" } != 1) return false
         val notes = frame.nodes.singleOrNull { it.label == "طلب خاص" } ?: return false
@@ -168,7 +169,7 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
             content.none { Regex("اختر|إلزامي|الزامي|مطلوب|اختياري").containsMatchIn(it.label) }
     }
     fun productBody(frame: CatalogFrame): CatalogNode? {
-        if (VERSION == "3.13.203") return currentPlainProductBody(frame)
+        if (profile.usesCurrentLayout) return currentPlainProductBody(frame)
         val notes = frame.nodes.singleOrNull { it.label == "طلب خاص" } ?: return null
         return ancestors(frame, notes).firstOrNull { it.className == "android.widget.ScrollView" }
     }
@@ -252,7 +253,7 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
             (frame.nodes.none { it.label in setOf("الاصناف الرئيسية", "الأصناف الرئيسية") } &&
                 frame.nodes.count { it.scrollable && it.className == "androidx.recyclerview.widget.RecyclerView" } != 1)) return null
         val titleNode = frame.nodes.singleOrNull { it.label == title } ?: return null
-        if (VERSION == "3.13.203") {
+        if (profile.usesCurrentLayout) {
             if (!titleNode.id.endsWith(":id/product_name")) return null
             val card = frame.nodes.singleOrNull { it.index == titleNode.parent && it.id.endsWith(":id/card_root") } ?: return null
             val target = frame.nodes.singleOrNull { it.index == card.parent && it.clickable && it.enabled &&
