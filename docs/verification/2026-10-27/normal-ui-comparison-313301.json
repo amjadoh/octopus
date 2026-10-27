@@ -1,7 +1,7 @@
 {
   "date": "2026-10-27",
   "timezone": "Asia/Riyadh",
-  "status": "live-verification-in-progress",
+  "status": "verified-current-single-item-compare-repeat-and-handoffs",
   "request": {
     "restaurant": "كودو",
     "item": "بطاطس وسط",
@@ -16,7 +16,9 @@
   },
   "publication": {
     "performed": false,
-    "normalCandidateOnly": true
+    "normalCandidateOnly": true,
+    "sourceSavedLocalCommit": "0a6a31d",
+    "pushed": false
   },
   "firstNormalUiRun": {
     "startedAt": "2026-10-27T11:55:59.9838194+03:00",
@@ -163,8 +165,10 @@
   "noOrderPaymentCodSubscriptionOrPointsConfirmed": true,
   "offlineReviewFollowup": {
     "apkSha256": "FFBBCDF1032943A9C6D95383A5BC8F023322D04AF7AD36C6ADA7B3706B57910F",
-    "installed": false,
-    "actualUiRunStarted": false,
+    "installed": true,
+    "installedAround": "2026-10-27T13:00:00+03:00",
+    "normalApkWithoutTestCatalogReceiver": true,
+    "actualUiRunStarted": true,
     "change": "Independent review found a legacy-version scope regression: single-item quantity adjustment now requires owned plain-cart capability, preserving the old rejection of Keeta 3.12.501. Current 3.13.301 and 3.13.203 remain admitted.",
     "unitTests": 528,
     "failures": 0,
@@ -173,7 +177,92 @@
     "buildResult": "BUILD SUCCESSFUL",
     "buildDuration": "37s",
     "buildLog": "work/quantity-admission-build-20261027.txt",
-    "reasonNotInstalled": "Phone actions paused for ongoing human call. D298 remains last installed.",
+    "initialPause": "Installation was initially deferred during the user's call. The call ended and the human authorized resuming before this candidate was installed.",
+    "normalUiComparison": {
+      "startedAt": "2026-10-27T13:02:27.4475633+03:00",
+      "startedAtFile": "work/device-20261027/normal-301-final-start.txt",
+      "observedCompletedAround": "2026-10-27T13:04:00+03:00",
+      "trigger": "Actual normal APK Compare button",
+      "initialCarts": "Both provider carts already held the matching Kudo medium fries x3, no options. The Keeta menu showed x3 / 27 SAR.",
+      "result": {
+        "keetaFinalHalala": 4581,
+        "hungerstationFinalHalala": 3750,
+        "bothUiStatuses": "TOTAL_READ",
+        "bothCartsMatchedRequestedThreePlainFries": true,
+        "providerInterventionAfterCompare": false
+      },
+      "screenshot": "work/device-20261027/normal-301-final-pair.png",
+      "screenshotWithin120SecondFreshnessWindow": true,
+      "hungerstationRecommendations": {
+        "actualHeadingVariant": "older heading",
+        "dispatched": true,
+        "statsTimestamp": 1793095447990,
+        "newHeadingStructuredVariantVerified": false
+      },
+      "scope": "Successful same-run normal UI pair on existing matching single-item baskets. This does not prove a both-initially-empty build or the new upsell heading's actual structure."
+    },
+    "repeatRun": {
+      "startedAt": "2026-10-27T13:05:24.5535054+03:00",
+      "startedAtFile": "work/device-20261027/normal-301-final-repeat-start.txt",
+      "observedCompletedAround": "2026-10-27T13:07:00+03:00",
+      "actualUiRunResult": "completed",
+      "result": {
+        "keetaFinalHalala": 4581,
+        "hungerstationFinalHalala": 3750,
+        "bothUiStatuses": "TOTAL_READ",
+        "bothCartQuantities": 3,
+        "bothCartItemSubtotalsHalala": 2700,
+        "matchingEvidenceBasis": "Both source validators admitted the full matching plain-item cart; an actual Keeta menu screenshot during this run also showed x3 / 27 SAR.",
+        "providerInterventionAfterCompare": false
+      },
+      "screenshot": "work/device-20261027/normal-301-final-repeat-pair.png",
+      "screenshotWithin120SecondFreshnessWindow": true,
+      "hungerstationRecommendations": {
+        "actualHeadingVariant": "older heading",
+        "dispatched": true,
+        "statsTimestamp": 1793095638494,
+        "newHeadingStructuredVariantVerified": false
+      }
+    },
+    "handoffs": {
+      "keeta": {
+        "startedAt": "2026-10-27T13:08:28.4740488+03:00",
+        "startedAtFile": "work/device-20261027/normal-301-keeta-handoff-start.txt",
+        "observedCompletedAround": "2026-10-27T13:09:00+03:00",
+        "trigger": "Actual Octopus Keeta handoff button",
+        "result": "completed-to-review",
+        "quantity": 3,
+        "itemSubtotalHalala": 2700,
+        "finalTotalHalala": 4581,
+        "providerInterventionAfterButtonBeforeCompletion": false,
+        "blockingOverlay": false,
+        "privateScreenshot": "work/device-20261027/keeta-final-handoff-private.png",
+        "screenshotIgnoredAndNotForCommit": true
+      },
+      "hungerstation": {
+        "startedAt": "2026-10-27T13:09:57.9138524+03:00",
+        "startedAtFile": "work/device-20261027/normal-301-hs-handoff-start.txt",
+        "observedCompletedAround": "2026-10-27T13:10:00+03:00",
+        "trigger": "Actual Octopus HungerStation handoff button, after manually returning to Octopus only after the completed Keeta handoff",
+        "result": "completed-to-review",
+        "fullCartVerifiedByHandler": true,
+        "itemSubtotalHalala": 2700,
+        "finalTotalHalala": 3750,
+        "cartMutations": false,
+        "privateScreenshot": "work/device-20261027/hs-final-handoff-private.png",
+        "screenshotIgnoredAndNotForCommit": true
+      }
+    },
+    "afterHandoffs": {
+      "returnedToOctopusAt": "2026-10-27T13:11:11+03:00",
+      "returnMethod": "Manual return after the handoff had completed",
+      "leftVisible": "Octopus comparison screen",
+      "screenshot": "work/device-20261027/normal-301-after-handoffs.png",
+      "keetaQuoteExpired120SecondWindow": true,
+      "hungerstationQuoteFreshAtCheckpoint": true,
+      "pairedQuoteFreshAtCheckpoint": false,
+      "lastFreshPairedEvidence": "The completed 13:07 repeat and work/device-20261027/normal-301-final-repeat-pair.png; do not label the after-handoff view as a fresh pair."
+    },
     "publicationPerformed": false
   }
 }
