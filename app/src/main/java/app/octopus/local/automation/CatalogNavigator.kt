@@ -49,13 +49,15 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private val keetaMenu get() = checkNotNull(keetaContext) { "لا يوجد طلب محدد لقراءة كيتا." }
     private var keetaBasketTitles: Set<String> = emptySet()
     private val keetaBasket get() = KeetaBasketReader(keetaMenu, keetaBasketTitles)
+    private fun installedKeetaProfile() = KeetaVersionProfile.resolve(
+        graph.installations.value.singleOrNull { it.provider == ProviderId.KEETA }?.version)
     private fun bindKeetaRequest(cart: CanonicalCart, line: CanonicalItem = cart.items.single()) {
-        require(PlainMenuReadPlan.create(cart, ProviderId.KEETA, "admission")?.lines?.contains(line) == true)
+        val profile = checkNotNull(installedKeetaProfile()) { "إصدار كيتا غير مدعوم في مسار القراءة الحالي." }
+        check(profile.allowsReading()) { "إصدار كيتا غير مدعوم في مسار القراءة الحالي." }
+        require(PlainMenuReadPlan.create(cart, ProviderId.KEETA, profile.version)?.lines?.contains(line) == true)
         requestFingerprint = cart.fingerprint
         keetaBasketTitles = cart.items.map { it.name }.toSet()
-        val version = graph.installations.value.singleOrNull { it.provider == ProviderId.KEETA }?.version
-        check(version in setOf("3.12.501", "3.13.203")) { "إصدار كيتا غير مدعوم في مسار القراءة الحالي." }
-        keetaContext = KeetaMenuReader(cart.restaurant, line.name, version!!)
+        keetaContext = KeetaMenuReader(cart.restaurant, line.name, profile.version)
     }
     private var job: Job? = null
     private var comparisonJob: Job? = null
@@ -269,7 +271,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     available = { id -> graph.catalog.value.previews.any { it.provider == id && it.itemSubtotal != null && it.fresh(desired, System.currentTimeMillis()) } },
                     prepare = { id ->
                         val started = if(id == ProviderId.HUNGERSTATION ||
-                            graph.installations.value.any { it.provider == ProviderId.KEETA && it.version == "3.13.203" })
+                            installedKeetaProfile()?.allowsOwnedPlainPreparation == true)
                             begin(operation=CatalogOperation.BUILD_CART,timeoutMillis=600_000) {
                                 val progress=PlainPreparationProgress()
                                 if(id==ProviderId.HUNGERSTATION) prepareOwnedHungerSteps(desired,true,progress)
@@ -337,9 +339,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 val read = readHungerProduct(restaurant, opened.item)
                 val details = read.details
                 graph.catalog.value = graph.catalog.value.copy(product = details)
-                check(details.optionsComplete && details.product.available && details.product.listedPriceHalala != null) {
-                    "لم يكتمل التحقق من الوجبة في هنقرستيشن؛ لا توجد مقارنة مؤكدة."
-                }
+                check(details.optionsComplete) { "لم تكتمل قراءة خيارات الوجبة في هنقرستيشن؛ لم أغير السلة." }
+                check(details.product.available) { "زر إضافة الوجبة في هنقرستيشن غير متاح في القراءة الحالية؛ لم أغير السلة." }
+                check(details.product.listedPriceHalala != null) { "سعر الوجبة في قائمة هنقرستيشن غير مقروء؛ لم أغير السلة." }
                 check(MenuSelectionValidator().selectConfigured(details,
                     ProductSelection(details.product.id, emptyMap(), 1), System.currentTimeMillis()) is SelectionResult.Accepted) {
                     "تحتاج الوجبة خيارات إلزامية؛ لم أستخدم سعرًا لطلب ناقص."
@@ -375,7 +377,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 check(graph.installations.value.any { it.provider == provider && it.version == keetaMenu.VERSION }) {
                     "إصدار كيتا يحتاج تحققًا قبل قراءة المقارنة."
                 }
-                if (keetaMenu.VERSION == "3.13.203") readCurrentKeetaProduct(desired) else try {
+                if (keetaMenu.profile.usesCurrentLayout) readCurrentKeetaProduct(desired) else try {
                     targetSeen = false
                     phase = "قراءة سعر كيتا وعروضه"
                     val launch = service.packageManager.getLaunchIntentForPackage(provider.packageName) ?: error("كيتا غير مثبت.")
@@ -494,7 +496,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 }) { try {
                     checkSession()
                     check((id == ProviderId.HUNGERSTATION && version == HungerStationCatalog.TESTED_VERSION) ||
-                        (id == ProviderId.KEETA && version == "3.13.203")) { "إصدار المنصة يحتاج تحققًا لقراءة جميع الأصناف." }
+                        (id == ProviderId.KEETA && KeetaVersionProfile.resolve(version)?.allowsReading(multipleItems=true)==true)) { "إصدار المنصة يحتاج تحققًا لقراءة جميع الأصناف." }
                     val plan = PlainMenuReadPlan.create(desired,id,version) ?: error("الطلب يحتاج مسار قراءة غير مدعوم.")
                     for (line in plan.lines) {
                         phase = "قراءة جميع أصناف الطلب في ${id.title}"
@@ -711,7 +713,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     fun inspectKeetaMenuForVerification():Boolean {
         if(!BuildConfig.DEBUG || !BuildConfig.VERSION_NAME.endsWith("-device-tools") || active || graph.session.value.active)return false
         val cart=graph.draft.value ?: return false
-        val line=PlainMenuReadPlan.create(cart,ProviderId.KEETA,"3.13.203")?.lines?.firstOrNull() ?: return false
+        val profile=installedKeetaProfile() ?: return false
+        val line=PlainMenuReadPlan.create(cart,ProviderId.KEETA,profile.version)?.lines?.firstOrNull() ?: return false
         if(!matchesSelectedRestaurant())return false
         return begin(operation=CatalogOperation.COMPARE_MENU,returnOnSuccess=false) {
             provider=ProviderId.KEETA;bindKeetaRequest(cart,line);targetSeen=false
@@ -930,10 +933,13 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
 
     /** Device verification entry only. No checkout, clear-cart or replacement action exists. */
     private suspend fun prepareOwnedKeetaSteps(desired:CanonicalCart, readReview:Boolean, progress:PlainPreparationProgress, testEdits:Boolean=false, readOnly:Boolean=false,clearTestCart:Boolean=false) {
-        val lines=PlainMenuReadPlan.create(desired,ProviderId.KEETA,"3.13.203")?.lines ?: error("طلب غير مدعوم.")
+        val profile=checkNotNull(installedKeetaProfile()) {"إصدار كيتا غير مدعوم لتجهيز السلة."}
+        check(profile.allowsOwnedPlainPreparation) {"إصدار كيتا غير مدعوم لتجهيز السلة."}
+        val lines=PlainMenuReadPlan.create(desired,ProviderId.KEETA,profile.version)?.lines ?: error("طلب غير مدعوم.")
+        check(profile.allowsPreparation(lines.size>1)) {"إصدار كيتا لا يدعم تجهيز هذا العدد من الأصناف."}
         provider=ProviderId.KEETA
         bindKeetaRequest(desired,lines.first())
-        check(graph.installations.value.singleOrNull {it.provider==provider}?.version=="3.13.203")
+        check(graph.installations.value.singleOrNull {it.provider==provider}?.version==profile.version)
         forgetPrepared(provider)
         progress.stage="OPEN_BASELINE"
         phase="قراءة السلة كاملة قبل تجهيز أصناف كيتا"
@@ -1103,7 +1109,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     fun preparePlainKeetaForVerification(readReview:Boolean=false,clearTestCart:Boolean=false): Boolean {
         if (!BuildConfig.DEBUG || !BuildConfig.VERSION_NAME.endsWith("-device-tools") || active || graph.session.value.active) return false
         val desired=graph.draft.value ?: return false
-        val lines=PlainMenuReadPlan.create(desired,ProviderId.KEETA,"3.13.203")?.lines ?: return false
+        val profile=installedKeetaProfile()?.takeIf {it.allowsOwnedPlainPreparation} ?: return false
+        val lines=PlainMenuReadPlan.create(desired,ProviderId.KEETA,profile.version)?.lines ?: return false
         if(lines.size!=2 || !matchesSelectedRestaurant())return false
         graph.catalog.value=graph.catalog.value.copy(comparisonRunning=true,
             finalTotals=graph.catalog.value.finalTotals.filterValues {it.fresh(desired,System.currentTimeMillis())} - ProviderId.KEETA,error=null)
@@ -1140,6 +1147,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         "المطعم غير متاح للطلب في القراءة الحالية.",
         "لم تظهر الوجبة المطابقة في هنقرستيشن؛ لم أستبدلها بوجبة أخرى.",
         "لم يكتمل التحقق من الوجبة في هنقرستيشن؛ لا توجد مقارنة مؤكدة.",
+        "لم تكتمل قراءة خيارات الوجبة في هنقرستيشن؛ لم أغير السلة.",
+        "زر إضافة الوجبة في هنقرستيشن غير متاح في القراءة الحالية؛ لم أغير السلة.",
+        "سعر الوجبة في قائمة هنقرستيشن غير مقروء؛ لم أغير السلة.",
         "تحتاج الوجبة خيارات إلزامية؛ لم أستخدم سعرًا لطلب ناقص.",
         "خيارات كيتا تحتاج دعمًا، ولا توجد سلة مطابقة قابلة للتحقق؛ لم أضف وجبة.",
         "تعذرت قراءة سلة كيتا بالكامل.",
@@ -1171,7 +1181,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         if (!matchesSelectedRestaurant()) return false
         val desired = graph.draft.value ?: return false
         if(handoff && (PlainComparisonSupport.existingTwoRow(desired) ||
-            graph.installations.value.any { it.provider == ProviderId.KEETA && it.version == "3.13.203" }))
+            installedKeetaProfile()?.allowsOwnedPlainPreparation == true))
             return openOwnedPlainHandoff(ProviderId.KEETA,desired)
         if (!PreviewEvidence.supports(desired)) return false
         if (handoff) {
@@ -1202,7 +1212,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                         closeKeetaReadSheet(frame); frame = await { keetaMenu.menu(it) }
                     }
                 }
-                if (keetaMenu.VERSION != "3.13.203" && keetaMenu.menu(frame) && keetaBasket.footerBag(frame) == null)
+                if (!keetaMenu.profile.usesCurrentLayout && keetaMenu.menu(frame) && keetaBasket.footerBag(frame) == null)
                     frame = restoreKeetaHeader(frame)
                 if (keetaBasket.emptyMenu(frame)) {
                     check(!handoff) { "سلة كيتا أصبحت فارغة؛ أعد تجهيزها." }
@@ -1225,7 +1235,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             if (handoff) check(evidence.lines.single().quantity == quantity) { "تغيرت الكمية؛ أعد تجهيز السلة." }
             var changes = 0
             while (evidence.lines.single().quantity != quantity) {
-                check(keetaMenu.VERSION in setOf("3.12.501", "3.13.203")) { "إصدار تعديل الكمية غير مدعوم." }
+                check(keetaMenu.profile.allowsOwnedPlainPreparation) { "إصدار تعديل الكمية غير مدعوم." }
                 check(++changes <= 98 && graph.draft.value?.fingerprint == desired.fingerprint)
                 val before = evidence.lines.single().quantity!!
                 val increase = before < quantity
@@ -1258,7 +1268,12 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             check(target.label != "إتمام الدفع" && target.label != "تفريغ السلة")
             val mutation = target.label == "إضافة إلى السلة" ||
                 keetaBasket.quantityTarget(frame, true) == target || keetaBasket.quantityTarget(frame, false) == target
-            if (mutation) recordBasketMutation()
+            if (mutation) {
+                recordBasketMutation()
+                // Journal I/O can suspend; the original ownership frame must still be active.
+                verifyActiveFrame(frame, root.windowId)
+                currentCoroutineContext().ensureActive(); checkSession()
+            }
             // One dispatch only, then await the exact resulting quantity. Never retry a mutation.
             check(performKeetaReadAction(root, target, AccessibilityNodeInfo.ACTION_CLICK)) { "تعذر تنفيذ إجراء السلة؛ لم أكرره." }
         } finally { @Suppress("DEPRECATION") root.recycle() }
@@ -1349,31 +1364,44 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     }
 
     private suspend fun keetaSearchAction(previous: CatalogFrame, action: KeetaSearchAction) {
-        currentCoroutineContext().ensureActive(); checkSession()
-        val root = service.rootInActiveWindow ?: throw UserInterrupted("اختفت شاشة البحث في كيتا؛ توقفت المقارنة.")
-        try {
-            check(provider == ProviderId.KEETA)
-            requireProviderWindow(root)
-            val fresh = capture(root)
-            if (fresh != previous) throw ScreenChangedBeforeAction()
-            val target = keetaMenu.searchTarget(fresh, action) ?: error("تعذر التحقق من عنصر البحث في كيتا.")
-            @Suppress("DEPRECATION")
-            val version = service.packageManager.getPackageInfo(provider.packageName, 0).versionName
-            check(SafetyGuard().allowsKeetaSearch(action, keetaMenu, fresh, target, root.packageName?.toString(),
-                version, graph.settings.value.catalogConsent, currentCoroutineContext().isActive))
-            val node = locateKeetaNode(root, target) ?: error("اختفى عنصر البحث.")
+        KeetaSearchReplan.run(previous,
+            observe = { await { keetaMenu.searchTarget(it, action) != null } }) { planned, dispatch ->
             try {
-                if (!(node.refresh() && node.isVisibleToUser && node.isEnabled && !node.isPassword &&
-                    !(android.os.Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive) &&
-                    node.isEditable == (action == KeetaSearchAction.ENTER_QUERY) && capture(root) == fresh)) throw ScreenChangedBeforeAction()
-                verifyActiveFrame(fresh, root.windowId)
+                lastStats.put("keetaSearchAction", action.name).put("keetaSearchDispatched", false)
                 currentCoroutineContext().ensureActive(); checkSession()
-                val success = if (action == KeetaSearchAction.ENTER_QUERY) node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
-                    putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, keetaMenu.restaurant)
-                }) else node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                check(success) { "لم تنفذ كيتا إجراء البحث؛ توقفت دون تكراره." }
-            } finally { @Suppress("DEPRECATION") node.recycle() }
-        } finally { @Suppress("DEPRECATION") root.recycle() }
+                val root = service.rootInActiveWindow ?: throw UserInterrupted("اختفت شاشة البحث في كيتا؛ توقفت المقارنة.")
+                try {
+                    check(provider == ProviderId.KEETA)
+                    requireProviderWindow(root)
+                    val fresh = capture(root)
+                    if (fresh != planned) throw ScreenChangedBeforeAction()
+                    val target = keetaMenu.searchTarget(fresh, action) ?: error("تعذر التحقق من عنصر البحث في كيتا.")
+                    @Suppress("DEPRECATION")
+                    val version = service.packageManager.getPackageInfo(provider.packageName, 0).versionName
+                    check(SafetyGuard().allowsKeetaSearch(action, keetaMenu, fresh, target, root.packageName?.toString(),
+                        version, graph.settings.value.catalogConsent, currentCoroutineContext().isActive))
+                    val node = locateKeetaNode(root, target) ?: error("اختفى عنصر البحث.")
+                    try {
+                        if (!(node.refresh() && node.isVisibleToUser && node.isEnabled && !node.isPassword &&
+                            !(android.os.Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive) &&
+                            node.isEditable == (action == KeetaSearchAction.ENTER_QUERY) && capture(root) == fresh)) throw ScreenChangedBeforeAction()
+                        verifyActiveFrame(fresh, root.windowId)
+                        currentCoroutineContext().ensureActive(); checkSession()
+                        // Mark before the native call: false or an exception after dispatch is terminal.
+                        dispatch.mark()
+                        lastStats.put("keetaSearchDispatched", true)
+                        val success = if (action == KeetaSearchAction.ENTER_QUERY) node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+                            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, keetaMenu.restaurant)
+                        }) else node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        check(success) { "لم تنفذ كيتا إجراء البحث؛ توقفت دون تكراره." }
+                    } finally { @Suppress("DEPRECATION") node.recycle() }
+                } finally { @Suppress("DEPRECATION") root.recycle() }
+                KeetaSearchReplan.Result.Dispatched
+            } catch (changed: ScreenChangedBeforeAction) {
+                if (dispatch.attempted) throw changed
+                KeetaSearchReplan.Result.ChangedBeforeDispatch(changed)
+            }
+        }
     }
 
     /** Current native menu/product capture has no evidenced delivery-mode header or coupon path. */
@@ -1582,6 +1610,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     /** Back from an evidenced basket preview only. No checkout control is selected. */
     private suspend fun closeKeetaReadSheet(previous: CatalogFrame) {
         currentCoroutineContext().ensureActive(); checkSession()
+        var drawerReturn: KeetaOwnedDrawerReturn? = null
         val root = service.rootInActiveWindow ?: throw UserInterrupted("اختفت معاينة كيتا؛ توقفت المقارنة.")
         try {
             check(provider == ProviderId.KEETA)
@@ -1594,13 +1623,56 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 val target = KeetaPromotionEvidence.closeTarget(frame) ?: error("تعذر تحديد زر إغلاق شروط العرض.")
                 check(performKeetaReadAction(root, target, AccessibilityNodeInfo.ACTION_CLICK)) { "تعذر إغلاق شروط العرض." }
             } else if (keetaMenu.basketDrawer(frame)) {
-                val target = keetaBasket.closeDrawer(frame) ?: error("تعذر تحديد إغلاق معاينة السلة.")
-                check(performKeetaReadAction(root, target, AccessibilityNodeInfo.ACTION_CLICK)) { "تعذر إغلاق معاينة السلة." }
+                val target = keetaBasket.closeDrawer(frame)
+                if (target != null) {
+                    check(performKeetaReadAction(root, target, AccessibilityNodeInfo.ACTION_CLICK)) { "تعذر إغلاق معاينة السلة." }
+                } else {
+                    val desired = graph.draft.value ?: error("اختفى الطلب؛ لم أخرج من السلة.")
+                    val evidence = keetaBasket.evidence(frame) ?: error("لم تثبت سلة كاملة للخروج منها.")
+                    @Suppress("DEPRECATION")
+                    val version = service.packageManager.getPackageInfo(provider.packageName, 0).versionName
+                    val command = KeetaOwnedDrawerReturn.create(frame, evidence, desired, version, System.currentTimeMillis())
+                        ?: error("تعذر تحديد إغلاق معاينة السلة.")
+                    verifyActiveFrame(frame, root.windowId)
+                    currentCoroutineContext().ensureActive(); checkSession()
+                    check(command.consumeBack(frame, graph.draft.value ?: desired, version, System.currentTimeMillis()))
+                    check(service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)) { "لم يكتمل الرجوع من السلة؛ لم أكرره." }
+                    drawerReturn = command
+                }
             } else {
                 val target = keetaMenu.closeProduct(frame) ?: error("تعذر تحديد إغلاق الوجبة.")
                 check(performKeetaReadAction(root, target, AccessibilityNodeInfo.ACTION_CLICK)) { "تعذر إغلاق معاينة الوجبة." }
             }
         } finally { @Suppress("DEPRECATION") root.recycle() }
+        drawerReturn?.let { finishKeetaOwnedDrawerReturn(it) }
+    }
+
+    private suspend fun finishKeetaOwnedDrawerReturn(command: KeetaOwnedDrawerReturn) {
+        fun desired() = graph.draft.value ?: error("اختفى الطلب أثناء الرجوع من السلة.")
+        fun matchesMenu(frame: CatalogFrame) = command.menuMatches(frame, desired(), keetaMenu.VERSION, System.currentTimeMillis())
+        var frame = await { matchesMenu(it) || command.searchTarget(it, desired(), keetaMenu.VERSION, System.currentTimeMillis()) != null }
+        if (!matchesMenu(frame)) {
+            val root = service.rootInActiveWindow ?: throw ScreenChangedBeforeAction()
+            try {
+                requireProviderWindow(root)
+                if (capture(root) != frame) throw ScreenChangedBeforeAction()
+                @Suppress("DEPRECATION")
+                val version = service.packageManager.getPackageInfo(provider.packageName, 0).versionName
+                val target = command.searchTarget(frame, desired(), version, System.currentTimeMillis())
+                    ?: error("لم تظهر نتيجة البحث المطابقة بعد الرجوع؛ لم أختر مطعمًا آخر.")
+                verifyActiveFrame(frame, root.windowId)
+                currentCoroutineContext().ensureActive(); checkSession()
+                check(command.consumeReopen(frame, target, desired(), version, System.currentTimeMillis()))
+                check(performKeetaReadAction(root, target, AccessibilityNodeInfo.ACTION_CLICK)) { "لم تفتح قائمة المطعم؛ لم أكرر الإجراء." }
+            } finally { @Suppress("DEPRECATION") root.recycle() }
+            frame = await { matchesMenu(it) }
+        }
+        @Suppress("DEPRECATION")
+        val version = service.packageManager.getPackageInfo(provider.packageName, 0).versionName
+        currentCoroutineContext().ensureActive(); checkSession()
+        check(command.finish(frame, desired(), version, System.currentTimeMillis())) {
+            "تغير المطعم أو عدد السلة أثناء الرجوع؛ توقفت قبل أي إجراء آخر."
+        }
     }
 
     /** Fallback only after a rejected structured scroll on the same complete known food menu. */
@@ -1821,10 +1893,15 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private suspend fun readFinalTotal(desired: CanonicalCart,verifiedSource:CatalogFrame?=null) {
         val saved = graph.catalog.value.preparedBaskets.forRequest(desired, provider) ?: error("لم تُتحقق السلة قبل قراءة الإجمالي.")
         val version = graph.installations.value.single { it.provider == provider }.version ?: error("إصدار المنصة غير معروف.")
-        val admission=if(desired.items.size>1) app.octopus.local.safety.PreparedReviewAdmission.create(provider,desired,saved,
-            verifiedSource ?: error("لم تُربط السلة المتعددة بشاشتها المتحققة."),version,System.currentTimeMillis())
-                ?: error("انتهت صلاحية إثبات السلة المتعددة؛ لم أفتح المراجعة.") else null
-        if (provider == ProviderId.KEETA) {
+        @Suppress("DEPRECATION")
+        val observedVersion=service.packageManager.getPackageInfo(provider.packageName,0).versionName
+        check(observedVersion==version) {"تغير إصدار المنصة؛ لم أفتح مراجعة السلة."}
+        val directDrawer=provider==ProviderId.KEETA && desired.items.size==1 &&
+            KeetaVersionProfile.resolve(version)?.allowsDirectDrawerReview==true
+        val admission=if(desired.items.size>1 || directDrawer) app.octopus.local.safety.PreparedReviewAdmission.create(provider,desired,saved,
+            verifiedSource ?: error("لم تُربط السلة بشاشتها المتحققة."),version,System.currentTimeMillis())
+                ?: error("انتهت صلاحية إثبات السلة؛ لم أفتح المراجعة.") else null
+        if (provider == ProviderId.KEETA && !directDrawer) {
             val drawer = await { keetaMenu.basketDrawer(it) || keetaMenu.menu(it) }
             if (keetaMenu.basketDrawer(drawer)) closeKeetaReadSheet(drawer)
             await { keetaMenu.menu(it) }
@@ -1847,7 +1924,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 verifyActiveFrame(frame, root.windowId)
                 currentCoroutineContext().ensureActive(); checkSession()
                 if(admission!=null) check(admission.consume(frame,target,provider,desired,version,System.currentTimeMillis())) {
-                    "لم يعد تصريح مراجعة السلة المتعددة صالحًا؛ لم أفتحها."
+                    "لم يعد تصريح مراجعة السلة صالحًا؛ لم أفتحها."
                 }
                 check(node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) { "لم تفتح مراجعة الطلب." }
             } finally { @Suppress("DEPRECATION") node.recycle() }
@@ -1871,6 +1948,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     val frame = capture(review)
                     val next = ReviewNavigationGuard.hungerRecommendationsTarget(frame, version)
                     if (next != null) {
+                        lastStats.put("hungerRecommendationsVariant", if (frame.nodes.any {
+                            it.label == "لا تفوت الفرصة!\nفرصتك لإضافة المزيد لطلبك" }) "NEW" else "OLD")
+                            .put("hungerRecommendationsDispatched", false)
                         val node = locateKeetaNode(review, next) ?: throw ScreenChangedBeforeAction()
                         try {
                             if (!node.refresh() || !node.isVisibleToUser || !node.isEnabled || !node.isClickable ||
@@ -1879,6 +1959,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                             verifyActiveFrame(frame, review.windowId)
                             checkSession(); currentCoroutineContext().ensureActive()
                             recommendationsSkipped = true
+                            lastStats.put("hungerRecommendationsAttemptedAt", System.currentTimeMillis())
+                                .put("hungerRecommendationsDispatched", true)
                             check(node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) { "تعذر تجاوز توصيات الأصناف إلى المراجعة." }
                         } finally { @Suppress("DEPRECATION") node.recycle() }
                         delay(250)
@@ -2282,7 +2364,26 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                                 .put("scrollable", n.scrollable).put("editable", false)
                         })))
                     }
-                } }, scroll = { scrollProduct(it) })
+                } }, scroll = { scrollProduct(it) }).also { reading ->
+                    if (BuildConfig.DEBUG) {
+                        // Fixed counts and booleans only: no provider text, user inputs or account data.
+                        val last = reading.lastFrame
+                        val checkpoint = JSONObject().put("capturedAt", System.currentTimeMillis())
+                            .put("optionsComplete", reading.details.optionsComplete)
+                            .put("available", reading.details.product.available)
+                            .put("pricePresent", reading.details.product.listedPriceHalala != null)
+                            .put("frameComplete", last.complete)
+                            .put("nodeCount", last.nodes.size)
+                            .put("enteredTextCount", last.nodes.count { it.enteredText })
+                            .put("addButtonCount", last.nodes.count { it.id == "flutterAddButton" })
+                            .put("addEnabled", last.nodes.singleOrNull { it.id == "flutterAddButton" }?.enabled == true)
+                            .put("titleCount", last.nodes.count { !it.clickable && it.label.trim() == item.name })
+                            .put("optionsEndObserved", last.nodes.any { it.label.trim() == "غالبًا ما يتم طلبه مع" })
+                        withContext(Dispatchers.IO) {
+                            runCatching { service.filesDir.resolve("last-hunger-product-reading.json").writeText(checkpoint.toString(), Charsets.UTF_8) }
+                        }
+                    }
+                }
         } finally {
             if (pages.length() > 0) withContext(Dispatchers.IO) {
                 runCatching { service.filesDir.resolve("live-hs-public-product.json").writeText(pages.toString(), Charsets.UTF_8) }

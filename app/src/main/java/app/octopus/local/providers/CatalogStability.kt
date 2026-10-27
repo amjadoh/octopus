@@ -8,6 +8,9 @@ object CatalogStability {
         }.joinToString { "${it.id}:${it.parent}:${it.enabled}" } + ":entry=" + HungerStationCatalog.browseEntry(frame)?.index
         CatalogScreen.BROWSE -> frame.nodes.filter { it.id.endsWith(":id/vendor_name") }
             .joinToString { "${it.id}:${it.label}:${it.enabled}" }
+        // A PDP may keep its text while controls finish loading or entered values change.
+        // Every captured state field participates; an unchanged label is not stable evidence.
+        CatalogScreen.PRODUCT -> frame.nodes.joinToString(prefix = "PRODUCT:complete=${frame.complete}:") { it.toString() }
         else -> frame.nodes.joinToString { it.id + it.label + it.parent }
     }
 }

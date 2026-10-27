@@ -100,7 +100,7 @@ class KeetaReadProbeTest {
             val inProduct = publicProduct || (phase == "product" && node.className?.toString() == "android.widget.ScrollView" &&
                 has(node) { sameName(it, item) } && !has(node) { app.octopus.local.providers.KeetaRestaurantName.matches(restaurant, label(it)) } &&
                 !has(node) { it.isEditable })
-            val value = if (inProduct) raw else reader.functionalLabel(raw)
+            val value = if (inProduct) raw else reader.functionalLabel(raw, node.viewIdResourceName.orEmpty())
             frameNodes.put(JSONObject().put("index", index).put("parent", parent)
                 .put("id", InspectionRedactor.resourceId(node.viewIdResourceName).orEmpty())
                 .put("label", value).put("className", InspectionRedactor.className(node.className).orEmpty())
@@ -113,7 +113,10 @@ class KeetaReadProbeTest {
             }
         }
         capture(root, -1, 0)
-        val report = JSONObject().put("phase", phase).put("version", "3.13.203")
+        @Suppress("DEPRECATION")
+        val observedVersion = instrumentation.targetContext.packageManager.getPackageInfo(provider, 0).versionName
+        val report = JSONObject().put("phase", phase).put("version", observedVersion)
+            .put("capturedAt", System.currentTimeMillis()).put("labelFilterVersion", "3.13.203")
             .put("nodes", org.json.JSONArray(snapshot.nodes)).put("truncated", snapshot.truncated)
             .put("catalogFrame", JSONObject().put("complete", complete).put("nodes", frameNodes))
         instrumentation.targetContext.filesDir.resolve("live-keeta-$phase.json").writeText(report.toString(), Charsets.UTF_8)
@@ -185,7 +188,7 @@ class KeetaReadProbeTest {
         val item = args.getString("item") ?: error("Missing item")
         require(restaurant.length in 1..100 && item.length in 1..100)
         @Suppress("DEPRECATION")
-        check(instrumentation.targetContext.packageManager.getPackageInfo(provider, 0).versionName == "3.13.203")
+        check(instrumentation.targetContext.packageManager.getPackageInfo(provider, 0).versionName in setOf("3.13.203", "3.13.301"))
         val root = awaitRoot { has(it) { n -> sameName(n,item) } && has(it) { n -> label(n) == "إضافة إلى السلة" } }
         try { record(root, "product", restaurant, item) } finally { root.recycle() }
     }

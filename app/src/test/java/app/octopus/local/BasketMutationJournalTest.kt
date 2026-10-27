@@ -5,6 +5,7 @@ import app.octopus.local.domain.*
 import app.octopus.local.providers.*
 import org.junit.Assert.*
 import org.junit.Test
+import java.security.MessageDigest
 
 class BasketMutationJournalTest {
     private class Store : BasketJournalStore {
@@ -20,6 +21,8 @@ class BasketMutationJournalTest {
     private fun actual(quantity: Int = 3) = BasketEvidence(hs, request.restaurant,
         listOf(BasketLineEvidence("فطيرة", emptyList(), quantity, quantity * 700L)), quantity * 700L, true)
     private fun rejected(action: () -> Unit) { assertTrue(runCatching(action).isFailure) }
+    private fun legacyHash(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray())
+        .joinToString("") { "%02x".format(it) }
 
     @Test fun repeatedCompareReusesKnownCartAndNeverPermitsAnotherFirstAdd() {
         val store = Store(); var journal = BasketMutationJournal(store)
@@ -76,5 +79,71 @@ class BasketMutationJournalTest {
         rejected { journal.beforeDispatch(hs, other) }
         assertTrue(journal.observe(request, actual()))
         journal.beforeDispatch(hs, request)
+    }
+
+    @Test fun equivalentRestaurantFormattingCannotReopenFirstAddAfterCompletedComparison() {
+        val store = Store(); val journal = BasketMutationJournal(store)
+        val first = request.copy(restaurant = "Kudo   مطعم")
+        journal.beforeDispatch(hs, first)
+        assertTrue(journal.observe(first, actual().copy(restaurant = first.restaurant)))
+        listOf("kudo مطعم", "  KUDO مطعم  ", "Kudo\u200f مطعم").forEach { name ->
+            val equivalent = request.copy(restaurant = name)
+            assertEquals(first.fingerprint, equivalent.fingerprint)
+            rejected { BasketMutationJournal(store).requireFirstAdd(hs, equivalent) }
+        }
+    }
+
+    @Test fun interruptedActionRecoversFromCompleteEquivalentNameObservationWithoutAnotherAdd() {
+        val store = Store(); val journal = BasketMutationJournal(store)
+        val first = request.copy(restaurant = "مطعم   جديد")
+        val equivalent = first.copy(restaurant = "مطعم جديد\u200f")
+        journal.beforeDispatch(hs, first)
+        val restarted = BasketMutationJournal(store)
+        rejected { restarted.requireFirstAdd(hs, equivalent) }
+        assertTrue(restarted.observe(equivalent, actual(1).copy(restaurant = equivalent.restaurant)))
+        rejected { restarted.requireFirstAdd(hs, equivalent) }
+        // Reading all existing rows permits the separately guarded quantity adjustment.
+        restarted.beforeDispatch(hs, equivalent)
+        rejected { restarted.beforeDispatch(hs, equivalent) }
+    }
+
+    @Test fun unknownLegacyFormattingCannotSilentlyBecomeAnEmptyCartAfterUpgrade() {
+        val old = request.copy(restaurant = "مطعم   قديم")
+        val store = Store().apply {
+            values = mapOf("seen.${hs.name}.${legacyHash(old.restaurant)}" to "1")
+        }
+        val journal = BasketMutationJournal(store)
+        val equivalent = old.copy(restaurant = "مطعم قديم")
+        assertEquals(old.fingerprint, equivalent.fingerprint)
+        rejected { journal.requireFirstAdd(hs, equivalent) }
+        // Even a different name cannot prove that the irreversible old hash is unrelated.
+        rejected { journal.requireFirstAdd(hs, request) }
+        journal.requireFirstAdd(ProviderId.KEETA, request)
+        assertTrue(store.values.keys.any { it.startsWith("seen.${hs.name}.") })
+    }
+
+    @Test fun completeLegacyNameObservationMigratesOnlyThatRestaurantAndKeepsSeenBarrier() {
+        val old = request.copy(restaurant = "مطعم   قديم")
+        val store = Store().apply {
+            values = mapOf("seen.${hs.name}.${legacyHash(old.restaurant)}" to "1",
+                "pending.${hs.name}" to legacyHash(old.restaurant) + ":" + legacyHash(old.fingerprint))
+        }
+        val journal = BasketMutationJournal(store)
+        assertFalse(journal.observe(old, actual().copy(restaurant = old.restaurant, complete = false)))
+        rejected { journal.requireFirstAdd(hs, request) }
+        assertTrue(journal.observe(old, actual().copy(restaurant = old.restaurant)))
+        assertFalse(store.values.keys.any { it.startsWith("seen.${hs.name}.") || it.startsWith("pending.") })
+        rejected { journal.requireFirstAdd(hs, old.copy(restaurant = "مطعم قديم")) }
+        journal.requireFirstAdd(hs, request)
+    }
+
+    @Test fun observingUnrelatedCartCannotMigrateAnotherLegacyHash() {
+        val store = Store().apply {
+            values = mapOf("seen.${hs.name}.${legacyHash("مطعم آخر")}" to "1")
+        }
+        val journal = BasketMutationJournal(store)
+        assertTrue(journal.observe(request, actual()))
+        assertTrue(store.values.keys.any { it.startsWith("seen.${hs.name}.") })
+        rejected { journal.requireFirstAdd(hs, request.copy(restaurant = "ثالث")) }
     }
 }

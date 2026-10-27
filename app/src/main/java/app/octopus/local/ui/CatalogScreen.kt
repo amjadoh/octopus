@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -64,6 +65,10 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
     var cartToDelete by remember { mutableStateOf<CanonicalCart?>(null) }
     var deleteError by remember { mutableStateOf<String?>(null) }
     var quoteTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    val listState = rememberLazyListState()
+    val menuIdentity = if (comparisonOnly) null else state.menu?.restaurant?.catalogKey
+    // Navigation resets position; a refreshed menu or progress update keeps the user's scroll.
+    LaunchedEffect(comparisonOnly, menuIdentity) { listState.scrollToItem(0) }
     LaunchedEffect(Unit) { while (true) { delay(15_000); quoteTime = System.currentTimeMillis() } }
     val currentQuoteTime = maxOf(quoteTime, System.currentTimeMillis())
     fun finishManualReading() {
@@ -95,7 +100,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
         if (publicState.area == null) areaDialog = true else graph.refreshPublicRestaurants()
     }
     Column(Modifier.fillMaxSize()) {
-    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(Modifier.weight(1f), state = listState, contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (!comparisonOnly && state.menu == null) item {
             MosabHomeHeader(query,
                 onQuery = { query = it.take(100) }, enabled = !state.busy,
@@ -150,9 +155,11 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
             MosabJourneyHero(state.menu!!.restaurant.name, "اختر وجباتك وخصص طلبك على مزاجك.", 2)
         }
         item {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            OutlinedButton(onClick = { areaDialog = true }, enabled = !state.busy && !state.manualCaptureActive,
+                modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
                 Icon(Icons.Outlined.LocationOn, null, Modifier.size(18.dp), tint = OctopusPalette.Petrol)
-                Text(publicState.area?.title ?: "من قائمة محفوظة؛ راجع تطابق عنوان التوصيل في التطبيقين", fontSize = 12.sp, color = OctopusPalette.Muted)
+                Text(publicState.area?.title ?: "حدد منطقة المطاعم", Modifier.weight(1f).padding(horizontal = 8.dp), fontSize = 12.sp)
+                Text("تغيير الموقع", fontSize = 12.sp)
             }
         }
         item {

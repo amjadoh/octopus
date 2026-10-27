@@ -21,4 +21,18 @@ class CatalogStabilityTest {
         assertNotEquals(CatalogStability.fingerprint(CatalogFrame(base,true)),
             CatalogStability.fingerprint(CatalogFrame(base.dropLast(1)+node(1,"price","12"),true)))
     }
+    @Test fun sameProductTextWithChangedControlStateResetsReadiness() {
+        val frame = CatalogFrame(listOf(node(0,"pdpCloseButton"),
+            node(1,"flutterAddButton","إضافة").copy(clickable=true)),true)
+        val original = CatalogStability.fingerprint(frame)
+        val action = frame.nodes.last()
+        for (changed in listOf(action.copy(enabled=false), action.copy(clickable=false),
+            action.copy(enteredText=true), action.copy(editable=true), action.copy(omittedText=true))) {
+            assertNotEquals(original, CatalogStability.fingerprint(frame.copy(nodes=frame.nodes.dropLast(1)+changed)))
+        }
+    }
+    @Test fun incompleteProductCannotShareTheCompleteProductFingerprint() {
+        val frame = CatalogFrame(listOf(node(0,"pdpCloseButton"),node(1,"price","9")),true)
+        assertNotEquals(CatalogStability.fingerprint(frame),CatalogStability.fingerprint(frame.copy(complete=false)))
+    }
 }

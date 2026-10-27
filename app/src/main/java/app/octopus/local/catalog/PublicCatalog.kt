@@ -12,7 +12,7 @@ import java.net.URLEncoder
 data class CatalogArea(val city: String, val district: String) {
     init {
         require(listOf(city, district).all { it.isNotBlank() && it.length <= 100 &&
-            it == it.trim() && it.matches(Regex("[\\p{L}\\p{N} -]+")) })
+            it == it.trim() && it.matches(Regex("[\\p{L}\\p{N} ()-]+")) })
     }
     private fun slug(value: String) = value.replace(Regex("[ -]+"), "-")
     val citySlug: String get() = slug(city).let { if (it == "مكة") "مكة-المكرمة" else it }
