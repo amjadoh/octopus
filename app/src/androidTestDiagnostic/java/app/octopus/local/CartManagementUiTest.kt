@@ -89,4 +89,20 @@ class CartManagementUiTest {
             assertFalse(graph.catalog.value.comparisonRunning)
         }
     }
+    @Test fun externalClearNeedsExplicitConfirmationAndKeepsTheDraft() {
+        val request = setup()
+        val provider = ProviderId.HUNGERSTATION
+        compose.runOnIdle { graph.basketMutationJournal.beforeDispatch(provider, request) }
+        compose.onNodeWithText("أفرغت سلة ${provider.title} وأريد البدء من جديد").performClick()
+        compose.onNodeWithText("رجوع").performClick()
+        compose.runOnIdle { assertTrue(runCatching { graph.basketMutationJournal.requireFirstAdd(provider, request) }.isFailure) }
+        compose.onNodeWithText("إدارة السلال وحذفها").performClick()
+        compose.onNodeWithText("أفرغت سلة ${provider.title} وأريد البدء من جديد").performClick()
+        compose.onNodeWithText("نعم، حذفت جميع أصناف هذا المطعم").performClick()
+        compose.runOnIdle {
+            graph.basketMutationJournal.requireFirstAdd(provider, request)
+            assertEquals(request, graph.draft.value)
+            assertFalse(graph.catalog.value.comparisonRunning)
+        }
+    }
 }

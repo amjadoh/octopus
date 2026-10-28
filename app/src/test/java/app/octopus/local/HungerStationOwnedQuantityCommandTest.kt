@@ -7,6 +7,27 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class HungerStationOwnedQuantityCommandTest {
+    @Test fun cartPlusMayOpenAnExactVariantButCanAuthorizeOnlyOneFurtherQuantityStep() {
+        val original=com.google.gson.Gson().fromJson(javaClass.getResource("/recorded-hs/hs-8.0.303-burger-existing-variant.json")!!.readText().removePrefix("\uFEFF"),CatalogFrame::class.java)
+        val sheet=original.copy(nodes=original.nodes.map{it.copy(label=it.label.replace("برجر فيليه دجاج حرّاق","جبنة الناتشوز").replace("§\n7","§\n13"))})
+        val c=command()
+        assertFalse(c.pendingVariant(sheet,request(),version,1001))
+        assertTrue(c.consume(frame(),c.target,request(),version,1001))
+        assertTrue(c.pendingVariant(sheet,request(),version,1002))
+        val change=checkNotNull(c.issueVariant(sheet,request(),version,1003))
+        assertNull(c.issueVariant(sheet,request(),version,1004))
+        assertEquals(2,change.expectedAfter)
+        assertTrue(change.consume(sheet,change.target,version,1004))
+        assertTrue(c.consumeVariantContinuation(sheet,change,request(),version,1004))
+        assertFalse(c.consumeVariantContinuation(sheet,change,request(),version,1005))
+        assertFalse(c.updatedVariant(sheet,request(),version,1005))
+        val updated=sheet.copy(nodes=sheet.nodes.map{if(it.id=="menuItemActionDualButtonValue")it.copy(label="2") else it.copy(label=it.label.replace("§\n13","§\n26"))})
+        assertTrue(c.updatedVariant(updated,request(),version,1006))
+        assertFalse(c.updatedVariant(updated,request(3),version,1006))
+        assertTrue(c.afterMatches(frame(2),request(),version,1010))
+        assertTrue(c.consumeReturn(frame(2),request(),version,1011))
+        assertFalse(c.updatedVariant(updated,request(),version,1012))
+    }
     private val version=HungerStationCatalog.TESTED_VERSION
     private fun request(q:Int=2)=CanonicalCart("كودو",null,listOf(
         CanonicalItem("بطاطس وسط",null,emptyList(),3),CanonicalItem("جبنة الناتشوز",null,emptyList(),q)))

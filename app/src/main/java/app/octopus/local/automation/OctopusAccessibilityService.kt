@@ -91,9 +91,10 @@ class OctopusAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         stopRead("SERVICE_RECONNECTED", "أعيد اتصال الخدمة؛ لن تُستأنف القراءة تلقائيًا.")
         ReadOnlyServiceBridge.attach(this)
-        catalogNavigator?.stop()
+        catalogNavigator?.stop("")
         catalogNavigator = CatalogNavigator(this, graph).also(LiveCatalogBridge::attach)
         graph.serviceConnected.value = true
+        graph.catalog.value = graph.catalog.value.copy(message = "")
         // A service reconnect must never resume a previous session.
         graph.session.value = SessionState()
     }
@@ -101,7 +102,7 @@ class OctopusAccessibilityService : AccessibilityService() {
         // Contents of AccessibilityEvent are not copied or logged.
         // Sampling verifies the current foreground package independently.
     }
-    override fun onInterrupt() { catalogNavigator?.stop("انقطع اتصال الخدمة."); stopRead("SERVICE_INTERRUPTED", "توقفت الخدمة؛ ابدأ اختبارًا جديدًا عند العودة.") }
+    override fun onInterrupt() { catalogNavigator?.stop("توقفت العملية؛ أعد المحاولة عند جاهزية الخدمة."); stopRead("SERVICE_INTERRUPTED", "توقفت الخدمة؛ ابدأ اختبارًا جديدًا عند العودة.") }
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
         catalogNavigator?.takeIf { it.active }?.stop("تغير تخطيط الهاتف؛ توقفت العملية بأمان.")

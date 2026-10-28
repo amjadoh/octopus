@@ -1,0 +1,19 @@
+{
+  "model": "gpt-6.1-terra",
+  "purpose": "Read an unexpected, redacted provider overlay and propose a grounded recovery action",
+  "liveConfigured": true,
+  "liveModelVerified": true,
+  "deviceGatewayVerified": true,
+  "connectionScope": "Local development gateway bound to loopback, reached from the authorized Honor device through USB reverse forwarding",
+  "verifiedScenario": "Android client submitted a previously recorded redacted Braze advert tree; Terra returned approved close advice. No click was executed by this probe.",
+  "runtimeScope": "Advice for an already native-validated explicit HungerStation advert close control; existing native fallback on gateway unavailability. Not a general autonomous screen navigator.",
+  "imageInputTested": false,
+  "releaseReady": false,
+  "requiredBeforeActivation": [
+    "An HTTPS gateway and a separately provisioned device credential",
+    "Production opt-in and disconnect controls for sharing redacted overlay content",
+    "Live advert dismissal, interrupted, stale-frame and unavailable-network acceptance tests",
+    "Complete two-provider comparison with equivalent cart, address/branch and fresh review totals"
+  ],
+  "notAuthorizedByModelOutput": ["payment", "order confirmation", "subscription", "credentials", "address changes", "unverified cart mutation"]
+}

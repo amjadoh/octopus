@@ -146,4 +146,33 @@ class BasketMutationJournalTest {
         assertTrue(store.values.keys.any { it.startsWith("seen.${hs.name}.") })
         rejected { journal.requireFirstAdd(hs, request.copy(restaurant = "ثالث")) }
     }
+    @Test fun explicitExternalClearResetsOnlyTheNamedRestaurantAndProvider() {
+        val store = Store(); val journal = BasketMutationJournal(store)
+        assertTrue(journal.observe(request, actual()))
+        val other = request.copy(restaurant = "آخر")
+        assertTrue(journal.observe(other, actual().copy(restaurant = other.restaurant)))
+        journal.beforeDispatch(ProviderId.KEETA, request)
+        journal.confirmExternalClear(hs, request)
+        BasketMutationJournal(store).requireFirstAdd(hs, request)
+        rejected { journal.requireFirstAdd(hs, other) }
+        rejected { journal.requireFirstAdd(ProviderId.KEETA, request) }
+        journal.beforeDispatch(hs, request)
+        rejected { journal.requireFirstAdd(hs, request) }
+    }
+    @Test fun externalClearCannotDiscardAnotherRestaurantsPendingMutation() {
+        val store = Store(); val journal = BasketMutationJournal(store)
+        journal.beforeDispatch(hs, request)
+        val before = store.values
+        rejected { journal.confirmExternalClear(hs, request.copy(restaurant = "آخر")) }
+        assertEquals(before, store.values)
+        journal.confirmExternalClear(hs, request)
+        journal.requireFirstAdd(hs, request)
+    }
+    @Test fun failedClearWriteKeepsTheDurableBarrier() {
+        val store = Store(); val journal = BasketMutationJournal(store)
+        journal.beforeDispatch(hs, request)
+        store.fail = true
+        rejected { journal.confirmExternalClear(hs, request) }
+        rejected { journal.requireFirstAdd(hs, request) }
+    }
 }

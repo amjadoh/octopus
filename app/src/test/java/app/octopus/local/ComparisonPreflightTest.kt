@@ -14,6 +14,12 @@ class ComparisonPreflightTest {
         allowed: Set<ProviderId> = ProviderId.entries.toSet(), consent: Boolean = true) =
         ComparisonPreflight.failure(cart, consent, allowed, rows)
 
+    @Test fun currentKeetaAdmitsTwoPlainRowsButKeepsConfiguredRequestsBlocked() {
+        val current = installed.map { if (it.provider == ProviderId.KEETA) it.copy(version = "3.13.301") else it }
+        assertNull(failure(rows = current))
+        assertNull(failure(two, current))
+        assertNotNull(failure(two.copy(items = two.items.map { it.copy(options = listOf(CartOption("إضافة", "جبن"))) }), current))
+    }
     @Test fun bothKnownAdaptersAdmitPlainOneAndTwoRowRequests() {
         assertNull(failure())
         assertNull(failure(two))

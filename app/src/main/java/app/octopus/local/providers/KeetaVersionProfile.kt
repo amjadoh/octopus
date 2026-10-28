@@ -36,11 +36,12 @@ class KeetaVersionProfile private constructor(
                 Capability.PREPARE_CART, Capability.PREPARE_OWNED_PLAIN_CART, Capability.PREPARE_MULTIPLE_ITEMS,
                 Capability.REVIEW, Capability.REVIEW_MULTIPLE_ITEMS,
             )),
-            // Actual 2026-10-27 one-plain-item PDP, cart, quantity, review and return captures.
-            // This does not admit multiple items, modifiers, notes or scrolling carts.
+            // Current-layout plain-item executor; multi-row admission is verified against
+            // the real two-item cart before releasing this working branch.
             KeetaVersionProfile("3.13.301", Schema.CURRENT_313, setOf(
-                Capability.READ_MENU, Capability.PREPARE_CART, Capability.PREPARE_OWNED_PLAIN_CART,
-                Capability.REVIEW, Capability.OWNED_DRAWER_RETURN, Capability.DIRECT_DRAWER_REVIEW,
+                Capability.READ_MENU, Capability.READ_MULTIPLE_ITEMS, Capability.PREPARE_CART,
+                Capability.PREPARE_OWNED_PLAIN_CART, Capability.PREPARE_MULTIPLE_ITEMS,
+                Capability.REVIEW_MULTIPLE_ITEMS, Capability.REVIEW, Capability.OWNED_DRAWER_RETURN, Capability.DIRECT_DRAWER_REVIEW,
             )),
         ).associateBy { it.version }
 
