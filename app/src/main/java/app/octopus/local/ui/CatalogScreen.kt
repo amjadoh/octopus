@@ -283,14 +283,9 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                                 Text(id.title, fontWeight = FontWeight.Bold)
                                 Text(money(quote.total), fontSize = 30.sp, fontWeight = FontWeight.ExtraBold)
                                 Text(if (quote.fresh(cart, currentQuoteTime)) "إجمالي مقروء من مراجعة التطبيق وقت المقارنة" else "قراءة سابقة — يلزم تحديثها", fontSize = 12.sp)
-                                Text("الإجمالي مقروء — التفاصيل جزئية",fontSize=12.sp,color=OctopusPalette.Muted)
-                                quote.fields.filterKeys { it != PriceField.ORDER_TOTAL }.forEach { (field, amount) ->
-                                    Text("${when(field) {
-                                        PriceField.SUBTOTAL -> "الأصناف"; PriceField.DELIVERY -> "التوصيل"; PriceField.SERVICE -> "الخدمة"
-                                        PriceField.SMALL_ORDER -> "رسوم الطلب الصغير"; PriceField.TAX -> "الضريبة"; PriceField.DISCOUNT -> "الخصم"
-                                        PriceField.WALLET -> "تغطية المحفظة"; PriceField.AMOUNT_DUE -> "المطلوب للدفع"; else -> "الإجمالي"
-                                    }}: ${money(amount)}", fontSize = 12.sp)
-                                }
+                                // Partial accessibility fields can contain a pre-discount fee. Until the
+                                // full breakdown is reconciled, only the independently read total is shown.
+                                Text("الإجمالي مقروء؛ لم يكتمل التحقق من تفاصيل الرسوم والخصومات.",fontSize=12.sp,color=OctopusPalette.Muted)
                                 Text("تم التحقق من السلة وقت القراءة. تطابق العنوان والفرع يحتاج تحققًا مستقلًا؛ لم يُعتمد ترتيب الأرخص.", fontSize = 11.sp, color = OctopusPalette.Muted)
                             }
                         }
