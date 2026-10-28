@@ -5,6 +5,12 @@ import com.google.gson.Gson
 import org.junit.Assert.*
 import org.junit.Test
 class HungerStationExistingVariantTest {
+    @Test fun currentBurgerSheetCanBeReadBeforeClosingWithoutAnotherAdd() {
+        val current=Gson().fromJson(javaClass.getResource("/recorded-hs/hs-8.0.303-burger-existing-variant.json")!!.readText().removePrefix("\uFEFF"),CatalogFrame::class.java)
+        val read=checkNotNull(HungerStationExistingVariant.read(current,"برجر فيليه دجاج حرّاق"))
+        assertEquals(1,read.quantity)
+        assertEquals(700L,read.unit)
+    }
     private val title="فطيرة جبن فيتا"
     private val frame=Gson().fromJson(javaClass.getResource("/recorded-hs-existing-variant.json")!!.readText(),CatalogFrame::class.java)
     @Test fun actualExistingPlainVariantCanChangeOnlyOneQuantityStep() {

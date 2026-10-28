@@ -8,7 +8,7 @@ class RidanCartProgram private constructor(private val issuedAt: Long, private v
     private val ownership: PlainBasketPreparationSession? = null,
     private val ownedEdit: PlainBasketPreparationSession.Edit? = null,
     private val ownedRequest: CanonicalCart? = null,
-    private val seed:PlainBasketSeed?=null) {
+    private val seed:PlainBasketSeed?=null, private val plainConfiguration:ConfiguredProduct?=null) {
     private var attempted = false
     fun consumeAdd(frame: CatalogFrame, node: CatalogNode, now: Long, currentRequest:CanonicalCart?=null): Boolean {
         if (attempted || now < issuedAt || now - issuedAt > 120_000 || !frame.complete ||
@@ -27,6 +27,7 @@ class RidanCartProgram private constructor(private val issuedAt: Long, private v
         else if(ownership==null)true else ownership.consume(ownedEdit!!,ownedRequest!!,HungerStationCatalog.TESTED_VERSION,now)
     }
     private fun plainOptionsVerified(frame: CatalogFrame, now: Long): Boolean {
+        plainConfiguration?.takeIf(HungerAlbaikPlainOptions::supports)?.let {return HungerAlbaikPlainOptions.verified(frame,it,now)}
         return runCatching {
             val reader = HungerStationProductReader(LiveRestaurant(restaurant, null, restaurant), LiveMenuItem(title, expectedUnit, productId))
             reader.observe(frame)
@@ -53,7 +54,7 @@ class RidanCartProgram private constructor(private val issuedAt: Long, private v
             details.restaurant.isNotBlank() && details.product.title.isNotBlank() &&
                 details.source.provider == ProviderId.HUNGERSTATION &&
                 details.source.providerVersion == HungerStationCatalog.TESTED_VERSION &&
-                details.product.groups.all { it.minimum == 0 && it.maximum == 1 } &&
+                (details.product.groups.all { it.minimum == 0 && it.maximum == 1 } || HungerAlbaikPlainOptions.supports(details)) &&
                 details.product.listedPriceHalala != null && selection.quantity == 1 && selection.choices.values.all { it.isEmpty() } &&
                 MenuSelectionValidator().selectConfigured(details, selection, now) is SelectionResult.Accepted
         /** Existing contents must be complete, session-owned and still agree with the visible menu footer. */
@@ -67,7 +68,7 @@ class RidanCartProgram private constructor(private val issuedAt: Long, private v
             val pending=ownership.next(request,before,HungerStationCatalog.TESTED_VERSION,now) as? PlainBasketPreparationSession.Step.Change ?: return null
             if(pending.edit!==edit)return null
             return RidanCartProgram(now,details.restaurant,details.product.title,details.product.listedPriceHalala!!,
-                details.product.id,1,ownership,edit,request)
+                details.product.id,1,ownership,edit,request,plainConfiguration=details)
         }
         fun createForSeed(details:ConfiguredProduct,selection:ProductSelection,emptyMenu:CatalogFrame,
             request:CanonicalCart,line:CanonicalItem,now:Long,observedAt:Long):Pair<RidanCartProgram,PlainBasketSeed>? {
@@ -76,14 +77,14 @@ class RidanCartProgram private constructor(private val issuedAt: Long, private v
             val token=PlainBasketSeed.create(request,line,ProviderId.HUNGERSTATION,HungerStationCatalog.TESTED_VERSION,
                 details.product.listedPriceHalala!!,emptyMenu,observedAt) ?: return null
             return RidanCartProgram(now,program.restaurant,program.title,program.expectedUnit,program.productId,
-                line.quantity,seed=token) to token
+                line.quantity,seed=token,plainConfiguration=details) to token
         }
         fun create(details: ConfiguredProduct, selection: ProductSelection, emptyMenu: CatalogFrame, now: Long, requestedQuantity: Int = 1): RidanCartProgram? {
             if (requestedQuantity !in 1..99 || !supports(details, selection, now) || !emptyMenu.complete ||
                 HungerStationCatalog.screen(emptyMenu) != CatalogScreen.MENU ||
                 emptyMenu.nodes.none { !it.clickable && it.label.lineSequence().any { line -> IdentityText.clean(line) == IdentityText.clean(details.restaurant) } } ||
                 emptyMenu.nodes.any { it.id in setOf("FlutterMenu_goToCartButton", "FlutterMenu_goToCartQuantity", "menuItemActionDualButtonValue") }) return null
-            return RidanCartProgram(now, details.restaurant, details.product.title, details.product.listedPriceHalala!!, details.product.id, requestedQuantity)
+            return RidanCartProgram(now, details.restaurant, details.product.title, details.product.listedPriceHalala!!, details.product.id, requestedQuantity,plainConfiguration=details)
         }
     }
 }

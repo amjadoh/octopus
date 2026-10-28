@@ -15,7 +15,7 @@ class CatalogTestReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (!BuildConfig.DEBUG || intent.action != "app.octopus.local.TEST_CATALOG") return
         val mode = intent.getStringExtra("mode") ?: "snapshot"
-        if (mode !in setOf("snapshot", "stop", "inspect_hs_menu_search", "inspect_keeta_menu", "public_menu", "public_add", "draft_quantity", "search", "browse", "open_menu", "open_product",
+        if (mode !in setOf("ai_probe", "snapshot", "stop", "inspect_hs_menu_search", "inspect_keeta_menu", "public_menu", "public_add", "draft_quantity", "search", "browse", "open_menu", "open_product",
                 "compare_menu", "compare_total", "resume_draft", "prepare_hs", "prepare_keeta", "prepare_multi_keeta", "clear_owned_keeta_test", "show_owned_hs_cart", "prepare_multi_hs", "prepare_multi_hs_review", "prepare_multi_keeta_review", "handoff_hs", "handoff_keeta")) return
         val query = intent.getStringExtra("query")?.takeIf { it.isNotBlank() && it.length <= 100 }
         val item = intent.getStringExtra("item")?.takeIf { it.isNotBlank() && it.length <= 100 }
@@ -26,7 +26,15 @@ class CatalogTestReceiver : BroadcastReceiver() {
             var reportError: String? = null
             try {
                 withTimeout(7000) { graph.draftReady.first { it } }
-                if (mode == "snapshot") started = true
+                if (mode == "ai_probe") {
+                    check(!graph.catalog.value.busy && !graph.catalog.value.comparisonRunning)
+                    val frame=com.google.gson.Gson().fromJson(context.filesDir.resolve("ai-probe-frame.json").readText(),app.octopus.local.providers.CatalogFrame::class.java)
+                    val close=checkNotNull(app.octopus.local.providers.HungerStationSpinPromo.closeTarget(frame))
+                    val approved=TerraRecoveryClient(context).approveAdvertClose(frame,close)
+                    context.filesDir.resolve("ai-probe-result.json").writeText(JSONObject().put("approved",approved ?: JSONObject.NULL).put("executedClick",false).toString())
+                    started=true
+                }
+                else if (mode == "snapshot") started = true
                 else if (mode == "stop") { LiveCatalogBridge.stop(); started = true }
                 else if (mode == "public_menu") {
                     check(!graph.catalog.value.busy && !graph.catalog.value.comparisonRunning)
@@ -85,7 +93,13 @@ class CatalogTestReceiver : BroadcastReceiver() {
                 }
                 pending.resultCode = if (started) 0 else 1
                 pending.resultData = if (started) "RUNTIME_STARTED" else "RUNTIME_NOT_STARTED"
-            } catch (_: Exception) { reportError = "RUNTIME_SETUP_FAILED"; pending.resultCode = 1 }
+            } catch (failure: Exception) {
+                reportError = "RUNTIME_SETUP_FAILED"
+                if(mode=="ai_probe") context.filesDir.resolve("ai-probe-result.json").writeText(
+                    JSONObject().put("errorType",failure.javaClass.simpleName)
+                        .put("locations",JSONArray(failure.stackTrace.filter{it.className.startsWith("app.octopus.")}.take(4).map{it.className+":"+it.lineNumber})).toString())
+                pending.resultCode = 1
+            }
             finally { pending.finish() }
             try {
                 if (started && mode !in setOf("snapshot", "stop", "resume_draft")) withTimeout(350_000) {

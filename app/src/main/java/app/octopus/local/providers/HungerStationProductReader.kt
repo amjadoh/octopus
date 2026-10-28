@@ -5,7 +5,7 @@ import java.security.MessageDigest
 
 /** Parses observed required/single-choice and optional-add/single-choice PDP sections. */
 class HungerStationProductReader(private val restaurant: LiveRestaurant, private val item: LiveMenuItem) {
-    private data class Group(val title: String, val minimum: Int = 1, val choices: LinkedHashMap<String, MenuChoice> = linkedMapOf())
+    private data class Group(val title: String, val minimum: Int = 1, val maximum: Int = 1, val choices: LinkedHashMap<String, MenuChoice> = linkedMapOf())
     private val groups = linkedMapOf<String, Group>()
     private val bodies = mutableListOf<String>()
     private var titleSeen = false
@@ -28,6 +28,17 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
             val node = nodes[i]
             val text = clean(node.label)
             if (text == "غالبًا ما يتم طلبه مع") { bottomSeen = true; break }
+            // Recorded ALBAIK optional groups use a group heading plus an explicit upper limit;
+            // required sections retain the separate "مطلوب" marker below.
+            val optionalLimit = nodes.getOrNull(i + 1)?.takeIf { !it.clickable }?.label?.let(::clean)
+            if (!node.clickable && text.matches(Regex("اختر من اضافات-(مبرده| من غير صوص|صوص) إلى .{1,100}")) &&
+                optionalLimit in setOf("اختيار واحد", "ما يصل إلى خيارين")) {
+                val maximum = if(optionalLimit == "ما يصل إلى خيارين") 2 else 1
+                if(!headersInFrame.add(text)) unsupported=true
+                group=groups.getOrPut(text) {Group(text,0,maximum)}
+                if(group.minimum!=0 || group.maximum!=maximum) unsupported=true
+                i+=2;continue
+            }
             // Honor / HS 8.0.303, Madwar feta product: an unchecked optional checkbox,
             // headed by these two exact labels. Do not infer optionality for other grammars.
             if (text in setOf("يمكنك اضافة", "اضافات فطاير") && !node.clickable && i + 1 < nodes.size &&
@@ -54,7 +65,9 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
             if (node.clickable && node.id != "flutterAddButton" && node.id != "pdpCloseButton" && node.id != "pdpZoomButton") {
                 val value = text.lineSequence().first().trim()
                 // Recorded choice rows are merged names with order-count/price suffixes; recommendation rows are excluded above.
-                val choiceShape = text.contains('\n') && (text.contains("طلب") || text.contains('§'))
+                val choiceShape = text.contains('\n') && (text.contains("طلب") || text.contains('§')) ||
+                    (text in setOf("بدون سلطة", "بدون صلصة", "بدون مخلل حار", "بدون مخلل") &&
+                        node.className in setOf("android.view.View", "android.widget.ImageView"))
                 if (!choiceShape && value.any(Char::isLetter)) unsupported = true
                 if (choiceShape && value.any(Char::isLetter)) {
                     val current = group
@@ -76,8 +89,8 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
     fun finish(atMillis: Long): ConfiguredProduct {
         require(titleSeen) { "اسم الوجبة داخل خياراتها لم يطابق اختيارك." }
         // Completeness follows the observed option grammar and end marker, never a restaurant name.
-        val complete = bottomSeen && !unsupported && groups.values.all { it.choices.isNotEmpty() }
-        val options = groups.values.filter { it.choices.isNotEmpty() }.map { MenuChoiceGroup(it.title, it.title, it.minimum, 1, it.choices.values.toList()) }
+        val complete = bottomSeen && !unsupported && groups.values.all { it.choices.size >= it.maximum }
+        val options = groups.values.filter { it.choices.size >= it.maximum }.map { MenuChoiceGroup(it.title, it.title, it.minimum, it.maximum, it.choices.values.toList()) }
         val fingerprint = MessageDigest.getInstance("SHA-256").digest(bodies.joinToString().toByteArray()).joinToString("") { "%02x".format(it) }
         return ConfiguredProduct(restaurant.name, MenuProduct(item.selector, item.name, null, enabled, item.listedPrice, options),
             CatalogProvenance(ProviderId.HUNGERSTATION, HungerStationCatalog.TESTED_VERSION, atMillis, fingerprint), complete,
