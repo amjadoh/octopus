@@ -59,6 +59,15 @@ object PreviewEvidence {
 enum class KeetaSearchAction { OPEN_SEARCH, EDIT_QUERY, ENTER_QUERY, SUBMIT_QUERY }
 
 open class KeetaMenuReader(val restaurant: String, val title: String, val VERSION: String = "3.12.501") {
+    private var optionalPlainFrame: CatalogFrame? = null
+    private var optionalPlainAt = 0L
+    fun acceptOptionalPlain(frame: CatalogFrame, proof: KeetaOptionalPlainSession, now: Long): Boolean {
+        if (!proof.observe(frame, this, now)) return false
+        optionalPlainFrame = frame; optionalPlainAt = now
+        return true
+    }
+    fun hasOptionalPlainProof(frame: CatalogFrame): Boolean = optionalPlainFrame == frame &&
+        System.currentTimeMillis() - optionalPlainAt in 0..120_000
     val profile = requireNotNull(KeetaVersionProfile.resolve(VERSION)) { "Unsupported Keeta version" }
     init { require(restaurant.isNotBlank() && title.isNotBlank() && restaurant.length <= 200 && title.length <= 300)
         require(profile.allowsReading()) }
@@ -78,6 +87,7 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
         // cards cannot look identical after redaction. Other unknown fields stay omitted.
         if (profile.usesCurrentLayout && resourceId == "com.sankuai.sailor.afooddelivery:id/product_name" &&
             text.length in 1..300 && text.any(Char::isLetter)) return text
+        if (text in KeetaOptionalPlainSession.publicLabels) return text
         if (KeetaRestaurantName.matches(restaurant, text)) return restaurant
         if (KeetaAvailability.closedText(text) || KeetaAvailability.unavailableText(text) || text=="موافق") return text
         if (profile.usesCurrentLayout && (text in setOf("معلومات غذائية", "معلومات التغذية", "مسببات الحساسية") || text.matches(Regex("[0-9٠-٩]{1,5} سعرة حرارية")))) return text
@@ -144,6 +154,7 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
         return result
     }
     fun closeProduct(frame: CatalogFrame): CatalogNode? {
+        if(profile.usesCurrentLayout) KeetaOptionalPlainSession.closeTarget(frame,restaurant,title)?.let {return it}
         if (!product(frame)) return null
         val productContent = (if (profile.usesCurrentLayout) currentReadOnlyProductBody(frame) else productBody(frame)) ?: return null
         val modal = ancestors(frame, productContent).firstOrNull { parent ->
@@ -175,6 +186,7 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
     }
     /** Read-only recognition does not authorize adding a product with unknown modifiers. */
     private fun currentReadOnlyProductBody(frame: CatalogFrame): CatalogNode? {
+        KeetaOptionalPlainSession.readBody(frame,restaurant,title)?.let { return it }
         KeetaSingleSkuProduct.body(frame,restaurant,title)?.let {return it}
         if (!frame.complete || frame.nodes.count { it.label == restaurant } != 1 ||
             frame.nodes.count { it.label == "إضافة إلى السلة" } != 1) return null
@@ -201,6 +213,7 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
     }
     /** Honor / 3.13.203 plain-product modal. Only its observed description slot may omit text. */
     private fun currentPlainProductBody(frame: CatalogFrame): CatalogNode? {
+        if (hasOptionalPlainProof(frame)) return KeetaOptionalPlainSession.readBody(frame,restaurant,title)
         KeetaSingleSkuProduct.body(frame,restaurant,title)?.let {return it}
         if (!frame.complete || frame.nodes.count { it.label == restaurant } != 1 ||
             frame.nodes.count { it.label == "إضافة إلى السلة" } != 1) return null

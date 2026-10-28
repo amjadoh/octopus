@@ -888,6 +888,51 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         return true
     }
 
+    private suspend fun ensureKeetaPlainProduct(initial:CatalogFrame):CatalogFrame {
+        if (keetaMenu.productBody(initial) != null) return initial
+        val session = KeetaOptionalPlainSession.start(initial,keetaMenu,System.currentTimeMillis())
+            ?: error("خيارات كيتا تحتاج قارئًا موثقًا لهذا المنتج؛ لم أضف.")
+        var frame = initial
+        repeat(12) {
+            if (keetaMenu.acceptOptionalPlain(frame,session,System.currentTimeMillis())) return frame
+            check(!session.blocked) {"تغيرت خيارات كيتا أو ظهر اختيار غير متحقق؛ لم أضف."}
+            val body = KeetaOptionalPlainSession.readBody(frame,keetaMenu.restaurant,keetaMenu.title)
+                ?: error("تغيرت صفحة خيارات كيتا؛ لم أضف.")
+            scrollKeetaProductPart(frame,body)
+            val before = frame
+            frame = await { it != before && keetaMenu.product(it) }
+        }
+        error("لم تكتمل تغطية خيارات كيتا؛ لم أضف.")
+    }
+
+    private suspend fun scrollKeetaProductPart(previous:CatalogFrame,body:CatalogNode) {
+        checkSession()
+        val root=service.rootInActiveWindow ?: error("اختفت خيارات كيتا.")
+        val rect=Rect()
+        val windowId=root.windowId
+        try {
+            requireProviderWindow(root)
+            if(capture(root)!=previous) throw ScreenChangedBeforeAction()
+            val node=locateKeetaNode(root,body) ?: throw ScreenChangedBeforeAction()
+            try {
+                check(node.refresh() && node.isVisibleToUser && node.isEnabled && node.isScrollable && !node.isEditable)
+                node.getBoundsInScreen(rect)
+            } finally {node.recycle()}
+        } finally {root.recycle()}
+        check(rect.height()>240 && rect.width()>120)
+        val x=rect.exactCenterX()
+        val path=Path().apply {moveTo(x,rect.top+rect.height()*.70f);lineTo(x,rect.top+rect.height()*.40f)}
+        val gesture=GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path,0,450)).build()
+        val done=withTimeout(3000) {suspendCancellableCoroutine<Boolean> { c ->
+            checkSession();verifyActiveFrame(previous,windowId)
+            if(!service.dispatchGesture(gesture,object:AccessibilityService.GestureResultCallback(){
+                override fun onCompleted(g:GestureDescription) {if(c.isActive)c.resume(true)}
+                override fun onCancelled(g:GestureDescription) {if(c.isActive)c.resume(false)}
+            },null) && c.isActive)c.resume(false)
+        }}
+        check(done) {"توقف تمرير الخيارات؛ لم أضف."}
+    }
+
     private suspend fun readKeetaPlainLine(desired: CanonicalCart, line: CanonicalItem): Long {
         val frame=openKeetaPlainLine(desired,line)
         try {
@@ -928,7 +973,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             openKeetaPreviewProduct(frame)
             frame=awaitKeetaProduct()
         }
-        return frame
+        return ensureKeetaPlainProduct(frame)
     }
 
     /** Device verification entry only. No checkout, clear-cart or replacement action exists. */
@@ -966,7 +1011,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             val empty=frame
             val observedAt=System.currentTimeMillis()
             openKeetaPreviewProduct(frame)
-            frame=awaitKeetaProduct()
+            frame=ensureKeetaPlainProduct(awaitKeetaProduct())
             val unit=keetaMenu.unitPrice(frame) ?: error("سعر الصنف الأول غير مقروء.")
             val token=PlainBasketSeed.create(desired,lines.first(),provider,keetaMenu.VERSION,unit,empty,observedAt)
                 ?: error("لم يثبت تصريح الصنف الأول من سلة فارغة؛ لم أضف.")
@@ -1808,7 +1853,12 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         act(results, CatalogAction.OPEN_RESTAURANT, { it.index == candidate.index && it.id == candidate.id && it.label == candidate.label })
         var viewOnlyNotice = false
         var landing = await { HungerStationCatalog.screen(it) in setOf(CatalogScreen.MENU, CatalogScreen.RESTAURANT_NOTICE) ||
+            HungerMenuSearchScreen.closeTarget(it)!=null ||
             graph.draft.value?.items?.singleOrNull()?.name?.let {title -> HungerStationExistingVariant.read(it,title)!=null}==true }
+        HungerMenuSearchScreen.closeTarget(landing)?.let { close ->
+            act(landing,CatalogAction.RETURN_TO_CATALOG,{it==close})
+            landing=await {HungerStationCatalog.screen(it) in setOf(CatalogScreen.MENU,CatalogScreen.RESTAURANT_NOTICE)}
+        }
         graph.draft.value?.items?.singleOrNull()?.name?.let {title -> HungerStationExistingVariant.read(landing,title)?.let {sheet ->
             act(landing,CatalogAction.CLOSE_HUNGER_VARIANT,{it==sheet.close},variantTitle=title)
             landing=await{HungerStationCatalog.screen(it) in setOf(CatalogScreen.MENU,CatalogScreen.RESTAURANT_NOTICE)}

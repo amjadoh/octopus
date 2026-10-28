@@ -16,6 +16,13 @@ class HungerMenuSearchSessionTest {
         CatalogNode(1,-1,"menuSearchInput","","android.widget.EditText",true,true,false)),true)
     private val version=HungerStationCatalog.TESTED_VERSION
     private fun session()=HungerMenuSearchSession.create(menu,cart,"بلو لاقون",version,1000)!!
+    @Test fun resumedMenuSearchHasOnlyItsKnownCloseTarget() {
+        assertEquals(CatalogScreen.SEARCH, HungerStationCatalog.screen(search))
+        assertEquals(search.nodes[0], CatalogCommands.backTarget(search))
+        assertNull(CatalogCommands.backTarget(search.copy(complete=false)))
+        assertNull(HungerMenuSearchScreen.closeTarget(search.copy(nodes=search.nodes + search.nodes[1].copy(index=2))))
+        assertNull(HungerMenuSearchScreen.closeTarget(search.copy(nodes=search.nodes.map { if(it.id=="menuSearchCloseButton") it.copy(enabled=false) else it })))
+    }
     @Test fun observedSearchControlsAreBoundToFullRequestAndConsumedOnce() {
         val s=session();val open=s.target(HungerMenuSearchAction.OPEN,menu,cart,version,1100)!!
         assertTrue(s.consume(HungerMenuSearchAction.OPEN,menu,open,cart,version,1100))
