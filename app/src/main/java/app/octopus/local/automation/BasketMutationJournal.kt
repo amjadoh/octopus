@@ -42,6 +42,18 @@ class BasketMutationJournal(private val store: BasketJournalStore) {
         // silently discard it; a complete observation of that known name migrates it below.
         check(values.keys.none { it.startsWith("seen.${provider.name}.") }) { LEGACY_UNRESOLVED }
     }
+    /** Explicit user attestation after clearing this restaurant in the provider app.
+     * This resets only the durable ambiguity barrier; the executor still requires its
+     * fresh, provider-specific empty-cart proof before any first add. Never call on launch. */
+    @Synchronized fun confirmExternalClear(provider: ProviderId, request: CanonicalCart) {
+        val values = store.read().toMutableMap()
+        val pendingKey = "pending.${provider.name}"
+        check(values[pendingKey] == null || pendingMatches(values[pendingKey], request.restaurant)) { UNRESOLVED }
+        values.remove(pendingKey)
+        values.remove(seen(provider, request.restaurant))
+        legacyKeys(provider, request.restaurant).forEach(values::remove)
+        store.write(values)
+    }
     /** Commit before dispatch. Failed dispatch and cancellation deliberately remain unresolved. */
     @Synchronized fun beforeDispatch(provider: ProviderId, request: CanonicalCart) {
         val values = store.read().toMutableMap()

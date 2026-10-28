@@ -195,6 +195,19 @@ class AppGraph(private val app: Application, publicClient: PublicCatalogClient =
         commitDraft(DraftChange.Changed(null))
     }
 
+    /** Explicit user confirmation; the next executor must still prove the live cart state. */
+    fun confirmProviderCartCleared(provider: ProviderId, expectedFingerprint: String) {
+        check(!catalog.value.busy && !catalog.value.comparisonRunning && !catalog.value.manualCaptureActive && !session.value.active) {
+            "أوقف العملية الحالية قبل تأكيد إفراغ السلة."
+        }
+        val current = draft.value
+        check(current != null && current.fingerprint == expectedFingerprint) { "تغير الطلب؛ راجعه قبل التأكيد." }
+        basketMutationJournal.confirmExternalClear(provider, current)
+        catalog.value = catalog.value.withoutProviderBasket(provider).copy(error = null,
+            message = "حُفظ تأكيدك بإفراغ سلة ${provider.title}. سنفحص حالتها مجددًا عند المقارنة قبل أي إضافة.")
+        existingQuantityConsent.value = null
+    }
+
     /** Opens the native app under user control; never claims its cart was deleted. */
     fun openProviderCartManagement(provider: ProviderId): Boolean {
         if (catalog.value.busy || catalog.value.comparisonRunning || catalog.value.manualCaptureActive || session.value.active) return false

@@ -62,6 +62,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
     var showProduct by remember(state.product?.source?.screenFingerprint) { mutableStateOf(true) }
     var localError by remember { mutableStateOf<String?>(null) }
     var manageCarts by remember { mutableStateOf(false) }
+    var clearedCartConfirmation by remember { mutableStateOf<Pair<ProviderId, CanonicalCart>?>(null) }
     var cartToDelete by remember { mutableStateOf<CanonicalCart?>(null) }
     var deleteError by remember { mutableStateOf<String?>(null) }
     var quoteTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -413,9 +414,24 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                 }, enabled = !state.busy && !changing, modifier = Modifier.fillMaxWidth()) {
                     Text("فتح ${provider.title} لحذف سلته")
                 }
+                TextButton(onClick = { draft?.let { clearedCartConfirmation = provider to it; manageCarts = false } },
+                    enabled = draft != null && ready && !state.busy && !changing) {
+                    Text("أفرغت سلة ${provider.title} وأريد البدء من جديد")
+                }
             }
             localError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         } }, confirmButton = { TextButton(onClick = { manageCarts = false }) { Text("رجوع") } })
+    clearedCartConfirmation?.let { (provider, confirmedCart) ->
+        AlertDialog(onDismissRequest = { clearedCartConfirmation = null },
+            title = { Text("تأكيد إفراغ سلة ${provider.title}") },
+            text = { Text("أكد فقط إذا حذفت جميع أصناف ${confirmedCart.restaurant} من ${provider.title}. يُزال سجل السلة السابقة لهذا المطعم فقط، ويُفحص التطبيق مجددًا قبل أي إضافة. إذا بقيت أصناف، ارجع للمنصة أولًا.") },
+            confirmButton = { TextButton(onClick = {
+                localError = null
+                try { graph.confirmProviderCartCleared(provider, confirmedCart.fingerprint); clearedCartConfirmation = null }
+                catch (_: Exception) { localError = "تعذر اعتماد الإفراغ؛ تأكد من عدم وجود عملية نشطة أو طلب متغير ثم حاول مجددًا."; clearedCartConfirmation = null }
+            }, enabled = !state.busy && !changing) { Text("نعم، حذفت جميع أصناف هذا المطعم") } },
+            dismissButton = { TextButton(onClick = { clearedCartConfirmation = null }) { Text("رجوع") } })
+    }
     cartToDelete?.let { target ->
         AlertDialog(onDismissRequest = { if (!changing) cartToDelete = null },
             title = { Text("حذف سلة الأخطبوط؟") },
