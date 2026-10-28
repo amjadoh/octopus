@@ -40,7 +40,7 @@ class KeetaVersionProfileTest {
         assertTrue(runCatching { KeetaMenuReader("كودو", "بطاطس وسط", "3.13.302") }.isFailure)
     }
 
-    @Test fun newRecordedVersionAdmitsOnlySinglePlainItemAndOwnedDrawerReturn() {
+    @Test fun currentVersionAdmitsPlainMultiItemExecutorAndOwnedDrawerReturn() {
         val profile = checkNotNull(KeetaVersionProfile.resolve("3.13.301"))
         assertTrue(profile.usesCurrentLayout)
         assertTrue(profile.allowsReading())
@@ -49,9 +49,9 @@ class KeetaVersionProfileTest {
         assertTrue(profile.allowsReview())
         assertTrue(profile.allowsOwnedDrawerReturn)
         assertTrue(profile.allowsDirectDrawerReview)
-        assertFalse(profile.allowsReading(true))
-        assertFalse(profile.allowsPreparation(true))
-        assertFalse(profile.allowsReview(true))
+        assertTrue(profile.allowsReading(true))
+        assertTrue(profile.allowsPreparation(true))
+        assertTrue(profile.allowsReview(true))
     }
 
     @Test fun readerAndReadPlanKeepActualVersionAndRejectAnotherVersionAtRecordTime() {

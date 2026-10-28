@@ -257,8 +257,8 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                             Text(preflightFailure, fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
                             TextButton(onClick = onProviders) { Text("مراجعة إعدادات المنصات") }
                         }
-                        if (PlainComparisonSupport.existingTwoRow(cart)) Text("المقارنة الحالية تدعم صنفين دون خيارات. يفحص التطبيق السلة أولًا؛ السلة المختلفة لا تُستبدل تلقائيًا.",fontSize=12.sp,color=OctopusPalette.Muted)
-                        if (!PreviewEvidence.supports(cart) && !PlainComparisonSupport.existingTwoRow(cart)) Text("حُفظ طلبك. التجهيز يدعم صنفًا واحدًا، أو صنفين دون خيارات من سلة موجودة؛ بقية الطلبات تحتاج دعمًا إضافيًا.", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                        if (preflightFailure == null && PlainComparisonSupport.existingTwoRow(cart)) Text("المقارنة الحالية تدعم صنفين دون خيارات. يفحص التطبيق السلة أولًا؛ السلة المختلفة لا تُستبدل تلقائيًا.",fontSize=12.sp,color=OctopusPalette.Muted)
+                        if (!PreviewEvidence.supports(cart) && !PlainComparisonSupport.existingTwoRow(cart)) Text("حُفظ طلبك كاملًا. راجع سبب عدم الجاهزية أعلاه قبل بدء المقارنة.", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
                         Text("يجهّز السلتين ويقرأ إجمالي المراجعة إذا تعرّف على مسارها، دون تأكيد طلب أو دفع. النتيجة غير المقروءة لا تُقدّر.", fontSize = 12.sp, color = OctopusPalette.Muted)
                         state.comparisonProgress.values.forEach { result ->
                             Text("${result.provider.title}: ${result.detail ?: "جارٍ تجهيز السلة والتحقق منها…"}", fontSize = 12.sp)
@@ -399,7 +399,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                 }
             }
         }
-        item { Text("اختر المطعم والوجبة. تُقبل الخيارات عند اكتمال قراءتها؛ التجهيز يدعم صنفًا واحدًا أو صنفين دون خيارات أو ملاحظات ضمن الشاشات المدعومة. الأصناف والتوصيل لا يمثلان الإجمالي النهائي مع الرسوم.", fontSize = 11.sp, color = OctopusPalette.Muted) }
+        item { Text("اختر المطعم والوجبة. تُحفظ الخيارات عند اكتمال قراءتها؛ تحدد شاشة المقارنة جاهزية تجهيز طلبك حسب إصدارات التطبيقين. الأصناف والتوصيل لا يمثلان الإجمالي النهائي مع الرسوم.", fontSize = 11.sp, color = OctopusPalette.Muted) }
     }
     if (areaDialog) CatalogAreaDialog(graph, onDismiss = { areaDialog = false })
     if (manageCarts) AlertDialog(onDismissRequest = { manageCarts = false },

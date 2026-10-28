@@ -12,11 +12,7 @@ class HungerMenuSearchSession private constructor(
     private var stage=0
     private fun valid(cart:CanonicalCart,version:String?,now:Long)=cart.fingerprint==fingerprint &&
         version==HungerStationCatalog.TESTED_VERSION && now>=createdAt && now-createdAt<=90_000
-    private fun searchFrame(f:CatalogFrame):Boolean=f.complete &&
-        f.nodes.none {Regex("password|otp|payment|checkout|credit|bank",RegexOption.IGNORE_CASE).containsMatchIn(it.id)} &&
-        f.nodes.count {it.editable}==1 &&
-        f.nodes.singleOrNull {it.id=="menuSearchInput"}?.let {it.editable && it.enabled && it.className=="android.widget.EditText"}==true &&
-        f.nodes.singleOrNull {it.id=="menuSearchCloseButton"}?.let {it.clickable && it.enabled && !it.editable && it.className=="android.widget.ImageView"}==true
+    private fun searchFrame(f:CatalogFrame):Boolean = HungerMenuSearchScreen.closeTarget(f) != null
     fun target(action:HungerMenuSearchAction,f:CatalogFrame,cart:CanonicalCart,version:String?,now:Long):CatalogNode? {
         if(!valid(cart,version,now))return null
         return when(action) {

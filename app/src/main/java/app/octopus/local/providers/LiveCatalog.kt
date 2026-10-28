@@ -83,6 +83,7 @@ object HungerStationCatalog {
         frame.hasId("pdpCloseButton") -> CatalogScreen.PRODUCT
         frame.hasId("FlutterCart_title") -> CatalogScreen.CART
         frame.hasId("menuBackButton") && frame.hasId("menuSearchButton") -> CatalogScreen.MENU
+        HungerMenuSearchScreen.closeTarget(frame) != null -> CatalogScreen.SEARCH
         frame.hasId("searchVendorsRecycler") -> CatalogScreen.RESULTS
         frame.hasId("vendor_list") && frame.hasId("close_button") -> CatalogScreen.BROWSE_PROMO
         frame.hasId("vendorsRecycler") && (frame.hasId("hsBackButton") ||
