@@ -26,13 +26,16 @@ object HungerStationSpinPromo {
     }
     /** Explicit Close button in the observed Braze home advert, never a security challenge. */
     private fun brazeHomeClose(frame: CatalogFrame): CatalogNode? {
-        if (!frame.complete || !frame.hasId("new_search_card_view") || frame.nodes.any {
+        if (!frame.complete || !(frame.hasId("new_search_card_view") ||
+            frame.hasId("menuSearchInput") && frame.hasId("menuSearchCloseButton") ||
+            frame.hasId("menuBackButton") && frame.hasId("menuSearchButton")) || frame.nodes.any {
                 app.octopus.local.safety.ProviderAccessRestrictions.detect(it.label) != null || securityText.containsMatchIn(it.label) }) return null
         val container=frame.nodes.singleOrNull { it.id.endsWith(":id/com_braze_inappmessage_html") &&
             it.className=="android.widget.RelativeLayout" } ?: return null
         val body=frame.descendants(container.index)
         if (body.size !in 5..30 || body.any {it.editable} || body.count {it.className=="android.webkit.WebView"} != 2) return null
-        return body.singleOrNull { it.className=="android.widget.Button" && it.clickable && it.enabled &&
-            it.label.trim().lowercase() in setOf("إغلاق","اغلاق","close","close button","dismiss") }
+        return body.singleOrNull { it.clickable && it.enabled && !it.editable &&
+            (it.className=="android.widget.Button" && it.label.trim().lowercase() in setOf("إغلاق","اغلاق","close","close button","dismiss") ||
+                it.className=="android.view.View" && it.label.trim().lowercase()=="close dialog") }
     }
 }

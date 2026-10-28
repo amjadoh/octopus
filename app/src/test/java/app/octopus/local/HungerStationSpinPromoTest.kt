@@ -17,6 +17,18 @@ class HungerStationSpinPromoTest {
         }, true)
     }
 
+    @Test fun actualMarketAdvertOverSearchPermitsOnlyItsExplicitCloseDialogControl() {
+        val f=com.google.gson.Gson().fromJson(javaClass.getResource("/recorded-hs/hs-8.0.303-braze-search-close-dialog-redacted.json")!!.readText(),CatalogFrame::class.java)
+        val close=checkNotNull(HungerStationSpinPromo.closeTarget(f))
+        assertEquals("Close dialog",close.label)
+        assertEquals("android.view.View",close.className)
+        assertEquals(CatalogScreen.SPIN_PROMO,HungerStationCatalog.screen(f))
+        assertTrue(SafetyGuard().allowsSpinPromoClose(f,close,ProviderId.HUNGERSTATION.packageName,HungerStationCatalog.TESTED_VERSION,true,true))
+        assertNull(HungerStationSpinPromo.closeTarget(f.copy(complete=false)))
+        assertNull(HungerStationSpinPromo.closeTarget(f.copy(nodes=f.nodes.map {if(it.index==close.index)it.copy(label="Explore Offers") else it})))
+        assertNull(HungerStationSpinPromo.closeTarget(f.copy(nodes=f.nodes+close.copy(index=999))))
+    }
+
     @Test fun observedPromoResolvesOnlyTheCloseIconIdentifiedByUser() {
         val frame = recorded()
         val target = HungerStationSpinPromo.closeTarget(frame)!!

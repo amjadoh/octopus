@@ -32,7 +32,7 @@ class HungerMenuSearchSession private constructor(
     /** Recomputed from the full fresh search frame. Nested Add controls are never candidates. */
     fun candidates(f:CatalogFrame,cart:CanonicalCart,version:String?,now:Long):List<Candidate> {
         if(!results(f,cart,version,now))return emptyList()
-        return f.nodes.filter {it.id.isEmpty() && it.className=="android.view.View" && it.clickable && it.enabled && !it.editable && !it.scrollable}.mapNotNull {node->HungerStationCatalog.menuItem(node)?.takeIf {it.name==query}?.let {Candidate(node,it)}}
+        return f.nodes.filter {it.id.isEmpty() && it.className in setOf("android.view.View","android.widget.ImageView") && it.clickable && it.enabled && !it.editable && !it.scrollable}.mapNotNull {node->HungerStationCatalog.menuItem(node)?.takeIf {it.name==query}?.let {Candidate(node,it)}}
     }
     companion object {
         fun create(menu:CatalogFrame,cart:CanonicalCart,query:String,version:String?,now:Long):HungerMenuSearchSession? {

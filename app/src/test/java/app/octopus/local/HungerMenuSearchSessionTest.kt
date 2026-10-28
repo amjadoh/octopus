@@ -23,6 +23,21 @@ class HungerMenuSearchSessionTest {
         assertNull(HungerMenuSearchScreen.closeTarget(search.copy(nodes=search.nodes + search.nodes[1].copy(index=2))))
         assertNull(HungerMenuSearchScreen.closeTarget(search.copy(nodes=search.nodes.map { if(it.id=="menuSearchCloseButton") it.copy(enabled=false) else it })))
     }
+    @Test fun actualHighestRatedAlbaikImageCardIsExactFoodCandidateNotItsSpicyVariant() {
+        val request=CanonicalCart("البيك",null,listOf(CanonicalItem("بيج بيك",null,emptyList(),2)))
+        val base=menu.copy(nodes=menu.nodes.map {if(it.label=="براون كوفي") it.copy(label="البيك") else it})
+        val session=checkNotNull(HungerMenuSearchSession.create(base,request,"بيج بيك",version,1000))
+        assertTrue(session.consume(HungerMenuSearchAction.OPEN,base,base.nodes[1],request,version,1100))
+        assertTrue(session.consume(HungerMenuSearchAction.TYPE,search,search.nodes[1],request,version,1200))
+        val f=com.google.gson.Gson().fromJson(javaClass.getResource("/recorded-hs/hs-8.0.303-in-menu-search-albaik-redacted.json")!!.readText(),CatalogFrame::class.java)
+        val candidate=session.candidates(f,request,version,1300).single()
+        assertEquals("android.widget.ImageView",candidate.node.className)
+        assertEquals("بيج بيك",candidate.item.name)
+        assertEquals(1750L,candidate.item.listedPrice)
+        assertNotEquals("بيج بيك حرّاق",candidate.item.name)
+        assertTrue(session.candidates(f.copy(complete=false),request,version,1300).isEmpty())
+    }
+
     @Test fun observedSearchControlsAreBoundToFullRequestAndConsumedOnce() {
         val s=session();val open=s.target(HungerMenuSearchAction.OPEN,menu,cart,version,1100)!!
         assertTrue(s.consume(HungerMenuSearchAction.OPEN,menu,open,cart,version,1100))
