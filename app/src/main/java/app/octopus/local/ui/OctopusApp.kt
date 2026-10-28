@@ -404,7 +404,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
 
 @Composable private fun SettingsScreen(settings: UserSettings, connected: Boolean, onSetup: () -> Unit, onExport: () -> Unit, onDelete: () -> Unit, onUpdate: () -> Unit, onDiagnostics: () -> Unit, onHistory: () -> Unit) {
     LazyColumn(contentPadding = PaddingValues(21.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        item { PageIntro("الإعدادات والخصوصية", "التحكم لك. بيانات الاختبار تبقى على الجهاز.") }
+        item { PageIntro("الإعدادات والخصوصية", "التحكم لك. راجع إعدادات القراءة والمساعد قبل بدء المقارنة.") }
         item { Panel {
             SectionTitle("تحديث التطبيق")
             InfoRow("الإصدار الحالي", BuildConfig.VERSION_NAME)
@@ -421,7 +421,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
         } }
         item { Panel {
             SectionTitle("بياناتك المحلية")
-            Text("نحفظ حالات القراءة والمبالغ المرشحة وإصدارات التطبيقات وسجلًا منقحًا للعناصر أثناء الجلسة التي تبدأها، لتفسير التعطل دون فحص منفصل. لا نصوص خام أو صور شاشة أو بيانات دخول أو خادم خارجي.", fontSize = 13.sp, lineHeight = 22.sp, color = Muted)
+            Text("نحفظ حالات القراءة والمبالغ المرشحة وإصدارات التطبيقات وسجلًا منقحًا للعناصر أثناء الجلسة التي تبدأها. عند تفعيل اتصال تيرا للاختبار، تُرسل نصوص نافذة الإعلان العامة وأزرار إغلاقها إلى خدمة OpenAI عبر بوابة الربط. لا تُرسل صورة الشاشة أو خلفية الحساب أو بيانات الدخول. يبقى مفتاح OpenAI خارج الجوال.", fontSize = 13.sp, lineHeight = 22.sp, color = Muted)
             OutlinedButton(onClick = onExport, Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text("تصدير السجل بعد مراجعته") }
             TextButton(onClick = onDelete) { Icon(Icons.Outlined.DeleteOutline, null, tint = Red); Spacer(Modifier.width(7.dp)); Text("حذف جميع بيانات الأخطبوط", color = Red) }
         } }

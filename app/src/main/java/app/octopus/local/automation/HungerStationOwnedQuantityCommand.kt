@@ -13,6 +13,9 @@ class HungerStationOwnedQuantityCommand private constructor(
 ) {
     private var dispatched=false
     private var returned=false
+    private var variantIssued=false
+    private var issuedVariant:HungerStationVariantQuantityCommand?=null
+    private var variantDispatchConsumed=false
     private val expectedQuantity=edit.before.getValue(edit.line.name)+
         if(edit.kind==PlainBasketPreparationSession.Kind.INCREASE_ONE)1 else -1
 
@@ -40,6 +43,35 @@ class HungerStationOwnedQuantityCommand private constructor(
         if(!afterMatches(frame,current,version,now))return false
         returned=true
         return true
+    }
+    fun pendingVariant(frame:CatalogFrame,current:CanonicalCart,version:String?,now:Long):Boolean {
+        if(!dispatched || returned || variantIssued || !context(current,version,now))return false
+        val row=before.lines.single{it.name==edit.line.name}
+        val read=HungerStationExistingVariant.read(frame,edit.line.name) ?: return false
+        return read.quantity==row.quantity && read.unit==row.lineAmount!!/row.quantity!!
+    }
+    fun issueVariant(frame:CatalogFrame,current:CanonicalCart,version:String?,now:Long):HungerStationVariantQuantityCommand? {
+        if(!pendingVariant(frame,current,version,now))return null
+        val row=before.lines.single{it.name==edit.line.name}
+        val command=HungerStationVariantQuantityCommand.next(frame,edit.line.name,row.lineAmount!!/row.quantity!!,expectedQuantity,version,now) ?: return null
+        variantIssued=true
+        issuedVariant=command
+        return command
+    }
+    /** This is the same journaled quantity edit, not authorization for a second basket mutation. */
+    fun consumeVariantContinuation(frame:CatalogFrame,command:HungerStationVariantQuantityCommand?,current:CanonicalCart,version:String?,now:Long):Boolean {
+        if(command==null || command!==issuedVariant || variantDispatchConsumed || !dispatched || returned || !context(current,version,now))return false
+        val row=before.lines.single{it.name==edit.line.name}
+        val read=HungerStationExistingVariant.read(frame,edit.line.name) ?: return false
+        if(read.quantity!=row.quantity || read.unit!=row.lineAmount!!/row.quantity!!)return false
+        variantDispatchConsumed=true
+        return true
+    }
+    fun updatedVariant(frame:CatalogFrame,current:CanonicalCart,version:String?,now:Long):Boolean {
+        if(!variantIssued || returned || !context(current,version,now))return false
+        val row=before.lines.single{it.name==edit.line.name}
+        val read=HungerStationExistingVariant.read(frame,edit.line.name) ?: return false
+        return read.quantity==expectedQuantity && read.unit==row.lineAmount!!/row.quantity!!
     }
     private fun context(current:CanonicalCart,version:String?,now:Long)=
         current.fingerprint==request.fingerprint && version==HungerStationCatalog.TESTED_VERSION && now>=at && now-at<=30_000

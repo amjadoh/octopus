@@ -62,6 +62,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
     var showProduct by remember(state.product?.source?.screenFingerprint) { mutableStateOf(true) }
     var localError by remember { mutableStateOf<String?>(null) }
     var manageCarts by remember { mutableStateOf(false) }
+    var clearedCartConfirmation by remember { mutableStateOf<Pair<ProviderId, CanonicalCart>?>(null) }
     var cartToDelete by remember { mutableStateOf<CanonicalCart?>(null) }
     var deleteError by remember { mutableStateOf<String?>(null) }
     var quoteTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -257,8 +258,8 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                             Text(preflightFailure, fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
                             TextButton(onClick = onProviders) { Text("مراجعة إعدادات المنصات") }
                         }
-                        if (PlainComparisonSupport.existingTwoRow(cart)) Text("المقارنة الحالية تدعم صنفين دون خيارات. يفحص التطبيق السلة أولًا؛ السلة المختلفة لا تُستبدل تلقائيًا.",fontSize=12.sp,color=OctopusPalette.Muted)
-                        if (!PreviewEvidence.supports(cart) && !PlainComparisonSupport.existingTwoRow(cart)) Text("حُفظ طلبك. التجهيز يدعم صنفًا واحدًا، أو صنفين دون خيارات من سلة موجودة؛ بقية الطلبات تحتاج دعمًا إضافيًا.", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                        if (preflightFailure == null && PlainComparisonSupport.existingTwoRow(cart)) Text("المقارنة الحالية تدعم صنفين دون خيارات. يفحص التطبيق السلة أولًا؛ السلة المختلفة لا تُستبدل تلقائيًا.",fontSize=12.sp,color=OctopusPalette.Muted)
+                        if (!PreviewEvidence.supports(cart) && !PlainComparisonSupport.existingTwoRow(cart)) Text("حُفظ طلبك كاملًا. راجع سبب عدم الجاهزية أعلاه قبل بدء المقارنة.", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
                         Text("يجهّز السلتين ويقرأ إجمالي المراجعة إذا تعرّف على مسارها، دون تأكيد طلب أو دفع. النتيجة غير المقروءة لا تُقدّر.", fontSize = 12.sp, color = OctopusPalette.Muted)
                         state.comparisonProgress.values.forEach { result ->
                             Text("${result.provider.title}: ${result.detail ?: "جارٍ تجهيز السلة والتحقق منها…"}", fontSize = 12.sp)
@@ -283,14 +284,9 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                                 Text(id.title, fontWeight = FontWeight.Bold)
                                 Text(money(quote.total), fontSize = 30.sp, fontWeight = FontWeight.ExtraBold)
                                 Text(if (quote.fresh(cart, currentQuoteTime)) "إجمالي مقروء من مراجعة التطبيق وقت المقارنة" else "قراءة سابقة — يلزم تحديثها", fontSize = 12.sp)
-                                Text("الإجمالي مقروء — التفاصيل جزئية",fontSize=12.sp,color=OctopusPalette.Muted)
-                                quote.fields.filterKeys { it != PriceField.ORDER_TOTAL }.forEach { (field, amount) ->
-                                    Text("${when(field) {
-                                        PriceField.SUBTOTAL -> "الأصناف"; PriceField.DELIVERY -> "التوصيل"; PriceField.SERVICE -> "الخدمة"
-                                        PriceField.SMALL_ORDER -> "رسوم الطلب الصغير"; PriceField.TAX -> "الضريبة"; PriceField.DISCOUNT -> "الخصم"
-                                        PriceField.WALLET -> "تغطية المحفظة"; PriceField.AMOUNT_DUE -> "المطلوب للدفع"; else -> "الإجمالي"
-                                    }}: ${money(amount)}", fontSize = 12.sp)
-                                }
+                                // Partial accessibility fields can contain a pre-discount fee. Until the
+                                // full breakdown is reconciled, only the independently read total is shown.
+                                Text("الإجمالي مقروء؛ لم يكتمل التحقق من تفاصيل الرسوم والخصومات.",fontSize=12.sp,color=OctopusPalette.Muted)
                                 Text("تم التحقق من السلة وقت القراءة. تطابق العنوان والفرع يحتاج تحققًا مستقلًا؛ لم يُعتمد ترتيب الأرخص.", fontSize = 11.sp, color = OctopusPalette.Muted)
                             }
                         }
@@ -399,7 +395,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                 }
             }
         }
-        item { Text("اختر المطعم والوجبة. تُقبل الخيارات عند اكتمال قراءتها؛ التجهيز يدعم صنفًا واحدًا أو صنفين دون خيارات أو ملاحظات ضمن الشاشات المدعومة. الأصناف والتوصيل لا يمثلان الإجمالي النهائي مع الرسوم.", fontSize = 11.sp, color = OctopusPalette.Muted) }
+        item { Text("اختر المطعم والوجبة. تُحفظ الخيارات عند اكتمال قراءتها؛ تحدد شاشة المقارنة جاهزية تجهيز طلبك حسب إصدارات التطبيقين. الأصناف والتوصيل لا يمثلان الإجمالي النهائي مع الرسوم.", fontSize = 11.sp, color = OctopusPalette.Muted) }
     }
     if (areaDialog) CatalogAreaDialog(graph, onDismiss = { areaDialog = false })
     if (manageCarts) AlertDialog(onDismissRequest = { manageCarts = false },
@@ -418,9 +414,24 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                 }, enabled = !state.busy && !changing, modifier = Modifier.fillMaxWidth()) {
                     Text("فتح ${provider.title} لحذف سلته")
                 }
+                TextButton(onClick = { draft?.let { clearedCartConfirmation = provider to it; manageCarts = false } },
+                    enabled = draft != null && ready && !state.busy && !changing) {
+                    Text("أفرغت سلة ${provider.title} وأريد البدء من جديد")
+                }
             }
             localError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         } }, confirmButton = { TextButton(onClick = { manageCarts = false }) { Text("رجوع") } })
+    clearedCartConfirmation?.let { (provider, confirmedCart) ->
+        AlertDialog(onDismissRequest = { clearedCartConfirmation = null },
+            title = { Text("تأكيد إفراغ سلة ${provider.title}") },
+            text = { Text("أكد فقط إذا حذفت جميع أصناف ${confirmedCart.restaurant} من ${provider.title}. يُزال سجل السلة السابقة لهذا المطعم فقط، ويُفحص التطبيق مجددًا قبل أي إضافة. إذا بقيت أصناف، ارجع للمنصة أولًا.") },
+            confirmButton = { TextButton(onClick = {
+                localError = null
+                try { graph.confirmProviderCartCleared(provider, confirmedCart.fingerprint); clearedCartConfirmation = null }
+                catch (_: Exception) { localError = "تعذر اعتماد الإفراغ؛ تأكد من عدم وجود عملية نشطة أو طلب متغير ثم حاول مجددًا."; clearedCartConfirmation = null }
+            }, enabled = !state.busy && !changing) { Text("نعم، حذفت جميع أصناف هذا المطعم") } },
+            dismissButton = { TextButton(onClick = { clearedCartConfirmation = null }) { Text("رجوع") } })
+    }
     cartToDelete?.let { target ->
         AlertDialog(onDismissRequest = { if (!changing) cartToDelete = null },
             title = { Text("حذف سلة الأخطبوط؟") },

@@ -16,12 +16,14 @@ object HungerStationExistingVariant {
             clean(n.label).lineSequence().take(4).toList()==listOf("لديك تعديل على هذا الصنف:",title,"لايوجد تعديلات أو إضافات","تعديل") } ?: return null
         val lines=clean(row.label).lines()
         if(lines.size!=6 || lines[4]!="§")return null
-        val unit=MoneyParser.parse(lines[5])?.takeIf{it>0 && it<=Long.MAX_VALUE/99} ?: return null
+        val lineAmount=MoneyParser.parse(lines[5])?.takeIf{it>0 && it<=Long.MAX_VALUE/99} ?: return null
         if(body.count{it.clickable && clean(it.label)=="صنف جديد للتعديل"}!=1)return null
         val counter=frame.descendants(row.index).singleOrNull{it.id=="menuItemActionDualButtonValue" &&
             !it.clickable && it.enabled && it.className=="android.view.View"} ?: return null
         val number=clean(counter.label).map{if(it in '٠'..'٩')('0'.code+it.code-'٠'.code).toChar()else it}.joinToString("")
         val quantity=number.takeIf{it.matches(Regex("[0-9]{1,2}"))}?.toIntOrNull()?.takeIf{it in 1..99} ?: return null
+        if(lineAmount%quantity!=0L)return null
+        val unit=lineAmount/quantity
         if(body.any {it.scrollable || (it.label.isNotBlank() && it.index !in setOf(close.index,row.index,counter.index) && clean(it.label)!="صنف جديد للتعديل")})return null
         // No additional described variant may hide behind the selected row.
         if(body.count{clean(it.label).startsWith("لديك تعديل على هذا الصنف:")}!=1)return null

@@ -1,0 +1,79 @@
+{
+  "date": "2026-10-28",
+  "coreSourceCommit": "77607918bbb93e79b90cc5b52a8b9632d517df89",
+  "device": "Honor MBH-N49, Android 16, unfolded",
+  "providerVersions": {
+    "keeta": "3.13.301",
+    "hungerstation": "8.0.303"
+  },
+  "scope": "ALBAIK: Big Baik x2 and spicy chicken fillet burger x2, without selected extras",
+  "context": {
+    "sameDeliveryAddress": "Confirmed directly by the user in this conversation",
+    "branchPolicy": "User accepts the branch available in each platform for that address",
+    "automaticallyVerifiedAddressOrBranch": false
+  },
+  "completedChecks": {
+    "twoConsecutiveFullComparisons": true,
+    "repeatDidNotDuplicateQuantities": true,
+    "keetaSelectedBasketHandoff": true,
+    "hungerstationSelectedBasketHandoff": true,
+    "normalBuildComparisonStartedFromVisibleButton": true,
+    "normalBuildDisplayedBothReviewTotals": true,
+    "orderOrPaymentSubmitted": false,
+    "emptyCartPreparationThroughNormalUi": true,
+    "explicitExternalClearConfirmationOnDevice": true
+  },
+  "fullRuns": [
+    {
+      "localEvidence": "run9-result-state.json",
+      "keetaTotalHalala": 5047,
+      "keetaCapturedAt": 1793190685929,
+      "hungerstationTotalHalala": 5635,
+      "hungerstationCapturedAt": 1793190706320,
+      "error": null
+    },
+    {
+      "localEvidence": "run10-result-state.json",
+      "keetaTotalHalala": 5047,
+      "keetaCapturedAt": 1793190844112,
+      "hungerstationTotalHalala": 5635,
+      "hungerstationCapturedAt": 1793190863781,
+      "error": null
+    }
+  ],
+  "normalUiEvidence": [
+    "normal-run-result.png",
+    "normal-totals-view.png",
+    "hs-empty-confirmed.png",
+    "keeta-empty-confirmed.png",
+    "cleared-start.png",
+    "empty-fixed-end.png",
+    "empty-fixed-totals.png"
+  ],
+  "evidencePrivacy": "Raw phone screenshots, UI trees and account context remain local and are not attached to this PR",
+  "displayCorrection": "Normal UI exposed a partial delivery fee that was not reconciled with discounts. The subsequent presentation-only correction suppresses all unverified fee details and keeps the directly read total.",
+  "limitations": [
+    "Evidence is limited to the specified two plain ALBAIK items; arbitrary restaurants and configured extras are not accepted.",
+    "Empty-cart preparation took about six minutes. Keeta exceeded the 120-second reading lifetime while HungerStation was prepared; the UI correctly marks it stale. This release shows review totals and does not claim an automatically verified cheapest offer.",
+    "A prior full run stopped on a stale frame; subsequent runs succeeded, but this does not establish universal reliability.",
+    "Terra is tested through a local USB gateway only. Production AI is not activated; HTTPS hosting, opt-in/provisioning and live-ad recovery remain outstanding.",
+    "The release workflow must pass unit, lint, emulator UI and signed artifact checks for the release commit before publication."
+  ],
+  "publicationReady": true,
+  "latestNativeSourceCommit": "af5704aa82aa6309d000e736051a1eb18a41396b",
+  "emptyCartRun": {
+    "sourceCommit": "af5704aa82aa6309d000e736051a1eb18a41396b",
+    "normalBuild": true,
+    "keetaTotalHalala": 5047,
+    "hungerstationTotalHalala": 5635,
+    "quantitiesPerProvider": [
+      2,
+      2
+    ],
+    "clearConfirmationUsed": true,
+    "existingQuantityConsentUsed": false,
+    "keetaExpiredByResultInspection": true,
+    "cheapestAutomaticallyApproved": false
+  },
+  "publicationScope": "User-requested native comparison update for trial, limited to the documented accepted scenario; production AI disabled."
+}

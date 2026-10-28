@@ -18,6 +18,7 @@ object CatalogCommands {
     /** Back controls and the search control's child are present in the saved device observations. */
     fun backTarget(frame: CatalogFrame): CatalogNode? {
         HungerStationSpinPromo.closeTarget(frame)?.let { return it }
+        HungerMenuSearchScreen.closeTarget(frame)?.let { return it }
         val id = when (HungerStationCatalog.screen(frame)) {
             CatalogScreen.PRODUCT -> "pdpCloseButton"
             CatalogScreen.CART -> "FlutterCart_back_button"

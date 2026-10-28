@@ -23,7 +23,7 @@ object ComparisonPreflight {
                 id == ProviderId.KEETA && KeetaVersionProfile.resolve(installed.version)?.let {
                     it.allowsReading(twoRows) && it.allowsPreparation(twoRows) && it.allowsReview(twoRows)
                 } != true ->
-                    "${id.title}: إصدار التطبيق لا يدعم مسار هذا الطلب حاليًا."
+                    if (twoRows) "${id.title}: تكامل الأخطبوط مع إصدار ${installed.version} لا يدعم تجهيز صنفين بعد. طلبك محفوظ كاملًا." else "${id.title}: إصدار التطبيق لا يدعم مسار هذا الطلب حاليًا."
                 else -> null
             }
         }

@@ -83,6 +83,7 @@ object HungerStationCatalog {
         frame.hasId("pdpCloseButton") -> CatalogScreen.PRODUCT
         frame.hasId("FlutterCart_title") -> CatalogScreen.CART
         frame.hasId("menuBackButton") && frame.hasId("menuSearchButton") -> CatalogScreen.MENU
+        HungerMenuSearchScreen.closeTarget(frame) != null -> CatalogScreen.SEARCH
         frame.hasId("searchVendorsRecycler") -> CatalogScreen.RESULTS
         frame.hasId("vendor_list") && frame.hasId("close_button") -> CatalogScreen.BROWSE_PROMO
         frame.hasId("vendorsRecycler") && (frame.hasId("hsBackButton") ||
@@ -157,7 +158,7 @@ object HungerStationCatalog {
 
     fun menuItem(cell: CatalogNode): LiveMenuItem? {
         if (!(cell.clickable && (cell.id.matches(Regex("gridMenuCell-\\d+-\\d+")) ||
-            (cell.id.isEmpty() && cell.className == "android.view.View")))) return null
+            (cell.id.isEmpty() && cell.className in setOf("android.view.View", "android.widget.ImageView"))))) return null
         val lines = cell.label.replace(Regex("[\\u200e\\u200f\\u061c\\u202a-\\u202e\\u2066-\\u2069]"), "")
             .lineSequence().map(String::trim).filter(String::isNotBlank).toList()
         val name = lines.firstOrNull { line -> line.any(Char::isLetter) && !line.contains("سعرة") &&
