@@ -21,7 +21,7 @@ class HungerStationOwnedQuantityCommandTest {
         assertTrue(c.consumeVariantContinuation(sheet,change,request(),version,1004))
         assertFalse(c.consumeVariantContinuation(sheet,change,request(),version,1005))
         assertFalse(c.updatedVariant(sheet,request(),version,1005))
-        val updated=sheet.copy(nodes=sheet.nodes.map{if(it.id=="menuItemActionDualButtonValue")it.copy(label="2") else it})
+        val updated=sheet.copy(nodes=sheet.nodes.map{if(it.id=="menuItemActionDualButtonValue")it.copy(label="2") else it.copy(label=it.label.replace("§\n13","§\n26"))})
         assertTrue(c.updatedVariant(updated,request(),version,1006))
         assertFalse(c.updatedVariant(updated,request(3),version,1006))
         assertTrue(c.afterMatches(frame(2),request(),version,1010))

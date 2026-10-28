@@ -10,6 +10,9 @@ class HungerStationExistingVariantTest {
         val read=checkNotNull(HungerStationExistingVariant.read(current,"برجر فيليه دجاج حرّاق"))
         assertEquals(1,read.quantity)
         assertEquals(700L,read.unit)
+        val two=current.copy(nodes=current.nodes.map {if(it.id=="menuItemActionDualButtonValue")it.copy(label="2") else it.copy(label=it.label.replace("§\n7","§\n14"))})
+        assertEquals(2,HungerStationExistingVariant.read(two,"برجر فيليه دجاج حرّاق")!!.quantity)
+        assertEquals(700L,HungerStationExistingVariant.read(two,"برجر فيليه دجاج حرّاق")!!.unit)
     }
     private val title="فطيرة جبن فيتا"
     private val frame=Gson().fromJson(javaClass.getResource("/recorded-hs-existing-variant.json")!!.readText(),CatalogFrame::class.java)
