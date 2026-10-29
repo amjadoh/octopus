@@ -14,7 +14,7 @@ out = root / 'release'
 out.mkdir(exist_ok=True)
 tool = Path(os.environ['ANDROID_HOME']) / 'build-tools/35.0.0'
 suites = [ET.parse(p).getroot() for p in (root / 'app/build/test-results').rglob('TEST-*.xml')]
-assert suites and sum(int(s.get('tests', 0)) for s in suites) >= 555
+assert suites and sum(int(s.get('tests', 0)) for s in suites) >= 556
 assert all(int(s.get(k, 0)) == 0 for s in suites for k in ('failures', 'errors', 'skipped'))
 ui_suites = [ET.parse(p).getroot() for p in (root / 'app/build/outputs/androidTest-results/connected').rglob('TEST-*.xml')]
 assert ui_suites and sum(int(s.get('tests', 0)) for s in ui_suites) >= 47, 'Actual emulator UI test results required'

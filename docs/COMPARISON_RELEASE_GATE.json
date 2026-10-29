@@ -8,7 +8,7 @@
     "keeta",
     "hungerstation"
   ],
-  "note": "New release candidate: waiting for ordinary signed APK acceptance; 2026-10-28 evidence remains historical and cannot authorize this publication.",
+  "note": "Physical scoped acceptance is complete on the ordinary APK; publication stays blocked until PR #2 CI can run and pass after account billing/spending-limit review.",
   "latestScopedAcceptance": "verification/2026-10-29/comparison-acceptance.json",
   "componentEvidence": [
     "verification/2026-10-19/honor-menu-offers.json",
@@ -21,5 +21,6 @@
   ],
   "scope": "scoped_native_comparison_update",
   "automaticCheapestApprovalVerified": false,
-  "productionAiActivated": false
+  "productionAiActivated": false,
+  "ordinaryApkComparisonVerified": true
 }
