@@ -3,6 +3,18 @@ import app.octopus.local.providers.*
 import org.junit.Assert.*
 import org.junit.Test
 class KeetaAvailabilityTest {
+    @Test fun minimumOrderNoticeIsRecognizedWithoutAcceptingItsFee() {
+        val notice=CatalogFrame(listOf(
+            CatalogNode(0,-1,"","لم يبلغ الطلب الحد الأدنى","android.widget.TextView",false,false,false),
+            CatalogNode(1,-1,"","إضافة أصناف أخرى","android.widget.TextView",false,false,false)),true)
+        assertTrue(KeetaAvailability.minimumOrderNotice(notice))
+        val reader=KeetaMenuReader("كودو","بطاطا صغيرة","3.13.203")
+        notice.nodes.forEach {assertEquals(it.label,reader.functionalLabel(it.label))}
+        assertFalse(KeetaAvailability.minimumOrderNotice(notice.copy(complete=false)))
+        assertFalse(KeetaAvailability.minimumOrderNotice(notice.copy(nodes=notice.nodes.drop(1))))
+        assertFalse(KeetaAvailability.minimumOrderNotice(notice.copy(nodes=notice.nodes.map {it.copy(editable=true)})))
+        assertFalse(KeetaAvailability.minimumOrderNotice(notice.copy(nodes=notice.nodes+notice.nodes[0].copy(index=2))))
+    }
     private fun frame(text:String="هذا المتجر مغلق حاليًا. ألقِ نظرة\nعلى المتاجر الأخرى.")=CatalogFrame(listOf(
         CatalogNode(0,-1,"",text,"android.widget.TextView",false,false,false),
         CatalogNode(1,-1,"","موافق","android.widget.Button",true,false,false)),true)

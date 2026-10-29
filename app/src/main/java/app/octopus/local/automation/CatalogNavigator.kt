@@ -334,9 +334,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             requestFingerprint = desired.fingerprint
             comparedProduct = null
             graph.catalog.value = graph.catalog.value.copy(previews = emptyList())
-            val hunger = MenuReadTimeoutBoundary.read(onTimeout = {
+            val hunger = MenuReadTimeoutBoundary.read(retryOnce = true, onTimeout = {
                 failedMenuPreview(ProviderId.HUNGERSTATION, desired,
-                    "انتهت مهلة قراءة الوجبة في هنقرستيشن؛ لم أغير السلة وسأكمل قراءة كيتا.")
+                    "انتهت مهلة قراءة الوجبة في هنقرستيشن أثناء: $phase؛ لم أغير السلة وسأكمل قراءة كيتا.")
             }) { try {
                 phase = "قراءة سعر هنقرستيشن وعروضه"
                 val restaurant = LiveRestaurant(desired.restaurant, null, desired.restaurant)
@@ -617,6 +617,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     }
 
     private suspend fun readCompleteHungerBasket(menu:CatalogFrame,desired:CanonicalCart):Pair<CatalogFrame,BasketEvidence> {
+        check(menu.nodes.none {it.label.matches(Regex("أضف [0-9٠-٩.,]+ § لإتمام طلبك"))}) {
+            "قيمة السلة أقل من الحد الأدنى للمطعم في هنقرستيشن؛ زد الكمية أو عدّل طلبك ثم أعد المقارنة."
+        }
         val version=graph.installations.value.singleOrNull {it.provider==ProviderId.HUNGERSTATION}?.version
         val proof=HungerStationCompleteCartProof.fromMenu(menu,desired.restaurant,version,System.currentTimeMillis())
             ?: error("تعذر إثبات عداد السلة ومبلغها من القائمة؛ لم أعدلها.")
@@ -1490,6 +1493,11 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         val launch = service.packageManager.getLaunchIntentForPackage(provider.packageName) ?: error("كيتا غير مثبت.")
         service.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         var frame = openKeetaRequest()
+        // Reuse a fully read matching basket on repeats instead of rescanning a long menu.
+        if(keetaMenu.menu(frame) && keetaBasket.footerBag(frame)!=null) {
+            keetaBasketAction {keetaBasket.footerBag(it)}
+            frame=await {keetaMenu.basketDrawer(it)}
+        }
         if (keetaMenu.basketDrawer(frame)) {
             val basket = keetaBasket.evidence(frame)
                 ?: error("تعذرت قراءة محتويات سلة كيتا الحالية بالكامل.")
@@ -2031,6 +2039,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             val review = service.rootInActiveWindow
             if (review != null) try {
                 requireProviderWindow(review)
+                if(provider==ProviderId.KEETA) stopAtKeetaMinimumOrder(capture(review))
                 if (provider == ProviderId.HUNGERSTATION && !recommendationsSkipped) {
                     val frame = capture(review)
                     val next = ReviewNavigationGuard.hungerRecommendationsTarget(frame, version)
@@ -2307,6 +2316,20 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         error("تعذر الرجوع إلى بداية البحث عبر الشاشات المعروفة.")
     }
 
+    /** Close the observed minimum-order notice; never accept its extra-fee/checkout action. */
+    private suspend fun stopAtKeetaMinimumOrder(frame:CatalogFrame) {
+        if(!KeetaAvailability.minimumOrderNotice(frame)) return
+        val root=service.rootInActiveWindow ?: throw ScreenChangedBeforeAction()
+        try {
+            requireProviderWindow(root)
+            if(capture(root)!=frame) throw ScreenChangedBeforeAction()
+            verifyActiveFrame(frame,root.windowId)
+            currentCoroutineContext().ensureActive();checkSession()
+            check(service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)) {"تعذر إغلاق تنبيه الحد الأدنى؛ راجعه في كيتا."}
+        } finally {@Suppress("DEPRECATION") root.recycle()}
+        error("قيمة السلة أقل من الحد الأدنى للمطعم في كيتا؛ زد الكمية أو عدّل طلبك ثم أعد المقارنة. لم أقبل رسوم الطلب الصغير.")
+    }
+
     private suspend fun await(predicate: (CatalogFrame) -> Boolean): CatalogFrame = withTimeout(15_000) {
         var fingerprint: String? = null
         var since = 0L
@@ -2337,6 +2360,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     }
                     if(HungerStationSpinPromo.closeTarget(frame)!=null) continue
                 }
+                if(provider==ProviderId.KEETA) stopAtKeetaMinimumOrder(frame)
                 if(provider==ProviderId.KEETA && (KeetaAvailability.closedNotice(frame) || KeetaAvailability.closedMenu(frame)))
                     throw UserInterrupted("المطعم مغلق حاليًا في كيتا؛ توقفت دون إضافة أخرى أو تأكيد طلب. اختر مطعمًا متاحًا للمقارنة.")
                 if (provider == ProviderId.HUNGERSTATION && frame.complete && frame.nodes.size<=30 &&
