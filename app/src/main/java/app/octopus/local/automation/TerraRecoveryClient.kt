@@ -1,29 +1,20 @@
 package app.octopus.local.automation
 
 import android.content.Context
-import app.octopus.local.BuildConfig
 import app.octopus.local.providers.*
 import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
-import java.net.URI
 import java.security.MessageDigest
 import java.util.UUID
 
 /** Optional gateway advice. The API key never belongs on Android; native action guards remain authoritative. */
-class TerraRecoveryClient(private val context: Context) {
+class TerraRecoveryClient(private val context: Context,
+    private val openConnection: (java.net.URI) -> HttpURLConnection = { it.toURL().openConnection() as HttpURLConnection }) {
     suspend fun approveAdvertClose(frame: CatalogFrame, close: CatalogNode): Boolean? = withContext(Dispatchers.IO) {
-        val file=context.filesDir.resolve("ai-recovery-config.json")
-        if(!file.exists()) return@withContext null
-        val config=JSONObject(file.readText())
-        if(!config.optBoolean("enabled")) return@withContext null
-        val endpoint=URI(config.getString("endpoint"))
-        require(endpoint.userInfo==null && endpoint.query==null && endpoint.fragment==null)
-        require(endpoint.scheme=="https" || (BuildConfig.VERSION_NAME.endsWith("-device-tools") &&
-            endpoint.scheme=="http" && endpoint.host=="127.0.0.1"))
-        val token=config.getString("token")
-        require(token.length>=32 && !token.startsWith("sk-"))
+        val store=TerraConnectionStore(context)
+        val config=store.activeConnection() ?: return@withContext null
         // Only the observed advert subtree can leave the phone. Never include the background catalog/account.
         val container=frame.nodes.singleOrNull {it.id.endsWith(":id/com_braze_inappmessage_html")} ?: return@withContext null
         val dialog=frame.descendants(container.index).singleOrNull {it.className=="android.app.AlertDialog"} ?: return@withContext null
@@ -36,12 +27,13 @@ class TerraRecoveryClient(private val context: Context) {
         val payload=JSONObject().put("request_id",id).put("frame_fingerprint",fingerprint)
             .put("provider","HUNGERSTATION").put("public_text",text).put("redacted_image",JSONObject.NULL).put("redaction_version",1)
             .put("candidates",JSONArray().put(JSONObject().put("id",close.index).put("label",close.label).put("class_name",close.className)))
-        val connection=endpoint.toURL().openConnection() as HttpURLConnection
+        if(!store.isStillActive(config)) return@withContext null
+        val connection=openConnection(config.endpoint)
         try {
             connection.instanceFollowRedirects=false
             connection.connectTimeout=2000;connection.readTimeout=6000
             connection.requestMethod="POST";connection.doOutput=true
-            connection.setRequestProperty("Authorization","Bearer $token")
+            connection.setRequestProperty("Authorization","Bearer ${config.token}")
             connection.setRequestProperty("Content-Type","application/json")
             connection.outputStream.use{it.write(payload.toString().toByteArray(Charsets.UTF_8))}
             if(connection.responseCode!=200) return@withContext null
@@ -53,6 +45,8 @@ class TerraRecoveryClient(private val context: Context) {
             }
             if(raw.size>16384) return@withContext null
             val result=JSONObject(String(raw,Charsets.UTF_8))
+            currentCoroutineContext().ensureActive()
+            if(!store.isStillActive(config)) return@withContext false
             if(result.getString("request_id")!=id || result.getString("frame_fingerprint")!=fingerprint) return@withContext false
             val advice=result.getJSONObject("advice")
             advice.getString("screen_type")=="advert" && advice.getString("action")=="dismiss_overlay" &&

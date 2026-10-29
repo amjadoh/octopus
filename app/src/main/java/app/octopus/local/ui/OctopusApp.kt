@@ -37,6 +37,7 @@ import app.octopus.local.BuildConfig
 import app.octopus.local.R
 import app.octopus.local.automation.ReadOnlyServiceBridge
 import app.octopus.local.automation.LiveCatalogBridge
+import app.octopus.local.automation.TerraConnectionStore
 import app.octopus.local.data.*
 import app.octopus.local.diagnostics.DiagnosticExporter
 import app.octopus.local.domain.*
@@ -179,7 +180,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
             text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("تستخدم النسخة التشخيصية خدمة الإتاحة لقراءة مؤشرات السعر الظاهرة في كيتا وهنقرستيشن أثناء اختبار تبدأه أنت فقط. قيد كيتا موثق في صفحة التطبيقات؛ موافقتك لا تعني موافقة المنصة.")
                 Text("تتنقل الخدمة لقراءة المطاعم والوجبات والعروض في اختبار تبدأه أنت. يمكن تجهيز الوجبة المختارة ذات البنية المدعومة بعد اختيارك الصريح؛ لا تُنشئ طلبًا نهائيًا ولا تنفذ دفعًا.")
-                Text("تُحفظ محليًا مبالغ مرشحة وحالات القراءة وإصدارات التطبيقات، ومعرّفات العناصر وتسميات وظيفية محددة أثناء الجلسة لتفسير فشل القراءة تلقائيًا. لا تُحفظ كلمات المرور أو رموز التحقق أو بيانات البطاقات أو نصوص الشاشة الخام أو صورها، ولا تُرسل البيانات إلى الإنترنت.")
+                Text("تُحفظ محليًا مبالغ مرشحة وحالات القراءة وإصدارات التطبيقات، ومعرّفات العناصر وتسميات وظيفية محددة أثناء الجلسة لتفسير فشل القراءة تلقائيًا. لا تُحفظ كلمات المرور أو رموز التحقق أو بيانات البطاقات أو نصوص الشاشة الخام أو صورها. إرسال نص الإعلان إلى مساعد تيرا يحتاج موافقة منفصلة من الإعدادات.")
                 Text("يمكنك الإيقاف فورًا من الزر الظاهر أثناء الاختبار، أو تعطيل الخدمة من إعدادات Android. تنتهي الجلسة خلال 90 ثانية كحد أقصى.")
             } },
             confirmButton = { TextButton(onClick = {
@@ -197,6 +198,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
             confirmButton = { TextButton(onClick = {
                 ReadOnlyServiceBridge.stop()
                 LiveCatalogBridge.stop()
+                TerraConnectionStore(context).disconnect()
                 graph.scope.launch { graph.recorder.clear(); graph.inspectionRecorder.clear(); graph.clearOrders(); graph.clearCatalog(); graph.settingsStore.clear(); graph.catalog.value = app.octopus.local.providers.LiveCatalogState(); deleteConfirmation = false }
             }) { Text("حذف البيانات", color = Red) } },
             dismissButton = { TextButton(onClick = { deleteConfirmation = false }) { Text("إلغاء") } })
@@ -420,6 +422,10 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
             OutlinedButton(onClick = onSetup, Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text("إعداد خدمة القراءة") }
         } }
         item { Panel {
+            val context = LocalContext.current
+            TerraControls(remember(context) { TerraConnectionStore(context) })
+        } }
+        item { Panel {
             SectionTitle("بياناتك المحلية")
             Text("نحفظ حالات القراءة والمبالغ المرشحة وإصدارات التطبيقات وسجلًا منقحًا للعناصر أثناء الجلسة التي تبدأها. عند تفعيل اتصال تيرا للاختبار، تُرسل نصوص نافذة الإعلان العامة وأزرار إغلاقها إلى خدمة OpenAI عبر بوابة الربط. لا تُرسل صورة الشاشة أو خلفية الحساب أو بيانات الدخول. يبقى مفتاح OpenAI خارج الجوال.", fontSize = 13.sp, lineHeight = 22.sp, color = Muted)
             OutlinedButton(onClick = onExport, Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text("تصدير السجل بعد مراجعته") }
@@ -432,6 +438,42 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
         } }
         item { Note("النسخة ${BuildConfig.VERSION_NAME} • المقارنة الكاملة بالرسوم والعروض وتجهيز كيتا قيد الاستكمال. لا تأكيد طلب أو دفع.", Icons.Outlined.Science) }
     }
+}
+@Composable internal fun TerraControls(store: TerraConnectionStore) {
+    var configured by remember { mutableStateOf(store.isConfigured()) }
+    var enabled by remember { mutableStateOf(store.activeConnection() != null) }
+    var consent by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf(false) }
+    SectionTitle("مساعد تيرا")
+    InfoRow("الحالة", if (enabled) "مفعّل" else "متوقف")
+    Text("يساعد في إغلاق إعلان يعترض المقارنة عندما يكون زر إغلاقه معروفًا. لا يختار الوجبات أو يغيّر السلة أو يؤكد الطلب.", fontSize = 13.sp, lineHeight = 22.sp, color = Muted)
+    if (configured) {
+        OutlinedButton(onClick = {
+            if (enabled) {
+                LiveCatalogBridge.stop()
+                error = runCatching { store.setEnabled(false) }.isFailure
+                enabled = store.activeConnection() != null
+            } else consent = true
+        }, modifier = Modifier.fillMaxWidth()) { Text(if (enabled) "إيقاف مساعد تيرا" else "تفعيل مساعد تيرا") }
+        TextButton(onClick = {
+            LiveCatalogBridge.stop()
+            store.disconnect()
+            configured = false
+            enabled = false
+        }) { Text("قطع الربط وحذف رمز الجهاز") }
+    } else {
+        Text("لم يُجهّز الربط لهذا الجهاز بعد. تستطيع استخدام المقارنة دون المساعد.", fontSize = 13.sp, color = Muted)
+    }
+    if (error) Text("تعذر حفظ الإعداد. أعد المحاولة.", color = Red, fontSize = 13.sp)
+    if (consent) AlertDialog(onDismissRequest = { consent = false },
+        title = { Text("تفعيل مساعد تيرا؟") },
+        text = { Text("أثناء مقارنة تبدأها أنت، تُرسل نصوص الإعلان العامة وأزرار إغلاقه فقط إلى OpenAI عبر خدمة الأخطبوط على Google Cloud. لا تُرسل صورة الشاشة أو خلفية الحساب أو العنوان أو بيانات الدخول. يمكنك إيقاف المشاركة أو قطع الربط من هنا. يبقى مفتاح OpenAI خارج الجوال.") },
+        confirmButton = { TextButton(onClick = {
+            error = runCatching { store.setEnabled(true) }.isFailure
+            enabled = store.activeConnection() != null
+            consent = false
+        }) { Text("أوافق وأفعّل المساعد") } },
+        dismissButton = { TextButton(onClick = { consent = false }) { Text("ليس الآن") } })
 }
 @Composable private fun InfoRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
