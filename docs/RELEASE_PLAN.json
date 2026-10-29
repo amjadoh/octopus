@@ -4,8 +4,8 @@
   "tag": "v1.3.15",
   "scope": "scoped_native_comparison_update",
   "userRequestedPublication": true,
-  "realComparisonComplete": false,
+  "realComparisonComplete": true,
   "prerelease": false,
-  "note": "Authorized cloud connection and native minimum-order recovery update. Kudu plain-item comparison is verified on the development candidate; ordinary signed APK acceptance and PR checks remain required before publication.",
+  "note": "Ordinary signed 1.3.15 comparison and repeat succeeded on Honor for Kudu small fries x5; PR #2 is awaiting executable CI after GitHub billing/spending-limit review. No merge/publication until required checks pass.",
   "verificationReport": "verification/2026-10-29/comparison-acceptance.json"
 }

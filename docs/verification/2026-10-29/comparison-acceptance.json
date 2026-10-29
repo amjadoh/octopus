@@ -14,11 +14,11 @@
   "completedChecks": {
     "orderOrPaymentSubmitted": false,
     "twoConsecutiveFullComparisons": true,
-    "normalBuildDisplayedBothReviewTotals": false,
+    "normalBuildDisplayedBothReviewTotals": true,
     "explicitExternalClearConfirmationOnDevice": true,
-    "normalBuildComparisonStartedFromVisibleButton": false,
+    "normalBuildComparisonStartedFromVisibleButton": true,
     "keetaSelectedBasketHandoff": true,
-    "emptyCartPreparationThroughNormalUi": false,
+    "emptyCartPreparationThroughNormalUi": true,
     "repeatDidNotDuplicateQuantities": true,
     "developmentCandidateEmptyCartPreparation": true,
     "hungerstationSelectedBasketHandoff": true
@@ -54,7 +54,7 @@
     "usbForwarding": false
   },
   "tests": {
-    "unitPassed": 555,
+    "unitPassed": 556,
     "lint": "passed",
     "androidPassed": 47,
     "gatewayPassed": 5
@@ -62,9 +62,31 @@
   "minimumOrderFinding": "8 SAR cart was below the 15 SAR restaurant minimum. Keeta offered a 7 SAR surcharge; it was not accepted. Candidate now recognizes the notice, exits it and explains the minimum; HungerStation also reports its minimum explicitly.",
   "evidencePrivacy": "Raw screenshots, account/address UI and tokens remain local and are not committed",
   "limitations": [
-    "Ordinary signed 1.3.15 acceptance remains pending",
-    "Live Terra advert click is not established; recorded redacted advert HTTPS call is verified",
-    "Automatic address/branch equality and arbitrary configured extras are not verified"
+    "GitHub Actions jobs did not start because the account billing or spending limit needs review; no CI pass, merge or publication is claimed.",
+    "Empty-cart preparation was verified per provider across ordinary-APK attempts: Keeta first, then HungerStation after confirmed external clearing; the final full run and its repeat both read the requested basket totals.",
+    "Readings expire after 120 seconds and are visibly marked stale; no automatic cheapest approval or address/branch equality is claimed.",
+    "Live Terra advert click and arbitrary configured extras remain unverified."
   ],
-  "publicationReady": false
+  "publicationReady": false,
+  "normalApk": {
+    "keetaTotalHalala": 4120,
+    "hungerstationTotalHalala": 4380,
+    "comparisonSourceCommit": "1b3e1542c97569ec700ab7fda518efb937c30fa3",
+    "quantityPerProvider": 5,
+    "developmentBridgeAbsent": true,
+    "runs": [
+      "release-normal-both-totals.png",
+      "release-normal-final-totals-proof.png"
+    ],
+    "sha256": "13077ded80873f73f06805ee445d926005db0a08f82bc5f890161257dca6f2f3",
+    "bytes": 64947899,
+    "versionCode": 23,
+    "version": "1.3.15-diagnostic"
+  },
+  "ci": {
+    "runUrl": "https://github.com/amjadoh/octopus/actions/runs/40843051486",
+    "checksExecuted": false,
+    "status": "blocked_before_job_start",
+    "reason": "Account billing or spending limit needs review"
+  }
 }
