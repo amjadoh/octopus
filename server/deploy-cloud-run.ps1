@@ -2,6 +2,7 @@ param(
     [Parameter(Mandatory)][ValidatePattern('^[a-z][a-z0-9-]{4,28}[a-z0-9]$')][string]$ProjectId,
     [Parameter(Mandatory)][ValidatePattern('^[a-z]+-[a-z]+[0-9]$')][string]$Region,
     [Parameter(Mandatory)][ValidatePattern('^[a-z0-9-]+@[a-z0-9-]+\.iam\.gserviceaccount\.com$')][string]$ServiceAccount,
+    [Parameter(Mandatory)][ValidatePattern('^[a-z0-9-]+@[a-z0-9-]+\.iam\.gserviceaccount\.com$')][string]$BuildServiceAccount,
     [Parameter(Mandatory)][ValidateRange(1,2147483647)][int]$OpenAiSecretVersion,
     [Parameter(Mandatory)][ValidateRange(1,2147483647)][int]$DeviceSecretVersion
 )
@@ -13,6 +14,7 @@ $taskBilling = & gcloud billing projects describe $ProjectId --format=json
 if ($LASTEXITCODE -ne 0) { throw 'Unable to verify project billing.' }
 if (-not ($taskBilling | ConvertFrom-Json).billingEnabled) { throw 'Enable billing for this project first.' }
 & gcloud run deploy octopus-ai --project=$ProjectId --region=$Region --source=$PSScriptRoot `
+    "--build-service-account=projects/$ProjectId/serviceAccounts/$BuildServiceAccount" `
     --service-account=$ServiceAccount --allow-unauthenticated --cpu=1 --memory=256Mi `
     --min=0 --max=1 --concurrency=8 --timeout=20s --cpu-throttling `
     "--set-secrets=OPENAI_API_KEY=octopus-openai-key:$OpenAiSecretVersion,AI_GATEWAY_TOKEN=octopus-device-token:$DeviceSecretVersion"

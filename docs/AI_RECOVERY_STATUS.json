@@ -4,16 +4,24 @@
   "liveConfigured": true,
   "liveModelVerified": true,
   "deviceGatewayVerified": true,
-  "connectionScope": "Local development gateway bound to loopback, reached from the authorized Honor device through USB reverse forwarding",
-  "verifiedScenario": "Android client submitted a previously recorded redacted Braze advert tree; Terra returned approved close advice. No click was executed by this probe.",
+  "localDeviceGatewayPreviouslyVerified": true,
+  "cloudGatewayVerified": true,
+  "cloudService": "https://octopus-ai-32027385946.us-central1.run.app",
+  "cloudRevision": "octopus-ai-00001-qdj",
+  "connectionScope": "Authorized Android device verified over HTTPS without USB reverse forwarding; separate in-app consent enabled",
+  "verifiedScenario": "Android-to-cloud recorded advert approved in 2250 ms with no USB forwarding and no live click. 9 Terra consent/client tests, all 47 local Android UI tests, 556 unit tests, lint/build and 5 gateway tests passed. Ordinary signed APK read Kudu fries x5 totals 4120/4380 halala and repeated without duplication. CI did not start due to GitHub account billing/spending limit.",
   "runtimeScope": "Advice for an already native-validated explicit HungerStation advert close control; existing native fallback on gateway unavailability. Not a general autonomous screen navigator.",
   "imageInputTested": false,
   "releaseReady": false,
   "requiredBeforeActivation": [
-    "An HTTPS gateway and a separately provisioned device credential",
-    "Production opt-in and disconnect controls for sharing redacted overlay content",
-    "Live advert dismissal, interrupted, stale-frame and unavailable-network acceptance tests",
-    "Complete two-provider comparison with equivalent cart, address/branch and fresh review totals"
+    "Live advert dismissal acceptance remains unverified; recorded redacted advert and transport/privacy/revocation tests are verified"
   ],
-  "notAuthorizedByModelOutput": ["payment", "order confirmation", "subscription", "credentials", "address changes", "unverified cart mutation"]
+  "notAuthorizedByModelOutput": [
+    "payment",
+    "order confirmation",
+    "subscription",
+    "credentials",
+    "address changes",
+    "unverified cart mutation"
+  ]
 }
