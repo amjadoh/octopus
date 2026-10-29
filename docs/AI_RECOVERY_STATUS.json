@@ -4,16 +4,25 @@
   "liveConfigured": true,
   "liveModelVerified": true,
   "deviceGatewayVerified": true,
-  "connectionScope": "Local development gateway bound to loopback, reached from the authorized Honor device through USB reverse forwarding",
-  "verifiedScenario": "Android client submitted a previously recorded redacted Braze advert tree; Terra returned approved close advice. No click was executed by this probe.",
+  "localDeviceGatewayPreviouslyVerified": true,
+  "cloudGatewayVerified": true,
+  "cloudService": "https://octopus-ai-32027385946.us-central1.run.app",
+  "cloudRevision": "octopus-ai-00001-qdj",
+  "connectionScope": "Authorized Android device verified over HTTPS without USB reverse forwarding; separate in-app consent enabled",
+  "verifiedScenario": "Cloud rejects wrong token (401) and private text (400). Android client returned approved=true for the recorded redacted HungerStation advert in 2250 ms on 2026-10-29; executedClick=false. Nine Android consent/client tests passed, including revocation during response, mismatched frame, disabled/private-input network suppression and HTTP 503. Earlier in this session 38 regression UI tests passed and one external live-catalog test skipped. 554 unit tests, lint and builds passed after the client test seam change.",
   "runtimeScope": "Advice for an already native-validated explicit HungerStation advert close control; existing native fallback on gateway unavailability. Not a general autonomous screen navigator.",
   "imageInputTested": false,
   "releaseReady": false,
   "requiredBeforeActivation": [
-    "An HTTPS gateway and a separately provisioned device credential",
-    "Production opt-in and disconnect controls for sharing redacted overlay content",
     "Live advert dismissal, interrupted, stale-frame and unavailable-network acceptance tests",
     "Complete two-provider comparison with equivalent cart, address/branch and fresh review totals"
   ],
-  "notAuthorizedByModelOutput": ["payment", "order confirmation", "subscription", "credentials", "address changes", "unverified cart mutation"]
+  "notAuthorizedByModelOutput": [
+    "payment",
+    "order confirmation",
+    "subscription",
+    "credentials",
+    "address changes",
+    "unverified cart mutation"
+  ]
 }

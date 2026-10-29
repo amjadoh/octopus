@@ -89,7 +89,8 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
             text.length in 1..300 && text.any(Char::isLetter)) return text
         if (text in KeetaOptionalPlainSession.publicLabels) return text
         if (KeetaRestaurantName.matches(restaurant, text)) return restaurant
-        if (KeetaAvailability.closedText(text) || KeetaAvailability.unavailableText(text) || text=="موافق") return text
+        if (KeetaAvailability.closedText(text) || KeetaAvailability.unavailableText(text) ||
+            text in setOf("موافق","لم يبلغ الطلب الحد الأدنى","إضافة أصناف أخرى")) return text
         if (profile.usesCurrentLayout && (text in setOf("معلومات غذائية", "معلومات التغذية", "مسببات الحساسية") || text.matches(Regex("[0-9٠-٩]{1,5} سعرة حرارية")))) return text
         return if (text in setOf(restaurant, "feed shopcard", title, "homepage header searchbar", "search page box", "search page btn", "طلب خاص", "إضافة إلى السلة", "توصيل", "استلام شخصي",
                 "الاصناف الرئيسية", "الأصناف الرئيسية", "الأصناف المضافة", "تفريغ السلة", "إتمام الدفع", "قسائمي", "شروط الاستخدام", "عرض خاص", "حسنًا", "حسنا", "1", "١") || text.matches(Regex("[0-9٠-٩]{1,2}")) || PreviewEvidence.offer(text) ||

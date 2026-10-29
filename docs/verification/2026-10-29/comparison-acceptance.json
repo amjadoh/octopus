@@ -1,0 +1,70 @@
+{
+  "date": "2026-10-29",
+  "device": "Honor MBH-N49, Android 16",
+  "providerVersions": {
+    "hungerstation": "8.0.303",
+    "keeta": "3.13.301"
+  },
+  "scope": "Kudu: small fries x5, no configured extras",
+  "context": {
+    "sameDeliveryAddress": "User confirmed same address",
+    "automaticallyVerifiedAddressOrBranch": false,
+    "branchPolicy": "Available branch in each platform accepted by user"
+  },
+  "completedChecks": {
+    "orderOrPaymentSubmitted": false,
+    "twoConsecutiveFullComparisons": true,
+    "normalBuildDisplayedBothReviewTotals": false,
+    "explicitExternalClearConfirmationOnDevice": true,
+    "normalBuildComparisonStartedFromVisibleButton": false,
+    "keetaSelectedBasketHandoff": true,
+    "emptyCartPreparationThroughNormalUi": false,
+    "repeatDidNotDuplicateQuantities": true,
+    "developmentCandidateEmptyCartPreparation": true,
+    "hungerstationSelectedBasketHandoff": true
+  },
+  "fullRuns": [
+    {
+      "hungerstationTotalHalala": 4380,
+      "localEvidence": "resume-five-final-readings-progress-state.json",
+      "keetaTotalHalala": 4120,
+      "quantitiesPerProvider": [
+        5,
+        5
+      ]
+    },
+    {
+      "hungerstationTotalHalala": 4380,
+      "localEvidence": "resume-repeat-complete-state.json",
+      "keetaTotalHalala": 4120,
+      "quantitiesPerProvider": [
+        5,
+        5
+      ]
+    }
+  ],
+  "terra": {
+    "providerTextScope": "Known HungerStation advert only; no screenshot or background account data",
+    "generalNavigation": false,
+    "recordedAdvertApproved": true,
+    "cloudAndroidVerified": true,
+    "executedLiveAdvertClick": false,
+    "latencyMs": 2250,
+    "separateConsentVerified": true,
+    "usbForwarding": false
+  },
+  "tests": {
+    "unitPassed": 555,
+    "lint": "passed",
+    "androidPassed": 47,
+    "gatewayPassed": 5
+  },
+  "minimumOrderFinding": "8 SAR cart was below the 15 SAR restaurant minimum. Keeta offered a 7 SAR surcharge; it was not accepted. Candidate now recognizes the notice, exits it and explains the minimum; HungerStation also reports its minimum explicitly.",
+  "evidencePrivacy": "Raw screenshots, account/address UI and tokens remain local and are not committed",
+  "limitations": [
+    "Ordinary signed 1.3.15 acceptance remains pending",
+    "Live Terra advert click is not established; recorded redacted advert HTTPS call is verified",
+    "Automatic address/branch equality and arbitrary configured extras are not verified"
+  ],
+  "publicationReady": false
+}
