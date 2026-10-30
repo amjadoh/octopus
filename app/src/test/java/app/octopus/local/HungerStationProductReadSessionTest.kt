@@ -9,6 +9,18 @@ import org.junit.Test
 
 /** Replays observed option grammar; these are local regression tests, not live provider runs. */
 class HungerStationProductReadSessionTest {
+    @Test fun editingPageNeedsObservedTopAndNativeScrollEndInsteadOfARecommendationMarker() = runBlocking {
+        val first=page(false).copy(nodes=page(false).nodes.map {
+            if(it.id=="flutterAddButton") it.copy(label="تحديث") else it } +
+            CatalogNode(200,-1,"","","android.widget.ScrollView",false,false,true,scrollForward=true,scrollBackward=false))
+        val last=first.copy(nodes=first.nodes.map { if(it.index==200) it.copy(scrollForward=false,scrollBackward=true) else it })
+        var reads=0
+        val result=HungerStationProductReadSession().read(restaurant,item,
+            frame={if(reads++==0)first else last},scroll={true},now={1000})
+        assertTrue(result.details.optionsComplete)
+        val missingTop=HungerStationProductReadSession(1).read(restaurant,item,frame={last},scroll={false},now={1000})
+        assertFalse(missingTop.details.optionsComplete)
+    }
     @Test fun observedTawookOptionalRemovalsDoNotBlockTheUnmodifiedProduct() = runBlocking {
         val restaurant=LiveRestaurant("البيك",null,"البيك")
         val item=LiveMenuItem("طاووق",1050,"tawook")

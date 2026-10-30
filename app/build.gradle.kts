@@ -14,8 +14,8 @@ android {
         // Test-only older identity exercises a real upgrade to the currently published signed APK.
         // Release validation rejects this identity; no fixture flag is used by CI publishing.
         val updateFixture = providers.gradleProperty("octopusUpdateFixture").orNull == "true"
-        versionCode = if (updateFixture) 13 else 26
-        versionName = if (updateFixture) "1.3.5" else "1.3.18"
+        versionCode = if (updateFixture) 13 else 27
+        versionName = if (updateFixture) "1.3.5" else "1.3.19"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     val previewStoreFile = System.getenv("OCTOPUS_SIGNING_STORE_FILE")

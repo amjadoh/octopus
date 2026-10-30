@@ -102,7 +102,6 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
     DisposableEffect(owner) {
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) {
             graph.refreshInstallations()
-            graph.refreshPublicRestaurants(force = false)
         } }
         owner.lifecycle.addObserver(observer)
         onDispose { owner.lifecycle.removeObserver(observer) }
@@ -122,7 +121,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
     OctopusTheme {
         Scaffold(containerColor = Background, contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
-                if (page != Page.HOME) {
+                if (page !in setOf(Page.HOME, Page.COMPARE)) {
                 Column(Modifier.background(Ink).statusBarsPadding()) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Image(painterResource(R.drawable.ic_octopus_selected), "شعار الأخطبوط", Modifier.size(36.dp))
@@ -138,22 +137,15 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
                 }
             },
             bottomBar = {
-                NavigationBar(containerColor = Color.White, tonalElevation = 0.dp) {
-                    listOf(Page.HOME, Page.COMPARE, Page.PROVIDERS, Page.SETTINGS).forEach { item ->
-                        NavigationBarItem(selected = page == item, onClick = { page = item },
-                            icon = { Icon(item.icon, null, Modifier.size(23.dp)) },
-                            label = { Text(item.title, fontSize = 11.sp) },
-                            colors = NavigationBarItemDefaults.colors(indicatorColor = OctopusPalette.CoralSoft,
-                                selectedIconColor = Ink, selectedTextColor = Ink, unselectedIconColor = Muted, unselectedTextColor = Muted))
-                    }
+                if (page !in setOf(Page.HOME, Page.COMPARE)) {
+                    TextButton(onClick = { page = Page.HOME }, modifier = Modifier.fillMaxWidth().navigationBarsPadding()) { Text("الرجوع للمقارنة") }
                 }
             }
         ) { padding ->
             Box(Modifier.padding(padding)) {
                 when (page) {
-                    Page.HOME, Page.COMPARE -> CatalogScreen(graph, comparisonOnly = page == Page.COMPARE,
-                        onRestaurants = { page = Page.HOME }, onOpenComparison = { page = Page.COMPARE },
-                        onProviders = { page = Page.PROVIDERS }, onSettings = { page = Page.SETTINGS },
+                    Page.HOME, Page.COMPARE -> NativeComparisonHome(graph,
+                        onSettings = { page = Page.SETTINGS },
                         onSetup = { if (!settings.consent) disclosure = true else openAccessibilitySettings() })
                     Page.PROVIDERS -> ProvidersScreen(installations, settings, onAllowed = { provider, allowed ->
                         ReadOnlyServiceBridge.stop()
@@ -431,7 +423,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
         } }
         item { Panel {
             SectionTitle("بياناتك المحلية")
-            Text("نحفظ حالات القراءة والمبالغ المرشحة وإصدارات التطبيقات وسجلًا منقحًا للعناصر أثناء الجلسة التي تبدأها. عند تفعيل اتصال تيرا للاختبار، تُرسل نصوص نافذة الإعلان العامة وأزرار إغلاقها إلى خدمة OpenAI عبر بوابة الربط. لا تُرسل صورة الشاشة أو خلفية الحساب أو بيانات الدخول. يبقى مفتاح OpenAI خارج الجوال.", fontSize = 13.sp, lineHeight = 22.sp, color = Muted)
+            Text("نحفظ حالات القراءة والمبالغ المرشحة وإصدارات التطبيقات وسجلًا منقحًا للعناصر أثناء الجلسة التي تبدأها. عند تفعيل تيرا، يُرسل نوع خطوة الاستعادة المقترحة عند التعثر، ونص الإعلان العام وأزرار إغلاقه عند وجوده، إلى OpenAI عبر بوابة الربط. لا تُرسل صورة الشاشة أو خلفية الحساب أو بيانات الدخول. يبقى مفتاح OpenAI خارج الجوال.", fontSize = 13.sp, lineHeight = 22.sp, color = Muted)
             OutlinedButton(onClick = onExport, Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text("تصدير السجل بعد مراجعته") }
             TextButton(onClick = onDelete) { Icon(Icons.Outlined.DeleteOutline, null, tint = Red); Spacer(Modifier.width(7.dp)); Text("حذف جميع بيانات الأخطبوط", color = Red) }
         } }
@@ -450,7 +442,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
     var error by remember { mutableStateOf(false) }
     SectionTitle("مساعد تيرا")
     InfoRow("الحالة", if (enabled) "مفعّل" else "متوقف")
-    Text("يساعد في إغلاق إعلان يعترض المقارنة عندما يكون زر إغلاقه معروفًا. لا يختار الوجبات أو يغيّر السلة أو يؤكد الطلب.", fontSize = 13.sp, lineHeight = 22.sp, color = Muted)
+    Text("يتدخل عند تعثر قراءة الشاشة أو الرجوع لقائمة المطعم ليستكمل المسار المتحقق منه، ويساعد في إغلاق الإعلان المعروف. لا يكرر الإضافة ولا يؤكد طلبًا أو دفعًا.", fontSize = 13.sp, lineHeight = 22.sp, color = Muted)
     if (configured) {
         OutlinedButton(onClick = {
             if (enabled) {
@@ -471,7 +463,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
     if (error) Text("تعذر حفظ الإعداد. أعد المحاولة.", color = Red, fontSize = 13.sp)
     if (consent) AlertDialog(onDismissRequest = { consent = false },
         title = { Text("تفعيل مساعد تيرا؟") },
-        text = { Text("أثناء مقارنة تبدأها أنت، تُرسل نصوص الإعلان العامة وأزرار إغلاقه فقط إلى OpenAI عبر خدمة الأخطبوط على Google Cloud. لا تُرسل صورة الشاشة أو خلفية الحساب أو العنوان أو بيانات الدخول. يمكنك إيقاف المشاركة أو قطع الربط من هنا. يبقى مفتاح OpenAI خارج الجوال.") },
+        text = { Text("أثناء مقارنة تبدأها أنت، يُرسل نوع خطوة الاستعادة المقترحة عند التعثر، ونص الإعلان العام وأزرار إغلاقه عند وجوده، إلى OpenAI عبر خدمة الأخطبوط على Google Cloud. لا تُرسل صورة الشاشة أو خلفية الحساب أو العنوان أو بيانات الدخول. يمكنك إيقاف المشاركة أو قطع الربط من هنا. يبقى مفتاح OpenAI خارج الجوال.") },
         confirmButton = { TextButton(onClick = {
             error = runCatching { store.setEnabled(true) }.isFailure
             enabled = store.activeConnection() != null
