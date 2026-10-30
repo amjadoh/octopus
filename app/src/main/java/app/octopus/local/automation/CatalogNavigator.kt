@@ -268,19 +268,24 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             graph.catalog.value = graph.catalog.value.copy(error = preflightFailure)
             return false
         }
-        graph.catalog.value = graph.catalog.value.copy(comparisonRunning = true, comparisonProgress = emptyMap(), finalTotals = emptyMap(), error = null)
+        val verifiesOwnedBaskets = installedKeetaProfile()?.allowsOwnedPlainPreparation == true
+        graph.catalog.value = graph.catalog.value.copy(comparisonRunning = true, comparisonProgress = emptyMap(), finalTotals = emptyMap(), previews = emptyList(), error = null)
         val comparisonAreaUrl = graph.settings.value.catalogArea?.url
         val epoch = ++comparisonEpoch
         comparisonJob = graph.scope.launch(start = CoroutineStart.LAZY) {
             try {
                 CartComparisonFlow().run(
                     readMenus = {
+                        // Owned adapters independently verify every basket row and option before
+                        // editing or opening review. Menu-price previews are not their authority.
+                        if (!verifiesOwnedBaskets) {
                         check(compareDraft()) { graph.catalog.value.error ?: "تعذر بدء قراءة أسعار الوجبات." }
                         job?.join()
                         currentCoroutineContext().ensureActive()
                         stepInterrupted?.let { throw CancellationException(it) }
+                        }
                     },
-                    available = { id -> graph.catalog.value.previews.any { it.provider == id && it.itemSubtotal != null && it.fresh(desired, System.currentTimeMillis()) } },
+                    available = { id -> verifiesOwnedBaskets || graph.catalog.value.previews.any { it.provider == id && it.itemSubtotal != null && it.fresh(desired, System.currentTimeMillis()) } },
                     prepare = { id ->
                         val started = if(id == ProviderId.HUNGERSTATION ||
                             installedKeetaProfile()?.allowsOwnedPlainPreparation == true)
@@ -532,6 +537,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                             JSONObject().put("provider",id.name).put("stage",multiReadStage)
                                 .put("recordedAt",System.currentTimeMillis())
                                 .put("reason",menuFailure(failure,"UNCLASSIFIED"))
+                                .put("codeLocation",JSONArray(failure.stackTrace.take(8).map { "${it.className}.${it.methodName}:${it.lineNumber}" }))
                                 .put("exceptionType",failure.javaClass.name).toString(),Charsets.UTF_8)
                     }
                     failedMenuPreview(id,desired,menuFailure(failure,"لم تكتمل قراءة جميع أصناف الطلب في ${id.title}؛ لم أحتسب مجموعًا جزئيًا ولم أغيّر السلة."))
@@ -560,9 +566,11 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             "خيارات الصنف غير مكتملة؛ لم أستخدم سعرًا ناقصًا."
         }
         val price=details.product.listedPriceHalala ?: error("سعر الصنف غير مقروء.")
+        act(read.lastFrame,CatalogAction.RETURN_TO_CATALOG,{it.id=="pdpCloseButton"})
         if(opened.search!=null) {
-            act(read.lastFrame,CatalogAction.RETURN_TO_CATALOG,{it.id=="pdpCloseButton"})
             closeHungerMenuSearch(opened.search,desired)
+        } else {
+            await { HungerStationCatalog.screen(it)==CatalogScreen.MENU }
         }
         return price
     }
@@ -1896,9 +1904,13 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         act(results, CatalogAction.OPEN_RESTAURANT, { it.index == candidate.index && it.id == candidate.id && it.label == candidate.label })
         var viewOnlyNotice = false
         phase="انتظار قائمة المطعم بعد نتيجة البحث"
-        var landing = await { HungerStationCatalog.screen(it) in setOf(CatalogScreen.MENU, CatalogScreen.RESTAURANT_NOTICE) ||
+        var landing = await { HungerStationCatalog.screen(it) in setOf(CatalogScreen.MENU, CatalogScreen.RESTAURANT_NOTICE, CatalogScreen.PRODUCT) ||
             HungerMenuSearchScreen.closeTarget(it)!=null ||
             graph.draft.value?.items?.any {line -> HungerStationExistingVariant.read(it,line.name)!=null}==true }
+        if (HungerStationCatalog.screen(landing)==CatalogScreen.PRODUCT) {
+            act(landing,CatalogAction.RETURN_TO_CATALOG,{it.id=="pdpCloseButton"})
+            landing=await {HungerStationCatalog.screen(it) in setOf(CatalogScreen.MENU,CatalogScreen.RESTAURANT_NOTICE) || HungerMenuSearchScreen.closeTarget(it)!=null}
+        }
         HungerMenuSearchScreen.closeTarget(landing)?.let { close ->
             act(landing,CatalogAction.RETURN_TO_CATALOG,{it==close})
             landing=await {HungerStationCatalog.screen(it) in setOf(CatalogScreen.MENU,CatalogScreen.RESTAURANT_NOTICE)}
