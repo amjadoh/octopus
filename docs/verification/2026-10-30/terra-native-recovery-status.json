@@ -4,7 +4,7 @@
   "local": {
     "unitTestsPassed": 592,
     "unitTestFailures": 0,
-    "androidUiTestsPassed": 52,
+    "androidUiTestsPassed": 53,
     "androidUiTestFailures": 0,
     "gatewayTestsPassed": 5,
     "lintPassed": true,

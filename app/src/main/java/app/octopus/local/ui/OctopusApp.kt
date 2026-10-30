@@ -423,7 +423,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
         } }
         item { Panel {
             SectionTitle("بياناتك المحلية")
-            Text("نحفظ حالات القراءة والمبالغ المرشحة وإصدارات التطبيقات وسجلًا منقحًا للعناصر أثناء الجلسة التي تبدأها. عند تفعيل اتصال تيرا للاختبار، تُرسل نصوص نافذة الإعلان العامة وأزرار إغلاقها إلى خدمة OpenAI عبر بوابة الربط. لا تُرسل صورة الشاشة أو خلفية الحساب أو بيانات الدخول. يبقى مفتاح OpenAI خارج الجوال.", fontSize = 13.sp, lineHeight = 22.sp, color = Muted)
+            Text("نحفظ حالات القراءة والمبالغ المرشحة وإصدارات التطبيقات وسجلًا منقحًا للعناصر أثناء الجلسة التي تبدأها. عند تفعيل تيرا، يُرسل نوع خطوة الاستعادة المقترحة عند التعثر، ونص الإعلان العام وأزرار إغلاقه عند وجوده، إلى OpenAI عبر بوابة الربط. لا تُرسل صورة الشاشة أو خلفية الحساب أو بيانات الدخول. يبقى مفتاح OpenAI خارج الجوال.", fontSize = 13.sp, lineHeight = 22.sp, color = Muted)
             OutlinedButton(onClick = onExport, Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text("تصدير السجل بعد مراجعته") }
             TextButton(onClick = onDelete) { Icon(Icons.Outlined.DeleteOutline, null, tint = Red); Spacer(Modifier.width(7.dp)); Text("حذف جميع بيانات الأخطبوط", color = Red) }
         } }
