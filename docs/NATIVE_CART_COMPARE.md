@@ -26,3 +26,14 @@ Validation completed 2026-10-30: 564 unit tests passed, lint passed, diagnostic 
 Legacy source/history/test reports are in sibling `checkpoint-before-cart-import-20261030/`. New build logs and temporary-emulator results are saved separately under sibling `native-cart-compare-*` files. Phone screenshots, native carts, credentials and signing materials are not part of source commits.
 
 Remote upload explicitly approved on 2026-10-30: both source branches and `checkpoint-before-cart-import-20261030` were pushed and independently verified with `ls-remote`. Remote main remains `f500983`. Draft PR #3 targets the preserved legacy branch to isolate the new-flow diff; no merge or release is authorized.
+
+## Subsequent phone trial and remote checks (2026-10-30)
+
+The user authorized replacing native baskets with a test basket and made the phone available. A signed diagnostic build was installed over the existing app without clearing its data. Prior local order preservation was verified. This trial followed the emulator-only validation above.
+
+- HungerStation 8.0.303 / Keeta 3.13.301: the native entry and floating compare control were exercised on the physical phone.
+- A source basket containing one plain Big Baik (17.50 SAR, no modifications) was imported successfully. Diagnostic state confirms restaurant, quantity 1, no options and no size.
+- The source order-review screen then displayed a provider error that the branch does not deliver to the selected address. Comparison stopped with no accepted final total and before Keeta preparation. The amount behind that error was not accepted as a valid quote.
+- Target filling and successful automatic return remain **unverified**. `nativeCartImportVerifiedOnPhone` remains false; this is not release acceptance.
+- Screenshots, diagnostic state and device APK backup remain in private sibling `native-cart-phone-20261030/`; no addresses or payment details are included here.
+- GitHub Actions run 41024347766 for commit `1c6211d` completed successfully: diagnostic build/unit/lint/UI checks and ai-gateway checks. No main merge or release was performed.
