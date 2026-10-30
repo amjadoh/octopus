@@ -9,11 +9,12 @@ class KeetaMealChoices(val cart: CanonicalCart) {
     private val completed = mutableSetOf<String>()
     private val singleChoiceSeen = mutableSetOf<String>()
     private val requiredGroups = mutableMapOf<String, String?>()
+    private val incompleteHeaders = mutableSetOf<String>()
     private var pending: String? = null
     private var failed = false
     private var reachedEnd = false
     private var readyFrame: CatalogFrame? = null
-    val ready: Boolean get() = !failed && pending == null && reachedEnd && completed == values &&
+    val ready: Boolean get() = !failed && pending == null && incompleteHeaders.isEmpty() && reachedEnd && completed == values &&
         requiredGroups.size == values.size && requiredGroups.values.toSet() == values
 
     init {
@@ -75,10 +76,15 @@ class KeetaMealChoices(val cart: CanonicalCart) {
             if (parts.size == 2 && parts[0].clickable && parts[0].enabled && !parts[0].editable &&
                 parts[0].label.isEmpty() && parts[0].className == "android.view.ViewGroup" &&
                 frame.descendants(parts[1].index).count { it.label == "إضافة إلى السلة" } == 1) {
-                val footer = frame.nodes.singleOrNull { it.index == parent.parent } ?: return null
-                val counts = frame.descendants(footer.index).filter { it.label.matches(Regex("[0-9٠-٩]+")) }
-                if (counts.singleOrNull()?.label !in setOf("1", "١")) return null
-                return parts[0]
+                var footer = parent
+                repeat(5) {
+                    footer = frame.nodes.singleOrNull { it.index == footer.parent } ?: return null
+                    val content = frame.descendants(footer.index)
+                    if (content.any { it.label == item.name || it.scrollable }) return null
+                    val counts = content.filter { it.label.matches(Regex("[0-9٠-٩]+")) }
+                    if (counts.isNotEmpty()) return parts[0].takeIf { counts.singleOrNull()?.label in setOf("1", "١") }
+                }
+                return null
             }
         }
         return null
@@ -96,10 +102,11 @@ class KeetaMealChoices(val cart: CanonicalCart) {
                 if (found == null) {
                     parent = frame.nodes.singleOrNull { it.index == parent.parent } ?: return null
                     val parts = children(parent)
-                    if (parts.size == 2) {
+                    if (parts.size in 1..2) {
                         val header = frame.descendants(parts[0].index)
-                        val rows = children(parts[1])
-                        if (header.any { it.index == marker.index } && rows.isNotEmpty() &&
+                        val rows = parts.getOrNull(1)?.let(::children).orEmpty()
+                        if (header.any { it.index == marker.index } &&
+                            header.count { it.label in setOf("اختر 1", "اختر ١", "تم") } == 1 &&
                             rows.all { it.clickable && it.enabled && !it.editable && it.className == "android.view.ViewGroup" }) {
                             val status = header.filter { it.label in setOf("اختر 1", "اختر ١", "تم") }
                             if (status.size != 1) return null
@@ -119,16 +126,43 @@ class KeetaMealChoices(val cart: CanonicalCart) {
                             val (row, value) = matched
                             // Observed row owns a nested label/icon press handler. Use the
                             // smallest clickable ancestor containing the exact requested label.
-                            val target = frame.descendants(row.index).filter { n ->
+                            val namedHandler = frame.descendants(row.index).filter { n ->
                                 n.clickable && n.enabled && !n.editable &&
                                     frame.descendants(n.index).any { it.label == value }
                             }.minByOrNull { frame.descendants(it.index).size } ?: return null
+                            // The label can open nested modifiers. The adjacent empty handler
+                            // is the radio control; never dispatch the label handler in that layout.
+                            val parts = children(namedHandler)
+                            val target = if (namedHandler != row) {
+                                if (parts.size != 2 || frame.descendants(parts[0].index).none { it.label == value }) return null
+                                parts[1].takeIf { it.clickable && it.enabled && !it.editable &&
+                                    it.className == "android.view.ViewGroup" &&
+                                    frame.descendants(it.index).all { child -> child.label.isBlank() && !child.omittedText } } ?: return null
+                            } else namedHandler
                             found = Group(key, value, status.single().label == "تم", target)
                         }
                     }
                 }
             }
-            results += found ?: return null
+            if (found == null) {
+                // A viewport may end at the required badge, before its limit or rows.
+                // Remember the heading until its complete group is observed; never add on it.
+                var ancestor = marker
+                var clippedKey: String? = null
+                repeat(4) {
+                    ancestor = frame.nodes.singleOrNull { it.index == ancestor.parent } ?: return null
+                    val body = frame.descendants(ancestor.index)
+                    if (clippedKey == null && body.count { it.label == "مطلوب" } == 1 &&
+                        body.none { it.label in setOf("اختر 1", "اختر ١", "تم") }) {
+                        clippedKey = body.filter { it.className == "android.widget.TextView" &&
+                            it.label.isNotBlank() && it.label != "مطلوب" }.singleOrNull()?.label
+                    }
+                }
+                incompleteHeaders += clippedKey ?: return null
+            } else {
+                incompleteHeaders -= found!!.key
+                results += found!!
+            }
         }
         if (results.map { it.key }.distinct().size != results.size ||
             results.mapNotNull { it.value }.let { it.distinct().size != it.size }) return null
@@ -146,11 +180,11 @@ class KeetaMealChoices(val cart: CanonicalCart) {
                     parent = frame.nodes.singleOrNull { it.index == parent.parent } ?: break
                     val body = frame.descendants(parent.index)
                     if (body.count { it.label == "مطلوب" } == 1 &&
-                        body.count { it.label in setOf("اختر 1", "اختر ١", "تم") } == 1) {
+                        body.count { it.label in setOf("اختر 1", "اختر ١", "تم") } <= 1) {
                         val heading = body.filter { it.className == "android.widget.TextView" && it.omittedText && !it.clickable &&
                             !it.editable && candidates[it.index] != null }.singleOrNull()
                         if (heading != null) headings.putIfAbsent(heading.index, candidates.getValue(heading.index))
-                        break
+                        if (heading != null) break
                     }
                 }
             }

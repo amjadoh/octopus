@@ -2,16 +2,14 @@
   "ready": false,
   "nativeCartImportVerifiedOnPhone": false,
   "configuredNativeCartVerifiedOnPhone": false,
-  "realProviderCartPreparationVerified": true,
-  "realFinalTotalsVerified": true,
-  "realTwoProviderComparisonVerified": true,
-  "realSelectedCartHandoffVerified": true,
-  "providersVerified": [
-    "keeta",
-    "hungerstation"
-  ],
-  "note": "Release blocked for basket-total reading regression: ALBAIK Big Baik x2 and Tawook x1 must show both actual review totals on the phone before publication.",
-  "latestScopedAcceptance": "verification/2026-10-29/comparison-acceptance.json",
+  "realProviderCartPreparationVerified": false,
+  "realFinalTotalsVerified": false,
+  "realTwoProviderComparisonVerified": false,
+  "realSelectedCartHandoffVerified": false,
+  "providersVerified": [],
+  "note": "Native configured-cart components were observed on the phone, but the complete two-provider review-total and return flow, repeatability and ordinary APK acceptance remain unverified. Local or CI success permits code review, not publication.",
+  "latestScopedAcceptance": "verification/2026-10-30/native-configured-cart-status.json",
+  "historicalPlainCartAcceptance": "verification/2026-10-29/comparison-acceptance.json",
   "componentEvidence": [
     "verification/2026-10-19/honor-menu-offers.json",
     "verification/2026-10-19/honor-basket-validation.json",
@@ -24,5 +22,5 @@
   "scope": "scoped_native_comparison_update",
   "automaticCheapestApprovalVerified": false,
   "productionAiActivated": false,
-  "ordinaryApkComparisonVerified": true
+  "ordinaryApkComparisonVerified": false
 }

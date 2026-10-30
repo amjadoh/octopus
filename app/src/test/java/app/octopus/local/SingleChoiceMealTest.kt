@@ -50,6 +50,19 @@ class SingleChoiceMealTest {
         assertNull(meal.resolve(target.copy(lines = listOf(target.lines.single().copy(quantity = 2))), 3000))
         assertNull(meal.resolve(target, 602_001))
     }
+    @Test fun exactNamedVariantAndUnselectedOptionalGroupsPreserveTheFullCartName() {
+        val variantName = "وجبة تجريبية - وسط"
+        val variant = MenuChoiceGroup("variant", "اختر العنصر", 1, 1,
+            listOf(MenuChoice("medium", variantName, true), MenuChoice("large", "وجبة تجريبية - كبير", true)))
+        val optional = MenuChoiceGroup("extras", "اضافة", 0, 2,
+            listOf(MenuChoice("extra-a", "إضافة أ", true), MenuChoice("extra-b", "إضافة ب", true)))
+        val schema = product.copy(product = product.product.copy(groups = listOf(variant) + groups + optional))
+        val basket = source.copy(lines = listOf(source.lines.single().copy(name = variantName)))
+        assertEquals(variantName, SingleChoiceMeal.create(basket, schema, 2000)!!.cart.items.single().name)
+        assertNull(SingleChoiceMeal.create(basket, product, 2000))
+        val extra = basket.copy(lines = listOf(basket.lines.single().copy(choices = basket.lines.single().choices + BasketChoiceEvidence("إضافة أ", null))))
+        assertNull(SingleChoiceMeal.create(extra, schema, 2000))
+    }
     @Test fun reviewRequiresFreshSchemaProofBoundToTheExactRawCartAndIsSingleUse() {
         fun node(i:Int,p:Int,id:String,label:String,click:Boolean=false,cls:String="android.view.View") =
             CatalogNode(i,p,id,label,cls,click,false,false)
@@ -60,8 +73,25 @@ class SingleChoiceMealTest {
             node(3,2,"menuItemActionDualButtonValue","1"),
             node(4,-1,"FlutterCart_footer_main_action_button","اذهب للدفع",true,"android.widget.Button")),true)
         assertEquals(source,BasketEvidenceReader.hungerStation(frame,true))
+        val edit = app.octopus.local.automation.HungerStationCartProductCommand.create(frame, source, 2000)!!
+        assertFalse(edit.consume(frame.copy(complete=false), edit.target, HungerStationCatalog.TESTED_VERSION, 2000))
+        assertTrue(edit.consume(frame, edit.target, HungerStationCatalog.TESTED_VERSION, 2000))
+        assertFalse(edit.consume(frame, edit.target, HungerStationCatalog.TESTED_VERSION, 2000))
         val meal=SingleChoiceMeal.create(source,product,2000)!!
         val proof=ConfiguredBasketVerification.source(meal,frame,source,2000)!!
+        val store = object : app.octopus.local.automation.BasketJournalStore {
+            var values = emptyMap<String, String>()
+            override fun read() = values
+            override fun write(values: Map<String, String>) { this.values = values }
+        }
+        val journal = app.octopus.local.automation.BasketMutationJournal(store)
+        journal.beforeDispatch(ProviderId.HUNGERSTATION, meal.cart)
+        assertFalse(journal.observeConfigured(meal.cart, proof, frame.copy(complete=false), HungerStationCatalog.TESTED_VERSION, 2000))
+        assertFalse(journal.observeConfigured(meal.cart, proof, frame, HungerStationCatalog.TESTED_VERSION, 17_001))
+        assertTrue(store.values.containsKey("pending.HUNGERSTATION"))
+        assertTrue(journal.observeConfigured(meal.cart, proof, frame, HungerStationCatalog.TESTED_VERSION, 2000))
+        assertFalse(store.values.containsKey("pending.HUNGERSTATION"))
+        assertTrue(runCatching { journal.requireFirstAdd(ProviderId.HUNGERSTATION, meal.cart) }.isFailure)
         val record=PreparedBasketRecord.create(meal.cart,proof.resolved,HungerStationCatalog.TESTED_VERSION,2000)!!
         assertNull(PreparedReviewAdmission.create(ProviderId.HUNGERSTATION,meal.cart,record,frame,HungerStationCatalog.TESTED_VERSION,2000))
         assertNull(PreparedReviewAdmission.create(ProviderId.HUNGERSTATION,meal.cart,record,frame,HungerStationCatalog.TESTED_VERSION,17_001,proof))

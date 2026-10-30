@@ -1,6 +1,18 @@
 # Native cart comparison — development branch
 
-Branch: `feature/native-cart-compare`. Legacy checkpoint: `checkpoint-before-cart-import-20261030` (`01b053b`). Do not merge to main or publish an app update without acceptance and user approval.
+Branch: `feature/native-cart-compare`. Legacy checkpoint: `checkpoint-before-cart-import-20261030` (`01b053b`). The user authorized PR #3 to target main and merge after its checks pass. Preserve the legacy branch and checkpoint. Publication remains separately gated on complete native-provider acceptance.
+
+## Latest status (2026-10-30)
+
+This section supersedes the historical trial notes below. Local validation passed: 582 unit tests, 49 Android UI tests on a local emulator, five gateway tests, lint and diagnostic/test APK builds. An integrated synthetic test connects option selection, complete basket verification, single-use review admission and request-bound final totals. It is not a live provider test.
+
+Physical component checks established source configured-meal schema reading, unchanged source basket and source review total; automatic target option selection and one addition; and target configured drawer recognition after the last parser fix. The complete target review-total and return flow has not been proved after that fix. Repeat comparisons with an existing configured target basket remain unsupported. Phone control is stopped while the user uses the device.
+
+The floating compare and stop-reading buttons are side by side; compare is larger and colored. Source options are read through the observed cart edit surface without pressing Update/Add. Target selection handles clipped required headers and exact radio controls; configured drawer parsing reconciles discounted rows and the promotional summary. Fresh complete configured proof can resolve a pending mutation while retaining the duplicate-prevention record.
+
+Only required single-choice selections for one configured meal of quantity one are admitted. Unselected optional groups can be present in the source schema; selected optional or multi-choice groups still fail admission. An exact source variant can be resolved from the observed required variant group. This is not support for arbitrary restaurants or modifiers.
+
+Current scoped evidence is in `verification/2026-10-30/native-configured-cart-status.json`. Release readiness remains false. Historical plain-cart success is retained separately and does not satisfy the new configured-cart release gate. Private captures, basket details and signing material remain outside Git.
 
 ## Implemented path
 

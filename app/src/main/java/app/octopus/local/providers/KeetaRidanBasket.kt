@@ -112,6 +112,7 @@ open class KeetaBasketReader(private val catalog: KeetaMenuReader, private val r
         if(sections.isEmpty())return null
         val cards=mutableListOf<CatalogNode>()
         for(section in sections) {
+            if (section == sections.last() && promotionalSummary(f, section) != null) continue
             if(section.className!="android.view.ViewGroup" || section.clickable || section.editable ||
                 section.scrollable || section.label.isNotEmpty() || section.omittedText)return null
             val children=f.nodes.filter {it.parent==section.index}
@@ -128,6 +129,28 @@ open class KeetaBasketReader(private val catalog: KeetaMenuReader, private val r
         return cards
     }
 
+    private fun promotionalSummary(f: CatalogFrame, section: CatalogNode): Long? {
+        if (catalog.VERSION != "3.13.301" || catalog.requestedChoices.isEmpty()) return null
+        val body = f.descendants(section.index)
+        val labels = setOf("تفاصيل العرض الترويجي", "يتم تأكيد المبلغ النهائي عند صفحة إتمام الدفع", "الإجمالي الفرعي", "الخصم", "الأصناف الترويجية", "الإجمالي")
+        val promotionLabel = body.singleOrNull { it.label == "الأصناف الترويجية" } ?: return null
+        val promotionLink = parent(f, promotionLabel)?.takeIf { it.className == "android.view.ViewGroup" &&
+            f.descendants(it.index).size == 2 && !promotionLabel.clickable }
+        if (body.any { (it.clickable && it != promotionLink) || it.editable || it.scrollable || it.omittedText } ||
+            labels.any { label -> body.count { it.label == label } != 1 } ||
+            body.any { it.label.isNotBlank() && it.label !in labels && MoneyParser.parse(it.label) == null }) return null
+        fun amount(label: String): Long? {
+            val text = body.single { it.label == label }
+            val group = parent(f, text) ?: return null
+            return f.descendants(group.index).filter { it.label.contains('﷼') }.singleOrNull()?.label?.let(MoneyParser::parse)
+        }
+        val base = amount("الإجمالي الفرعي") ?: return null
+        val discount = amount("الخصم") ?: return null
+        val total = amount("الإجمالي") ?: return null
+        return total.takeIf { base >= 0 && discount <= 0 && total >= 0 &&
+            runCatching { Math.addExact(base, discount) }.getOrNull() == total }
+    }
+
     private fun plainSkuLabel(f:CatalogFrame,node:CatalogNode,name:String=node.label):Boolean {
         val control=parent(f,node) ?: return false
         val wrapper=parent(f,control) ?: return false
@@ -138,6 +161,21 @@ open class KeetaBasketReader(private val catalog: KeetaMenuReader, private val r
             f.descendants(parts[0].index).count {it.className=="android.widget.ImageView"}==1 &&
             f.descendants(parts[0].index).count {it.label==name && !it.clickable}==1 &&
             f.descendants(parts[0].index).none {it.label.isNotEmpty() && it.label!=name || it.omittedText || it.clickable}
+    }
+
+    private fun rowAmount(f: CatalogFrame, body: List<CatalogNode>): Long? {
+        val prices = body.filter { it.label.contains('﷼') }
+        if (prices.size == 1) return MoneyParser.parse(prices.single().label)
+        if (catalog.VERSION != "3.13.301" || catalog.requestedChoices.isEmpty() || prices.size != 2 ||
+            body.count { it.label.matches(Regex("خصم [0-9٠-٩]{1,2}%")) } != 1) return null
+        val current = prices[0]
+        val group = parent(f, current) ?: return null
+        val parts = f.nodes.filter { it.parent == group.index }
+        if (parts.size != 2 || parts[0] != current || parts[1].className != "android.view.ViewGroup" ||
+            f.descendants(parts[1].index).filter { it.label.contains('﷼') } != listOf(prices[1])) return null
+        val amount = MoneyParser.parse(current.label) ?: return null
+        val original = MoneyParser.parse(prices[1].label) ?: return null
+        return amount.takeIf { it >= 0 && it < original }
     }
 
     private fun rows(f: CatalogFrame): List<CatalogNode>? {
@@ -152,9 +190,10 @@ open class KeetaBasketReader(private val catalog: KeetaMenuReader, private val r
         if (!names.add(name)) return null
         if (body.size > 65 || body.any { it.omittedText || it.editable } ||
             body.filter { it.label.isNotEmpty() }.any { it.label != name && quantity(it) == null && !it.label.contains('﷼') &&
-                catalog.configuredChoices(it.label) == null } ||
+                catalog.configuredChoices(it.label) == null &&
+                !(catalog.requestedChoices.isNotEmpty() && it.label.matches(Regex("خصم [0-9٠-٩]{1,2}%"))) } ||
             body.count { it.label == name } !in 1..2 || body.count { quantity(it) != null && it.clickable } != 1 ||
-            body.count { it.label.contains('﷼') && MoneyParser.parse(it.label) != null } != 1) return null
+            rowAmount(f, body) == null) return null
         }
         return cards
     }
@@ -169,14 +208,20 @@ open class KeetaBasketReader(private val catalog: KeetaMenuReader, private val r
             val body = f.descendants(card.index)
             val name = body.first { it.label in requestedTitles }.label
             val count = body.singleOrNull { quantity(it) != null && it.clickable }?.let(::quantity) ?: return null
-            val amount = body.singleOrNull { it.label.contains('﷼') }?.label?.let(MoneyParser::parse) ?: return null
-            val choices = body.filter { it.label.isNotEmpty() && it.label != name && quantity(it) == null && !it.label.contains('﷼') }
+            val amount = rowAmount(f, body) ?: return null
+            val choices = body.filter { it.label.isNotEmpty() && it.label != name && quantity(it) == null && !it.label.contains('﷼') &&
+                !it.label.matches(Regex("خصم [0-9٠-٩]{1,2}%")) }
                 .flatMap { catalog.configuredChoices(it.label) ?: return null }
             if (choices.map { it.value }.distinct().size != choices.size) return null
             if (catalog.requestedChoices.isNotEmpty() && choices.map { it.value }.toSet() != catalog.requestedChoices) return null
             BasketLineEvidence(name, choices, count, amount)
         }
         val subtotal = runCatching { lines.fold(0L) { total, line -> Math.addExact(total,line.lineAmount!!) } }.getOrNull() ?: return null
+        val summary = f.nodes.singleOrNull { it.label == "تفاصيل العرض الترويجي" }
+        if (summary != null) {
+            val section = ancestors(f, summary).firstOrNull { promotionalSummary(f, it) != null } ?: return null
+            if (promotionalSummary(f, section) != subtotal) return null
+        }
         return BasketEvidence(ProviderId.KEETA, catalog.restaurant, lines, subtotal, true)
     }
 

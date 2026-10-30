@@ -5,6 +5,36 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class KeetaRidanBasketTest {
+    @Test fun configuredDiscountRowKeepsExactChoicesAndCurrentPrice() {
+        val reader = KeetaMenuReader("مطعم تجريبي", "وجبة تجريبية", "3.13.301", setOf("جانب أ", "مشروب ب"))
+        val original = fixture(1)
+        val price = original.nodes.single { it.label == "30.00 ﷼" }
+        fun n(i: Int, p: Int, text: String = "", cls: String = "android.view.ViewGroup") =
+            CatalogNode(i,p,"",text,cls,false,false,false)
+        val nodes = original.nodes.filter { it.index != price.index }.map {
+            it.copy(label = when(it.label) { "ريدان" -> reader.restaurant; "نصف دجاج مضغوط" -> reader.title; else -> it.label })
+        } + listOf(n(100,price.parent),n(101,100,"20.00 ﷼","android.widget.TextView"),n(102,100),
+            n(103,102),n(104,103,"25.00 ﷼","android.widget.TextView"),
+            n(105,price.parent,"خصم 20%","android.widget.TextView"),
+            n(106,price.parent,"وجبة تجريبية، جانب أ، مشروب ب","android.widget.TextView"))
+        val f = CatalogFrame(nodes,true)
+        val actual = KeetaBasketReader(reader).evidence(f)!!
+        assertEquals(2000L, actual.subtotal)
+        assertEquals(setOf("جانب أ","مشروب ب"),actual.lines.single().choices.map { it.value }.toSet())
+        assertNull(KeetaBasketReader(reader).evidence(f.copy(nodes=nodes.map { if(it.index==106) it.copy(label="وجبة أخرى، جانب أ، مشروب ب") else it })))
+        assertNull(KeetaBasketReader(reader).evidence(f.copy(nodes=nodes.map { if(it.index==104) it.copy(parent=price.parent) else it })))
+        val card = original.nodes.single { it.index == price.parent }
+        val section = original.nodes.single { it.index == card.parent }
+        val totals = listOf(n(200,section.parent),n(201,200),
+            n(202,201,"تفاصيل العرض الترويجي","android.widget.TextView"),
+            n(203,201,"يتم تأكيد المبلغ النهائي عند صفحة إتمام الدفع","android.widget.TextView"),
+            n(204,200),n(205,204,"الإجمالي الفرعي","android.widget.TextView"),n(206,204,"25.00 ﷼","android.widget.TextView"),
+            n(207,200),n(208,207,"الخصم","android.widget.TextView"),n(209,207,"-5.00 ﷼","android.widget.TextView"),
+            n(210,200),n(216,210).copy(clickable=true),n(211,216,"الأصناف الترويجية","android.widget.TextView"),n(212,210,"-5.00 ﷼","android.widget.TextView"),
+            n(213,200),n(214,213,"الإجمالي","android.widget.TextView"),n(215,213,"20.00 ﷼","android.widget.TextView"))
+        assertEquals(2000L,KeetaBasketReader(reader).evidence(f.copy(nodes=nodes+totals))!!.subtotal)
+        assertNull(KeetaBasketReader(reader).evidence(f.copy(nodes=nodes+totals.map {if(it.index==215)it.copy(label="19.00 ﷼")else it})))
+    }
     @Test fun multipleVisiblePlainRowsAreReadWithoutDroppingOrMergingProducts() {
         val one = fixture()
         val first = one.nodes.single { it.label == "نصف دجاج مضغوط" }

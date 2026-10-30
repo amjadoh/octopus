@@ -84,13 +84,15 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
     }
     fun configuredChoices(text: String): List<BasketChoiceEvidence>? {
         if (requestedChoices.isEmpty()) return null
-        val parts = text.split(',', '،').map(String::trim)
+        val displayed = text.split(',', '،').map(String::trim)
+        val parts = if (displayed.firstOrNull() == title && displayed.size > 1) displayed.drop(1) else displayed
         if (parts.isEmpty() || parts.distinct().size != parts.size || parts.any { it !in requestedChoices }) return null
         return parts.map { BasketChoiceEvidence(it, null) }
     }
     fun functionalLabel(raw: String, resourceId: String = ""): String {
         val text = raw.replace(Regex("[\\u200e\\u200f\\u061c\\u202a-\\u202e\\u2066-\\u2069\\ufeff]"), "").trim()
         if (requestedChoices.isNotEmpty() && (text in requestedChoices ||
+                text in setOf("تفاصيل العرض الترويجي", "يتم تأكيد المبلغ النهائي عند صفحة إتمام الدفع", "الإجمالي الفرعي", "الخصم", "الأصناف الترويجية", "الإجمالي") ||
                 text in setOf("مطلوب", "اختر 1", "اختر ١", "تم", "اختياري") ||
                 configuredChoices(text) != null)) return text
         // Observed public menu title field. Retain visible titles so scrolling past unrelated

@@ -198,7 +198,15 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     delay(650)
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) {
+            catch (failure: Exception) {
+                if (BuildConfig.DEBUG) runCatching {
+                    service.filesDir.resolve("manual-capture-failure.json").writeText(JSONObject()
+                        .put("exceptionType", failure.javaClass.simpleName)
+                        .put("locations", JSONArray(failure.stackTrace.filter { it.className.startsWith("app.octopus.") }
+                            .take(5).map { "${it.className}:${it.lineNumber}" }))
+                        .put("stop", catalogStop.evidence?.let { com.google.gson.Gson().toJson(it) } ?: JSONObject.NULL)
+                        .toString())
+                }
                 graph.catalog.value = graph.catalog.value.copy(error = "تعذرت قراءة الشاشة الحالية بأمان؛ بقيت القوائم المحفوظة متاحة.")
             } finally {
                 // No timeout or interruption is allowed to pull the user back into Octopus.
@@ -383,14 +391,23 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     val root = service.rootInActiveWindow ?: error("اختفت سلة هنقرستيشن.")
                     try { requireProviderWindow(root); verifyActiveFrame(source, root.windowId) }
                     finally { @Suppress("DEPRECATION") root.recycle() }
-                    val menu = leaveCompleteHungerBasket(source, original)
-                    val opened = openHungerPlainProduct(menu, probe, probe.items.single())
-                    val read = readHungerProduct(LiveRestaurant(probe.restaurant, null, probe.restaurant), opened.item)
+                    val edit = HungerStationCartProductCommand.create(source, original, System.currentTimeMillis())
+                        ?: error("لم أثبت عنصر الوجبة لقراءة خياراتها؛ لم أغير السلة.")
+                    act(source, CatalogAction.OPEN_PRODUCT, { it == edit.target }, cartProductCommand = edit)
+                    val productFrame = await { HungerStationCatalog.screen(it) == CatalogScreen.PRODUCT }
+                    val rowName = probe.items.single().name
+                    val heading = productFrame.nodes.filter { !it.clickable &&
+                        (it.label == rowName || rowName.startsWith(it.label + " - ")) && it.label.isNotBlank()
+                    }.map { it.label }.distinct().singleOrNull()
+                        ?: error("لم يتطابق اسم الوجبة مع صفحة خياراتها.")
+                    val read = readHungerProduct(LiveRestaurant(probe.restaurant, null, probe.restaurant),
+                        LiveMenuItem(heading, null, "cart-product"))
                     val verified = SingleChoiceMeal.create(original, read.details, System.currentTimeMillis())
                         ?: error("لم تثبت جميع اختيارات الوجبة وكمياتها من قائمة المطعم؛ لم أغير السلة.")
                     act(read.lastFrame, CatalogAction.RETURN_TO_CATALOG, { it.id == "pdpCloseButton" })
-                    val returned = if (opened.search != null) closeHungerMenuSearch(opened.search, probe)
-                        else await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
+                    val unchanged = await { HungerStationCatalog.screen(it) == CatalogScreen.CART }
+                    check(BasketEvidenceReader.hungerStation(unchanged, true) == original) { "تغيرت السلة أثناء قراءة الخيارات." }
+                    val returned = leaveCompleteHungerBasket(unchanged, original)
                     val (cartFrame, raw) = readCompleteHungerBasket(returned, probe)
                     check(raw == original) { "تغيرت سلة هنقرستيشن أثناء قراءة الخيارات؛ أعد المقارنة." }
                     val proof = app.octopus.local.safety.ConfiguredBasketVerification.source(verified, cartFrame, raw, System.currentTimeMillis())
@@ -455,7 +472,13 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         for (attempt in 0 until 60) {
             checkSession()
             when (val step = selection.next(frame, keetaMenu)) {
-                KeetaMealChoices.Step.Blocked -> error("خيارات كيتا غير مطابقة أو غير مكتملة؛ لم أضف الوجبة.")
+                KeetaMealChoices.Step.Blocked -> {
+                    if (BuildConfig.VERSION_NAME.endsWith("-device-tools")) runCatching {
+                        service.filesDir.resolve("keeta-choice-stop-frame.json")
+                            .writeText(com.google.gson.Gson().toJson(frame))
+                    }
+                    error("خيارات كيتا غير مطابقة أو غير مكتملة؛ لم أضف الوجبة.")
+                }
                 KeetaMealChoices.Step.Ready -> { complete = true; break }
                 is KeetaMealChoices.Step.Select -> {
                     phase = "اختيار مكونات الوجبة المطابقة في كيتا"
@@ -490,7 +513,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         frame = await { keetaMenu.basketDrawer(it) }
         val proof = app.octopus.local.safety.ConfiguredBasketVerification.target(meal, selection, keetaMenu, frame, System.currentTimeMillis())
             ?: error("لم تتطابق سلة كيتا كاملة بعد الإضافة؛ لم أكرر الإضافة ولم أعتمد سعرًا.")
-        observeBasketMutation(desired, proof.resolved)
+        check(withContext(Dispatchers.IO) {
+            graph.basketMutationJournal.observeConfigured(desired, proof, frame, keetaMenu.VERSION, System.currentTimeMillis())
+        }) { "تعذر تثبيت نتيجة سلة كيتا؛ لم أكرر الإضافة." }
         rememberPrepared(desired, proof.resolved, keetaMenu.VERSION)
         readFinalTotal(desired, frame, proof)
     }
@@ -984,6 +1009,17 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         if(!BuildConfig.DEBUG || !BuildConfig.VERSION_NAME.endsWith("-device-tools") || active || graph.session.value.active)return false
         val cart=graph.draft.value ?: return false
         val profile=installedKeetaProfile() ?: return false
+        if (cart.items.size == 1 && cart.items.single().options.isNotEmpty()) {
+            return begin(operation=CatalogOperation.COMPARE_MENU, returnOnSuccess=false) {
+                provider = ProviderId.KEETA
+                val item = cart.items.single()
+                keetaContext = KeetaMenuReader(cart.restaurant, item.name, profile.version, item.options.map { it.value }.toSet())
+                keetaBasketTitles = setOf(item.name)
+                val observed = await { keetaMenu.basketDrawer(it) }
+                service.filesDir.resolve("keeta-configured-drawer-frame.json")
+                    .writeText(com.google.gson.Gson().toJson(observed))
+            }
+        }
         val line=PlainMenuReadPlan.create(cart,ProviderId.KEETA,profile.version)?.lines?.firstOrNull() ?: return false
         if(!matchesSelectedRestaurant())return false
         return begin(operation=CatalogOperation.COMPARE_MENU,returnOnSuccess=false) {
@@ -2827,7 +2863,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         ownedVariantContinuation:HungerStationOwnedQuantityCommand?=null,
         menuQuantityCommand: HungerStationMenuQuantityCommand? = null,
         productQuantityCommand: HungerStationProductQuantityCommand? = null,
-        variantQuantityCommand: HungerStationVariantQuantityCommand? = null, variantTitle:String?=null): Boolean {
+        variantQuantityCommand: HungerStationVariantQuantityCommand? = null, variantTitle:String?=null,
+        cartProductCommand: HungerStationCartProductCommand? = null): Boolean {
         currentCoroutineContext().ensureActive(); checkSession()
         val root = service.rootInActiveWindow ?: throw UserInterrupted("اختفت الشاشة قبل الإجراء؛ توقفت المقارنة.")
         try {
@@ -2839,6 +2876,12 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             val node = selected.single()
             check(node.enabled) { "العنصر غير متاح؛ توقفت العملية." }
             val allowed = when (action) {
+                CatalogAction.OPEN_PRODUCT -> if (cartProductCommand != null)
+                    provider == ProviderId.HUNGERSTATION && graph.settings.value.catalogConsent &&
+                        cartProductCommand.consume(fresh, node, graph.installations.value.singleOrNull { it.provider == provider }?.version,
+                            System.currentTimeMillis())
+                    else SafetyGuard().allowsCatalogAction(action, HungerStationCatalog.screen(fresh), root.packageName?.toString(),
+                        graph.settings.value.catalogConsent, currentCoroutineContext().isActive, fresh.complete, node.label)
                 CatalogAction.CLOSE_HUNGER_VARIANT -> provider==ProviderId.HUNGERSTATION && graph.settings.value.catalogConsent &&
                     graph.installations.value.singleOrNull{it.provider==provider}?.version==HungerStationCatalog.TESTED_VERSION &&
                     variantTitle?.let {HungerStationExistingVariant.read(fresh,it)?.close==node}==true
@@ -2992,13 +3035,33 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
 
     private fun privateId(id: String) = id.contains(Regex("address|location|welcome|wallet|phone|email|password|otp|verification|recipient|contact", RegexOption.IGNORE_CASE))
     private fun showManualControls(): Boolean = try {
+        fun dp(value: Int) = (value * service.resources.displayMetrics.density).toInt()
         val controls = LinearLayout(service).apply {
-            orientation = LinearLayout.VERTICAL
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = android.view.View.LAYOUT_DIRECTION_RTL
+            gravity = Gravity.CENTER_VERTICAL
             addView(Button(service).apply {
                 text = if (importingBasket) "قارن" else "احفظ وارجع للأخطبوط"
+                textSize = if (importingBasket) 18f else 14f
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+                setTextColor(android.graphics.Color.rgb(24, 32, 38))
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(android.graphics.Color.rgb(255, 87, 93)); cornerRadius = dp(18).toFloat()
+                }
+                minimumWidth = 0; minimumHeight = 0
+                setPadding(dp(12), 0, dp(12), 0)
                 setOnClickListener { if (importingBasket) compareNativeBasket() else captureManualCatalog() }
-            })
-            addView(Button(service).apply { text = "إيقاف القراءة ×"; setOnClickListener { endManualCatalog() } })
+            }, LinearLayout.LayoutParams(dp(if (importingBasket) 132 else 184), dp(56)))
+            addView(Button(service).apply {
+                text = "إيقاف القراءة ×"; textSize = 14f
+                minimumWidth = 0; minimumHeight = 0
+                setPadding(dp(10), 0, dp(10), 0)
+                setTextColor(android.graphics.Color.rgb(32, 48, 57))
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(android.graphics.Color.rgb(239, 243, 245)); cornerRadius = dp(16).toFloat()
+                }
+                setOnClickListener { endManualCatalog() }
+            }, LinearLayout.LayoutParams(dp(120), dp(48)).apply { marginStart = dp(8) })
         }
         val params = WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,

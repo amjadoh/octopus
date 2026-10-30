@@ -63,6 +63,22 @@ class BasketMutationJournal(private val store: BasketJournalStore) {
         store.write(values)
     }
     /** Recovery requires complete, positively parsed rows belonging to the current full request. */
+    @Synchronized fun observeConfigured(request: CanonicalCart,
+        proof: app.octopus.local.safety.ConfiguredBasketVerification,
+        frame: app.octopus.local.providers.CatalogFrame, version: String, now: Long): Boolean {
+        if (!proof.matches(request, frame, version, now) ||
+            !app.octopus.local.providers.BasketItemMatcher.compare(request, proof.resolved).matches) return false
+        val provider = proof.resolved.provider
+        val values = store.read().toMutableMap()
+        val key = "pending.${provider.name}"
+        if (values[key] != null && !pendingMatches(values[key], request.restaurant)) return false
+        values.remove(key)
+        legacyKeys(provider, request.restaurant).forEach(values::remove)
+        values[seen(provider, request.restaurant)] = "1"
+        store.write(values)
+        return true
+    }
+
     @Synchronized fun observe(request: CanonicalCart, evidence: BasketEvidence): Boolean {
         if (!evidence.complete || evidence.restaurant != request.restaurant || evidence.lines.isEmpty() ||
             evidence.lines.map { it.name }.distinct().size != evidence.lines.size ||
