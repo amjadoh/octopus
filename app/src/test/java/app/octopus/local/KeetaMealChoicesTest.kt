@@ -41,7 +41,13 @@ class KeetaMealChoicesTest {
         val footer=n(root,click=true); val action=n(footer,click=true); val label=n(footer)
         n(label,"إتمام الدفع","android.widget.TextView")
         val drawer=CatalogFrame(nodes,true)
+        assertNull(app.octopus.local.safety.ConfiguredBasketVerification.target(meal,KeetaMealChoices(meal.cart),reader,drawer,1200))
         val proof=app.octopus.local.safety.ConfiguredBasketVerification.target(meal,selection,reader,drawer,1200)!!
+        val returnCommand = app.octopus.local.automation.KeetaOwnedDrawerReturn.createConfigured(drawer,proof.raw,meal,reader.VERSION,1250)!!
+        assertTrue(returnCommand.consumeBack(drawer,meal.cart,reader.VERSION,1300))
+        assertFalse(returnCommand.consumeBack(drawer,meal.cart,reader.VERSION,1301))
+        assertNull(app.octopus.local.automation.KeetaOwnedDrawerReturn.createConfigured(drawer,proof.raw,meal,"future",1250))
+        assertNull(app.octopus.local.automation.KeetaOwnedDrawerReturn.createConfigured(drawer,proof.raw,meal,reader.VERSION,700000))
         assertTrue(proof.raw.lines.single().choices.all { it.quantity == null })
         assertTrue(proof.resolved.lines.single().choices.all { it.quantity == 1 })
         val record=PreparedBasketRecord.create(meal.cart,proof.resolved,reader.VERSION,1200)!!
@@ -57,6 +63,38 @@ class KeetaMealChoicesTest {
         assertEquals(2550L,total.total)
         assertTrue(total.fresh(meal.cart,1500))
         assertFalse(total.fresh(meal.cart.copy(items=listOf(meal.cart.items.single().copy(quantity=2))),1500))
+        val sourceFrame = CatalogFrame(listOf(
+            CatalogNode(0,-1,"FlutterCart_title","السلة\n${cart.restaurant}","android.view.View",false,false,false),
+            CatalogNode(1,-1,"FlutterCart_scroll_view","المجموع\n20\n§","android.view.View",false,false,false),
+            CatalogNode(2,1,"FlutterCart_cartItem","${reader.title}\nجانب أ\nمشروب ب\nتعديل\n20\n§","android.view.View",true,false,false),
+            CatalogNode(3,2,"menuItemActionDualButtonValue","1","android.view.View",false,false,false)
+        ), true)
+        val totals = mutableMapOf<ProviderId, FinalTotalReading>()
+        val visits = mutableListOf<ProviderId>()
+        kotlinx.coroutines.runBlocking {
+            app.octopus.local.automation.CartComparisonFlow().run({}, { true }, { provider ->
+                visits += provider
+                if (provider == ProviderId.KEETA) {
+                    assertTrue(proof.matches(meal.cart, drawer, reader.VERSION, 1500))
+                    totals[provider] = total
+                } else {
+                    assertNotNull(app.octopus.local.safety.ConfiguredBasketVerification.source(meal,sourceFrame,source,1500))
+                    val changed = sourceFrame.copy(nodes=sourceFrame.nodes.map {
+                        if(it.id=="menuItemActionDualButtonValue") it.copy(label="2") else it })
+                    assertNull(app.octopus.local.safety.ConfiguredBasketVerification.source(meal,changed,source,1500))
+                    val sourceQuote = app.octopus.local.pricing.QuoteExtractor().extract(SafeSnapshot(listOf(
+                        SafeToken(PriceField.SUBTOTAL,2000,10,30,0,200,"subtotal"),
+                        SafeToken(PriceField.ORDER_TOTAL,2700,40,60,0,200,"total")),2,false))
+                    totals[provider] = FinalTotalReading(provider,HungerStationCatalog.TESTED_VERSION,
+                        meal.cart.fingerprint,sourceQuote.fields,1500)
+                }
+                null
+            }, { true }, {}, totalAvailable={totals[it]?.fresh(meal.cart,1600)==true},
+                providerOrder=listOf(ProviderId.KEETA,ProviderId.HUNGERSTATION))
+        }
+        assertEquals(listOf(ProviderId.KEETA,ProviderId.HUNGERSTATION),visits)
+        assertEquals(2,totals.size)
+        assertEquals(150L,totals.getValue(ProviderId.HUNGERSTATION).total-totals.getValue(ProviderId.KEETA).total)
     }
     @Test fun headerVisibleBeforeRowsDoesNotRejectIncompleteViewport() {
         val full = frame()
