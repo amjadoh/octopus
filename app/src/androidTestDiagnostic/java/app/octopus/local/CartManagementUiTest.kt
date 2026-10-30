@@ -42,6 +42,23 @@ class CartManagementUiTest {
             assertFalse(graph.catalog.value.comparisonRunning)
         }
     }
+    @Test fun comparisonShowsActualBasketTotalsEvenWhenMenuPricesWereUnreadable() {
+        val request=setup()
+        compose.onNodeWithText("رجوع").performClick()
+        compose.runOnIdle {
+            val now=System.currentTimeMillis()
+            graph.catalog.value=graph.catalog.value.copy(selectedRestaurant=request.restaurant,
+                previews=ProviderId.entries.map { MenuCostPreview(it,request.fingerprint,null,emptyList(),now,"fixture",error="لم تكتمل قراءة القائمة") },
+                finalTotals=mapOf(
+                    ProviderId.HUNGERSTATION to FinalTotalReading(ProviderId.HUNGERSTATION,"fixture",request.fingerprint,mapOf(PriceField.ORDER_TOTAL to 1100L),now),
+                    ProviderId.KEETA to FinalTotalReading(ProviderId.KEETA,"fixture",request.fingerprint,mapOf(PriceField.ORDER_TOTAL to 1250L),now)))
+        }
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("11 ر.س"))
+        compose.onNodeWithText("11 ر.س").assertIsDisplayed()
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("12.5 ر.س"))
+        compose.onNodeWithText("12.5 ر.س").assertIsDisplayed()
+        compose.onNodeWithText("أسعار الوجبات المقروءة").assertDoesNotExist()
+    }
     @Test fun cancelPreservesCartAndConfirmationDeletesOnlyActiveDraft() {
         val request = setup()
         compose.onNodeWithText("حذف سلة الأخطبوط").performClick()

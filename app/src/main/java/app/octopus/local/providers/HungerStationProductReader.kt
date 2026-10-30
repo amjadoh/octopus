@@ -31,7 +31,7 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
             // Recorded ALBAIK optional groups use a group heading plus an explicit upper limit;
             // required sections retain the separate "مطلوب" marker below.
             val optionalLimit = nodes.getOrNull(i + 1)?.takeIf { !it.clickable }?.label?.let(::clean)
-            if (!node.clickable && text.matches(Regex("اختر من اضافات-(مبرده| من غير صوص|صوص) إلى .{1,100}")) &&
+            if (!node.clickable && text.matches(Regex("اختر من اضافات-(مبرده| من غير صوص|صوص|بطاطس) إلى .{1,100}")) &&
                 optionalLimit in setOf("اختيار واحد", "ما يصل إلى خيارين")) {
                 val maximum = if(optionalLimit == "ما يصل إلى خيارين") 2 else 1
                 if(!headersInFrame.add(text)) unsupported=true
@@ -66,7 +66,7 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
                 val value = text.lineSequence().first().trim()
                 // Recorded choice rows are merged names with order-count/price suffixes; recommendation rows are excluded above.
                 val choiceShape = text.contains('\n') && (text.contains("طلب") || text.contains('§')) ||
-                    (text in setOf("بدون سلطة", "بدون صلصة", "بدون مخلل حار", "بدون مخلل") &&
+                    (text in setOf("بدون سلطة", "بدون صلصة", "بدون مخلل حار", "بدون مخلل", "بدون بطاطس", "بدون صلصة ثوم") &&
                         node.className in setOf("android.view.View", "android.widget.ImageView"))
                 if (!choiceShape && value.any(Char::isLetter)) unsupported = true
                 if (choiceShape && value.any(Char::isLetter)) {

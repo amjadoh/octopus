@@ -2,12 +2,29 @@ package app.octopus.local
 
 import app.octopus.local.automation.*
 import app.octopus.local.providers.*
+import app.octopus.local.domain.*
 import kotlinx.coroutines.*
 import org.junit.Assert.*
 import org.junit.Test
 
 /** Replays observed option grammar; these are local regression tests, not live provider runs. */
 class HungerStationProductReadSessionTest {
+    @Test fun observedTawookOptionalRemovalsDoNotBlockTheUnmodifiedProduct() = runBlocking {
+        val restaurant=LiveRestaurant("البيك",null,"البيك")
+        val item=LiveMenuItem("طاووق",1050,"tawook")
+        val labels=listOf("تمويه","طاووق","اختر من اضافات-بطاطس إلى طاووق","اختيار واحد","بدون بطاطس",
+            "اختر من اضافات- من غير صوص إلى طاووق","اختيار واحد","بدون مخلل",
+            "اختر من اضافات-صوص إلى طاووق","اختيار واحد","بدون صلصة ثوم","غالبًا ما يتم طلبه مع")
+        val frame=CatalogFrame(listOf(CatalogNode(0,-1,"pdpCloseButton","","android.widget.ImageView",true,false,false))+
+            labels.mapIndexed { i,label -> CatalogNode(i+1,-1,"",label,"android.view.View",label=="تمويه" || label.startsWith("بدون "),false,false) }+
+            CatalogNode(labels.size+1,-1,"flutterAddButton","إضافة\n§\n10.50","android.widget.Button",true,false,false),true)
+        val details=HungerStationProductReadSession().read(restaurant,item,{frame},{error("Options end is already visible")},{1000}).details
+        assertTrue(details.optionsComplete)
+        assertEquals(1050L,details.product.listedPriceHalala)
+        assertEquals(3,details.product.groups.size)
+        assertTrue(details.product.groups.all { it.minimum==0 })
+        assertTrue(MenuSelectionValidator().selectConfigured(details,ProductSelection(details.product.id,emptyMap(),1),1000) is SelectionResult.Accepted)
+    }
     private val restaurant = LiveRestaurant("مدور", null, "مدور")
     private val item = LiveMenuItem("فطيرة جبن فيتا", 700, "recorded-item")
     private fun page(end: Boolean, choice: Boolean = true): CatalogFrame {

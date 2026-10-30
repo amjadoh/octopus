@@ -293,7 +293,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                     } }
                 }
             }
-            if (state.previews.isNotEmpty()) {
+            if (!comparisonOnly && state.previews.isNotEmpty()) {
                 item { Text("أسعار الوجبات المقروءة", fontSize = 22.sp, fontWeight = FontWeight.Bold) }
                 item { Text("بيانات القائمة منفصلة عن إجمالي مراجعة الطلب. لا يدخل سعر ناقص في ترتيب النتائج، وتطابق العنوان والفرع يحتاج تحققًا.", fontSize = 12.sp, color = OctopusPalette.Muted) }
                 item { ComparisonSummary(state.previews, state.finalTotals, cart, currentQuoteTime) }
@@ -622,7 +622,7 @@ private fun ComparisonSummary(previews: List<MenuCostPreview>, totals: Map<Provi
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(label, Modifier.weight(1.2f), fontSize = 12.sp, color = OctopusPalette.Muted)
                     sources.forEachIndexed { sourceIndex, source ->
-                        val value = if (index == 4) totals[providers[sourceIndex]]?.takeIf { it.fresh(cart, now) }?.total?.let(::money) ?: "غير مقروء"
+                        val value = if (index == 4) totals[providers[sourceIndex]]?.let { if (it.fresh(cart, now)) money(it.total) else "قراءة سابقة — أعد التحقق" } ?: "لم يُقرأ الإجمالي"
                         else if (source?.fresh(cart, now) != true) "غير مقروء" else when (index) {
                             0 -> source.itemSubtotal?.let(::money) ?: "غير مقروء"
                             1 -> source.calculationAt(now)?.itemDiscount?.let(::money) ?: "غير مقروء"
