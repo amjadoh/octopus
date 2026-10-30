@@ -33,7 +33,7 @@ for variant in ('diagnostic',):
     assert len(certs) == 1 and certs[0].replace(':', '').lower() == expected_cert, 'Unexpected APK signing certificate'
     manifest = subprocess.check_output([str(tool / 'aapt'), 'dump', 'xmltree', str(apk), 'AndroidManifest.xml'], text=True)
     badging = subprocess.check_output([str(tool / 'aapt'), 'dump', 'badging', str(apk)], text=True)
-    assert "versionCode='23'" in badging and "versionName='1.3.15-diagnostic'" in badging, 'Wrong APK version'
+    assert "versionCode='24'" in badging and "versionName='1.3.16-diagnostic'" in badging, 'Wrong APK version'
     assert 'android.permission.INTERNET' in manifest, 'Private in-app updater requires HTTPS connectivity'
     with zipfile.ZipFile(apk) as z:
         dex = b''.join(z.read(n) for n in z.namelist() if n.endswith('.dex'))
@@ -43,12 +43,14 @@ for variant in ('diagnostic',):
         blocks = manifest.split('E: service ')
         service = next(b for b in blocks[1:] if 'app.octopus.local.automation.OctopusAccessibilityService' in b)
         assert 'android:enabled' in service and '0x0' in service.split('E: intent-filter')[0]
-    dest = out / 'octopus-1.3.15.apk'
+    dest = out / 'octopus-1.3.16.apk'
     shutil.copy2(apk, dest)
     apks.append({'file': dest.name, 'bytes': dest.stat().st_size, 'sha256': hashlib.sha256(dest.read_bytes()).hexdigest(), 'signatureVerified': True})
 gate = json.loads((root / 'docs/COMPARISON_RELEASE_GATE.json').read_text(encoding='utf-8'))
-assert gate['ready'] is True
-summary = {'version': '1.3.15', 'versionCode': 23, 'commit': os.environ['GITHUB_SHA'],
+plan = json.loads((root / 'docs/RELEASE_PLAN.json').read_text(encoding='utf-8'))
+user_trial = plan.get('publicationMode') == 'user_trial' and plan.get('userTrialAuthorized') is True and plan.get('userRequestedPublication') is True and plan.get('realComparisonComplete') is False
+assert gate['ready'] is True or user_trial, 'Release requires physical acceptance or explicit user-trial authorization'
+summary = {'version': '1.3.16', 'versionCode': 24, 'commit': os.environ['GITHUB_SHA'],
            'runUrl': f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
            'unitTestExecutions': sum(int(s.get('tests', 0)) for s in suites), 'lint': lint, 'apks': apks,
            'demoIsolatedFromDiagnosticApk': True, 'deviceUiTestsExecuted': True,
@@ -60,6 +62,7 @@ summary = {'version': '1.3.15', 'versionCode': 23, 'commit': os.environ['GITHUB_
            'realSelectedCartHandoffVerified': gate['realSelectedCartHandoffVerified'],
            'physicalDeviceAcceptance': gate['latestScopedAcceptance'],
            'automaticCheapestApprovalVerified': False, 'productionAiActivated': False,
+           'publicationMode': plan.get('publicationMode', 'accepted_release'), 'physicalAcceptanceComplete': gate['ready'],
            'releaseScope': gate['scope'], 'signing': 'stable preview certificate',
            'signingCertificateSha256': expected_cert}
 (out / 'validation-summary-ci.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
