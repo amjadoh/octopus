@@ -6,10 +6,78 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class KeetaMealChoicesTest {
+    @Test fun configuredSelectionToVerifiedReviewKeepsOptionsAndTotalBoundToSameRequest() {
+        val source = BasketEvidence(ProviderId.HUNGERSTATION, cart.restaurant, listOf(
+            BasketLineEvidence(reader.title, cart.items.single().options.map { BasketChoiceEvidence(it.value, null) }, 1, 2000)), 2000, true)
+        val groups = cart.items.single().options.mapIndexed { i, option ->
+            MenuChoiceGroup("group$i", option.group, 1, 1, listOf(MenuChoice("choice$i", option.value, true)))
+        }
+        val schema = ConfiguredProduct(cart.restaurant, MenuProduct("meal", reader.title, null, false, 2000, groups),
+            CatalogProvenance(ProviderId.HUNGERSTATION, HungerStationCatalog.TESTED_VERSION, 1000, "synthetic"), true, null)
+        val meal = app.octopus.local.automation.SingleChoiceMeal.create(source, schema, 1100)!!
+        assertEquals(cart, meal.cart)
+        val selection = KeetaMealChoices(meal.cart)
+        val done = mutableSetOf<String>()
+        repeat(2) {
+            val productFrame = frame(done, nestedRadio=true)
+            val step = selection.next(productFrame, reader) as KeetaMealChoices.Step.Select
+            assertTrue(selection.consume(step, productFrame, reader))
+            done += step.value
+        }
+        selection.next(frame(done), reader)
+        selection.endObserved()
+        assertEquals(KeetaMealChoices.Step.Ready, selection.next(frame(done), reader))
+        val nodes = mutableListOf<CatalogNode>()
+        fun n(p: Int, text: String = "", cls: String = "android.view.ViewGroup", click: Boolean = false): Int {
+            val i=nodes.size; nodes += CatalogNode(i,p,"",text,cls,click,false,false); return i
+        }
+        val root=n(-1); n(root,cart.restaurant,"android.widget.TextView")
+        val pane=n(root); val header=n(pane)
+        n(header,"الأصناف المضافة","android.widget.TextView"); n(header,"تفريغ السلة","android.widget.TextView")
+        val scroll=n(pane,cls="android.widget.ScrollView"); val content=n(scroll); val section=n(content); val row=n(section,click=true)
+        n(row,reader.title,"android.widget.TextView")
+        n(row,"وجبة تجريبية، جانب أ، مشروب ب","android.widget.TextView")
+        n(row,"20.00 ﷼","android.widget.TextView"); n(row,"1","android.widget.TextView",true)
+        val footer=n(root,click=true); val action=n(footer,click=true); val label=n(footer)
+        n(label,"إتمام الدفع","android.widget.TextView")
+        val drawer=CatalogFrame(nodes,true)
+        val proof=app.octopus.local.safety.ConfiguredBasketVerification.target(meal,selection,reader,drawer,1200)!!
+        assertTrue(proof.raw.lines.single().choices.all { it.quantity == null })
+        assertTrue(proof.resolved.lines.single().choices.all { it.quantity == 1 })
+        val record=PreparedBasketRecord.create(meal.cart,proof.resolved,reader.VERSION,1200)!!
+        val permit=app.octopus.local.safety.PreparedReviewAdmission.create(ProviderId.KEETA,meal.cart,record,drawer,reader.VERSION,1250,proof)!!
+        val target=app.octopus.local.safety.ReviewNavigationGuard.target(ProviderId.KEETA,drawer,meal.cart,reader.VERSION,permit,1300)!!
+        assertEquals(action,target.index)
+        assertTrue(permit.consume(drawer,target,ProviderId.KEETA,meal.cart,reader.VERSION,1300))
+        assertFalse(permit.consume(drawer,target,ProviderId.KEETA,meal.cart,reader.VERSION,1301))
+        val quote=app.octopus.local.pricing.QuoteExtractor().extract(SafeSnapshot(listOf(
+            SafeToken(PriceField.SUBTOTAL,2000,10,30,0,200,"subtotal"),
+            SafeToken(PriceField.ORDER_TOTAL,2550,40,60,0,200,"total")),2,false))
+        val total=FinalTotalReading(ProviderId.KEETA,reader.VERSION,meal.cart.fingerprint,quote.fields,1400)
+        assertEquals(2550L,total.total)
+        assertTrue(total.fresh(meal.cart,1500))
+        assertFalse(total.fresh(meal.cart.copy(items=listOf(meal.cart.items.single().copy(quantity=2))),1500))
+    }
+    @Test fun headerVisibleBeforeRowsDoesNotRejectIncompleteViewport() {
+        val full = frame()
+        val rows = full.nodes.filter { it.label == "جانب أ" || it.label == "مشروب ب" }.map { it.parent }.toSet()
+        val hidden = rows.flatMap { full.descendants(it) }.map { it.index }.toSet()
+        val partial = full.copy(nodes = full.nodes.filter { it.index !in hidden })
+        val session = KeetaMealChoices(cart)
+        assertEquals(KeetaMealChoices.Step.Scroll, session.next(partial, reader))
+        assertTrue(session.next(full, reader) is KeetaMealChoices.Step.Select)
+        assertNull(session.addTarget(partial, reader))
+        val badgeOnly = partial.copy(nodes = partial.nodes.filter { it.label != "اختر 1" })
+        val clippedSession = KeetaMealChoices(cart)
+        assertEquals(KeetaMealChoices.Step.Scroll, clippedSession.next(badgeOnly, reader))
+        clippedSession.endObserved()
+        assertFalse(clippedSession.ready)
+        assertTrue(clippedSession.next(full, reader) is KeetaMealChoices.Step.Select)
+    }
     private val cart = CanonicalCart("مطعم تجريبي", null, listOf(CanonicalItem("وجبة تجريبية", null,
         listOf(CartOption("الجانب", "جانب أ"), CartOption("المشروب", "مشروب ب")), 1)))
     private val reader = KeetaMenuReader(cart.restaurant, cart.items.single().name, "3.13.301", setOf("جانب أ", "مشروب ب"))
-    private fun frame(done: Set<String> = emptySet(), quantity: String = "1", unknownGroup: Boolean = false): CatalogFrame {
+    private fun frame(done: Set<String> = emptySet(), quantity: String = "1", unknownGroup: Boolean = false, nestedRadio: Boolean = false): CatalogFrame {
         val nodes = mutableListOf<CatalogNode>()
         fun node(parent: Int, label: String = "", click: Boolean = false, cls: String = "android.view.ViewGroup", scroll: Boolean = false): Int {
             val i = nodes.size
@@ -30,11 +98,16 @@ class KeetaMealChoicesTest {
             node(header, if (value in done) "تم" else "اختر 1", cls="android.widget.TextView")
             val rows = node(group)
             val row = node(rows, click=true)
-            node(row, value, cls="android.widget.TextView")
+            if (nestedRadio) {
+                val nameHandler = node(row, click=true)
+                val labelBox = node(nameHandler)
+                node(labelBox, value, cls="android.widget.TextView")
+                node(nameHandler, click=true) // radio; nameHandler opens modifiers
+            } else node(row, value, cls="android.widget.TextView")
         }
         node(modal) // close slot
         val footer = node(modal)
-        val action = node(footer)
+        val action = node(node(node(footer)))
         node(action, click=true)
         val label = node(action)
         node(label, "إضافة إلى السلة", cls="android.widget.TextView")
@@ -61,6 +134,14 @@ class KeetaMealChoicesTest {
         assertNotNull(session.addTarget(f,reader))
         assertNull(session.addTarget(frame(setOf(first.value,second.value),quantity="2"),reader))
     }
+    @Test fun nestedChoiceSelectsRadioInsteadOfOpeningModifierDetails() {
+        val f = frame(nestedRadio=true)
+        val step = KeetaMealChoices(cart).next(f, reader) as KeetaMealChoices.Step.Select
+        assertTrue(step.target.clickable)
+        assertTrue(f.descendants(step.target.index).all { it.label.isBlank() })
+        val sibling = f.nodes.single { it.parent == step.target.parent && it.index != step.target.index }
+        assertTrue(f.descendants(sibling.index).any { it.label == step.value })
+    }
     @Test fun failedAcknowledgementUnknownRequiredGroupAndIncompleteFrameCannotAdd() {
         val session=KeetaMealChoices(cart)
         val f=frame()
@@ -80,6 +161,9 @@ class KeetaMealChoicesTest {
         assertNotNull(reader.configuredChoices("جانب أ، مشروب ب"))
         assertNull(reader.configuredChoices("جانب أ، مشروب آخر"))
         assertNull(reader.configuredChoices("جانب أ، جانب أ"))
+        assertNotNull(reader.configuredChoices("وجبة تجريبية، جانب أ، مشروب ب"))
+        assertNull(reader.configuredChoices("وجبة مختلفة، جانب أ، مشروب ب"))
+        assertNull(reader.configuredChoices("وجبة تجريبية، وجبة تجريبية، جانب أ، مشروب ب"))
     }
 
     @Test fun followsPartlyVisibleGroupAndScopesScrollingToProductSheet() {

@@ -29,16 +29,22 @@ class SingleChoiceMeal private constructor(
                 product.source.providerVersion != HungerStationCatalog.TESTED_VERSION || !product.source.fresh(now, 30_000) ||
                 evidence.restaurant != product.restaurant) return null
             val row = evidence.lines.singleOrNull() ?: return null
-            val groups = product.product.groups
-            if (row.quantity != 1 || row.name != product.product.title || row.lineAmount == null || row.lineAmount < 0 ||
+            val allGroups = product.product.groups
+            val variant = if (row.name == product.product.title) null else allGroups.singleOrNull { g ->
+                g.title == "اختر العنصر" && g.minimum == 1 && g.maximum == 1 &&
+                    row.name.startsWith(product.product.title + " - ") && g.choices.count { it.available && it.title == row.name } == 1
+            } ?: if (row.name != product.product.title) return null else null
+            val groups = allGroups.filter { it != variant && it.minimum > 0 }
+            if (row.quantity != 1 || row.lineAmount == null || row.lineAmount < 0 ||
                 evidence.subtotal != row.lineAmount || groups.isEmpty() || groups.size > 12 ||
                 groups.any { it.minimum != 1 || it.maximum != 1 } || row.choices.size != groups.size ||
                 row.choices.any { it.quantity != null && it.quantity != 1 } ||
                 row.choices.map { it.value }.distinct().size != row.choices.size) return null
             val used = mutableSetOf<String>()
             val options = row.choices.map { choice ->
-                val group = groups.singleOrNull { g -> g.choices.count { it.available && it.title == choice.value } == 1 }
+                val group = allGroups.singleOrNull { g -> g.choices.count { it.available && it.title == choice.value } == 1 }
                     ?: return null
+                if (group !in groups) return null // Optional selections need a separate multiplicity proof.
                 if (!used.add(group.id)) return null
                 CartOption(group.title, choice.value)
             }

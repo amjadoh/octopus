@@ -17,7 +17,9 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
         if (!frame.complete) unsupported = true
         require(HungerStationCatalog.screen(frame) == CatalogScreen.PRODUCT) { "تعذر التعرف على خيارات الوجبة." }
         val nodes = frame.nodes.filter { it.label.isNotBlank() }
-        if (frame.nodes.any { it.enteredText } || nodes.count { !it.clickable && clean(it.label) == item.name } > 1) unsupported = true
+        val headings = nodes.withIndex().count { (i, n) -> !n.clickable && clean(n.label) == item.name &&
+            !(nodes.getOrNull(i+1)?.label?.let(::clean) == "مطلوب" && nodes.getOrNull(i+2)?.label?.let(::clean) == "اختيار واحد") }
+        if (frame.nodes.any { it.enteredText } || headings > 1) unsupported = true
         titleSeen = titleSeen || nodes.any { !it.clickable && clean(it.label) == item.name }
         enabled = frame.nodes.singleOrNull { it.id == "flutterAddButton" }?.enabled == true
         bodies += nodes.joinToString("|") { it.id + clean(it.label) }
@@ -31,6 +33,15 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
             // Recorded ALBAIK optional groups use a group heading plus an explicit upper limit;
             // required sections retain the separate "مطلوب" marker below.
             val optionalLimit = nodes.getOrNull(i + 1)?.takeIf { !it.clickable }?.label?.let(::clean)
+            // Observed optional sections on HS 8.0.303. The imported cart must separately
+            // prove that none of these multi-select additions was selected.
+            val optionalMaximum = optionalLimit?.let { Regex("ما يصل إلى ([1-9]) خيارات").matchEntire(it)?.groupValues?.get(1)?.toInt() }
+            if (!node.clickable && text in setOf("الاختيار من الاضافات", "اضافة") && optionalMaximum != null) {
+                if (!headersInFrame.add(text)) unsupported = true
+                group = groups.getOrPut(text) { Group(text, 0, optionalMaximum) }
+                if (group.minimum != 0 || group.maximum != optionalMaximum) unsupported = true
+                i += 2; continue
+            }
             if (!node.clickable && text.matches(Regex("اختر من اضافات-(مبرده| من غير صوص|صوص|بطاطس) إلى .{1,100}")) &&
                 optionalLimit in setOf("اختيار واحد", "ما يصل إلى خيارين")) {
                 val maximum = if(optionalLimit == "ما يصل إلى خيارين") 2 else 1
@@ -55,6 +66,13 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
                 if (group.minimum != 1) unsupported = true
                 i += 3; continue
             }
+            // A scroll can clip the heading while leaving its limit and an overlapping
+            // already-read choice. Restore only the uniquely proven single-choice group.
+            if (group == null && !node.clickable && text == "اختيار واحد") {
+                val overlap = nodes.getOrNull(i + 1)?.takeIf { it.clickable }?.label?.let(::clean)?.lineSequence()?.first()
+                val known = groups.values.singleOrNull { it.maximum == 1 && overlap in it.choices }
+                if (known != null) { group = known; i++; continue }
+            }
             if (text == "مطلوب" || text == "اختياري" || text.startsWith("اختيار ")) unsupported = true
             // Observed dismiss scrim and nutrition notice, before any option section.
             // They are read-only metadata here and never become actionable choices.
@@ -65,7 +83,8 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
             if (node.clickable && node.id != "flutterAddButton" && node.id != "pdpCloseButton" && node.id != "pdpZoomButton") {
                 val value = text.lineSequence().first().trim()
                 // Recorded choice rows are merged names with order-count/price suffixes; recommendation rows are excluded above.
-                val choiceShape = text.contains('\n') && (text.contains("طلب") || text.contains('§')) ||
+                val choiceShape = text.contains('\n') && (text.contains("طلب") || text.contains('§') || text.contains("سعرة")) ||
+                    (group?.title == "اختر العنصر" && !text.contains('\n') && text.startsWith(item.name + " - ")) ||
                     (text in setOf("بدون سلطة", "بدون صلصة", "بدون مخلل حار", "بدون مخلل", "بدون بطاطس", "بدون صلصة ثوم") &&
                         node.className in setOf("android.view.View", "android.widget.ImageView"))
                 if (!choiceShape && value.any(Char::isLetter)) unsupported = true

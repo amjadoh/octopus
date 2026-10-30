@@ -5,6 +5,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class KeetaRestaurantNameTest {
+    @org.junit.Test fun observedCampaignSpacingPreservesRestaurantIdentity() {
+        assertTrue(KeetaRestaurantName.matches("كنتاكي", "كنتاكي - مخلل كل شي🥒"))
+        assertTrue(KeetaRestaurantName.matches("كنتاكي", "كنتاكي - مخلل كل شي 🥒"))
+        assertFalse(KeetaRestaurantName.matches("كنتاكي", "كنتاكي النرجس - مخلل كل شي🥒"))
+        assertFalse(KeetaRestaurantName.matches("مطعم آخر", "كنتاكي - مخلل كل شي🥒"))
+    }
     @Test fun observedCouponDecorationPreservesRestaurantAndBranchIdentity() {
         assertTrue(KeetaRestaurantName.matches("كودو", "🔥 كودو -كوبونات 🔥"))
         assertFalse(KeetaRestaurantName.matches("كودو", "🔥 كودو النرجس -كوبونات 🔥"))

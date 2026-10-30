@@ -109,7 +109,8 @@ class CatalogSourceRegressionUiTest {
                 assertTrue(graph.showLocalRestaurants())
                 compose.activity.setContent { MaterialTheme { CatalogScreen(graph, {}, {}) } }
             }
-            compose.onNodeWithText("منطقة عرض المطاعم").assertIsDisplayed()
+            compose.onNodeWithText("منطقة عرض المطاعم").assertDoesNotExist()
+            compose.onNodeWithText("ابدأ من هنقرستيشن").assertIsDisplayed()
             compose.onNodeWithText("عنوانك النشط في هنقرستيشن").assertDoesNotExist()
             compose.onNodeWithText("ابحث عن مطعم…").performTextInput("اثيل")
             compose.onNode(hasScrollToNodeAction() and SemanticsMatcher.keyIsDefined(
@@ -249,7 +250,7 @@ class CatalogSourceRegressionUiTest {
         } finally { cleanup(graph) }
     }
 
-    @Test fun restaurantMenuHasDirectLocationChangeWithoutLeavingTheMenu() {
+    @Test fun restaurantMenuHidesSavedLocationWithoutChangingItsSelectedRestaurant() {
         val graph = graph()
         try {
             val manual = LiveRestaurant("مطعم موقع للاختبار", null, "مطعم موقع للاختبار")
@@ -258,9 +259,10 @@ class CatalogSourceRegressionUiTest {
                 assertTrue(graph.showLocalMenu(manual))
                 compose.activity.setContent { MaterialTheme { CatalogScreen(graph, {}, {}) } }
             }
-            compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("تغيير الموقع"))
-            compose.onNodeWithText("تغيير الموقع").performClick()
-            compose.onNodeWithText("منطقة قائمة المطاعم").assertIsDisplayed()
+            compose.onNodeWithText("تغيير الموقع").assertDoesNotExist()
+            compose.onNodeWithText("منطقة قائمة المطاعم").assertDoesNotExist()
+            compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("وجبة يدوية محفوظة"))
+            compose.onNodeWithText("وجبة يدوية محفوظة").assertIsDisplayed()
             compose.runOnIdle {
                 assertEquals(manual.name, graph.catalog.value.menu?.restaurant?.name)
                 assertFalse(graph.catalog.value.comparisonRunning)
@@ -291,7 +293,7 @@ class CatalogSourceRegressionUiTest {
             val list = compose.onNode(hasScrollToIndexAction() and SemanticsMatcher.keyIsDefined(
                 androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange))
             list.performScrollToNode(hasText(first.name))
-            compose.onNodeWithText("منطقة عرض المطاعم").assertIsNotDisplayed()
+            compose.onNodeWithText("ابدأ من هنقرستيشن").assertIsNotDisplayed()
             compose.onNodeWithText(first.name).performClick()
             compose.onNodeWithText("اختر هنا، وقارن عندما يكتمل طلبك").assertIsDisplayed()
             compose.runOnIdle { assertEquals(first.name, graph.catalog.value.menu?.restaurant?.name) }
@@ -311,7 +313,7 @@ class CatalogSourceRegressionUiTest {
             list.performScrollToNode(hasText("وجبة ثانية 20"))
             list.performScrollToNode(hasText("العودة للمطاعم"))
             compose.onNodeWithText("العودة للمطاعم").performClick()
-            compose.onNodeWithText("منطقة عرض المطاعم").assertIsDisplayed()
+            compose.onNodeWithText("ابدأ من هنقرستيشن").assertIsDisplayed()
             compose.runOnIdle {
                 assertNull(graph.catalog.value.menu)
                 assertFalse(graph.catalog.value.comparisonRunning)

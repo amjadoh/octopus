@@ -11,7 +11,8 @@ object KeetaRestaurantName {
         // Exact campaign heading observed in the native menu, 2026-10-30.
         // Chain recognition only; never proof of delivery address or branch.
         if (IdentityText.clean(expected) == "كنتاكي" &&
-            IdentityText.clean(displayed) == IdentityText.clean("كنتاكي - مخلل كل شي 🥒")) return true
+            IdentityText.clean(displayed) in setOf("كنتاكي - مخلل كل شي 🥒", "كنتاكي - مخلل كل شي🥒")
+                .map(IdentityText::clean)) return true
         // Exact campaign title observed on the actual Herfy menu on 2026-10-26.
         // This identifies the chain name only; it does not establish branch/address equality.
         if (IdentityText.clean(expected)=="هرفي" &&
