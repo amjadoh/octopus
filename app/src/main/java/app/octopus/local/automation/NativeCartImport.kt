@@ -28,11 +28,20 @@ class NativeCartImport {
 
     /** Complete source contents, before a configured-product schema resolves option counts. */
     fun evidence(frame: CatalogFrame, version: String?, now: Long): BasketEvidence? {
-        if (version != HungerStationCatalog.TESTED_VERSION || now < menuAt || now - menuAt > 30_000 ||
-            HungerStationCatalog.screen(frame) != CatalogScreen.CART ||
-            frame.nodes.any { it.enteredText || it.omittedText }) return null
-        val evidence = BasketEvidenceReader.hungerStation(frame, true)
-        if (!HungerStationCompleteCartProof.matchesMenu(menu ?: return null, evidence)) return null
-        return evidence
+        if (failure(frame, version, now) != null) return null
+        return BasketEvidenceReader.hungerStation(frame, true)
+    }
+
+    fun failure(frame: CatalogFrame, version: String?, now: Long): String? {
+        if (version != HungerStationCatalog.TESTED_VERSION) return "إصدار هنقرستيشن الحالي لم يُتحقق منه؛ لم يبدأ نقل السلة."
+        if (HungerStationCatalog.screen(frame) != CatalogScreen.CART)
+            return "افتح سلة هنقرستيشن ثم اضغط «قارن»؛ الشاشة الحالية ليست سلة معروفة."
+        if (!frame.complete || frame.nodes.any { it.enteredText || it.omittedText })
+            return "قراءة سلة هنقرستيشن غير مكتملة؛ لم يبدأ نقلها."
+        if (menu == null || now < menuAt || now - menuAt > 30_000)
+            return "لم تثبت قراءة حديثة لعداد السلة من قائمة المطعم. ارجع لقائمة المطعم ثم افتح السلة واضغط «قارن» خلال ٣٠ ثانية."
+        if (!HungerStationCompleteCartProof.matchesMenu(menu!!, BasketEvidenceReader.hungerStation(frame, true)))
+            return "لم تتطابق أصناف السلة وكمياتها ومبالغها مع عداد قائمة المطعم؛ لم يبدأ نقل سلة ناقصة."
+        return null
     }
 }
