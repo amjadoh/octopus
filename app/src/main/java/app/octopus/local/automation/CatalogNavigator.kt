@@ -328,7 +328,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     check(installedKeetaProfile()?.version == "3.13.301") { "إصدار كيتا يحتاج تحققًا لمسار الخيارات." }
                     manualJob = null
                     endManualCatalog()
-                    startConfiguredComparison(source, nativeEvidence, probe)
+                    startConfiguredComparison(nativeEvidence, probe)
                     return@launch
                 }
                 val imported = nativeCartImport.read(source,
@@ -345,7 +345,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 // Do not cancel this import job while handing ownership to the comparison job.
                 manualJob = null
                 endManualCatalog()
-                startImportedComparison(desired, source, imported.second)
+                startImportedComparison(desired, imported.second)
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: Exception) {
                 if (generation == token) {
@@ -386,14 +386,14 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         return cart
     }
 
-    private fun startImportedComparison(desired: CanonicalCart, source: CatalogFrame, evidence: BasketEvidence) {
+    private fun startImportedComparison(desired: CanonicalCart, evidence: BasketEvidence) {
         val epoch = ++comparisonEpoch
         graph.catalog.value = graph.catalog.value.copy(comparisonRunning = true, finalTotals = emptyMap(),
             comparisonProgress = emptyMap(), previews = emptyList(), error = null)
         comparisonJob = graph.scope.launch(start = CoroutineStart.LAZY) {
             try {
-                // Source first: read its actual review total before opening the target provider.
-                for (id in listOf(ProviderId.HUNGERSTATION, ProviderId.KEETA)) {
+                // The imported source is already known. Prepare Keeta before reading source review.
+                for (id in listOf(ProviderId.KEETA, ProviderId.HUNGERSTATION)) {
                     currentCoroutineContext().ensureActive()
                     check(graph.draft.value?.fingerprint == desired.fingerprint) { "تغير الطلب؛ توقفت المقارنة." }
                     graph.catalog.value = graph.catalog.value.copy(comparisonProgress = graph.catalog.value.comparisonProgress +
@@ -401,11 +401,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     check(begin(operation = CatalogOperation.BUILD_CART, timeoutMillis = 600_000) {
                         if (id == ProviderId.HUNGERSTATION) {
                             requestFingerprint = desired.fingerprint
-                            val root = service.rootInActiveWindow ?: error("اختفت سلة هنقرستيشن.")
-                            try { requireProviderWindow(root); verifyActiveFrame(source, root.windowId) }
-                            finally { @Suppress("DEPRECATION") root.recycle() }
-                            rememberPrepared(desired, evidence, HungerStationCatalog.TESTED_VERSION)
-                            readFinalTotal(desired, source)
+                            readImportedHungerTotal(desired, evidence)
                         } else prepareOwnedKeetaSteps(desired, true, PlainPreparationProgress())
                     }) { graph.catalog.value.error ?: "تعذر بدء المقارنة." }
                     job?.join()
@@ -415,6 +411,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     val total = graph.catalog.value.finalTotals[id]?.fresh(desired, System.currentTimeMillis()) == true
                     graph.catalog.value = graph.catalog.value.copy(comparisonProgress = graph.catalog.value.comparisonProgress +
                         (id to CartComparisonProgress(id, if (total) CartComparisonStep.TOTAL_READ else CartComparisonStep.REVIEW_UNAVAILABLE)))
+                }
+                check(ProviderId.entries.all { graph.catalog.value.finalTotals[it]?.fresh(desired, System.currentTimeMillis()) == true }) {
+                    "لم تكتمل قراءة الإجماليين؛ لا توجد مقارنة نهائية بعد."
                 }
                 graph.catalog.value = graph.catalog.value.copy(message = "انتهت المقارنة. راجع إجمالي كل منصة وتطابق عنوان التوصيل والفرع.")
             } catch (cancelled: CancellationException) { throw cancelled }
@@ -430,7 +429,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         comparisonJob?.start()
     }
 
-    private fun startConfiguredComparison(source: CatalogFrame, original: BasketEvidence, probe: CanonicalCart) {
+    private fun startConfiguredComparison(original: BasketEvidence, probe: CanonicalCart) {
         val epoch = ++comparisonEpoch
         val previousFingerprint = graph.draft.value?.fingerprint
         graph.catalog.value = graph.catalog.value.copy(comparisonRunning = true, finalTotals = emptyMap(),
@@ -441,11 +440,12 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 check(begin(operation = CatalogOperation.BUILD_CART, timeoutMillis = 600_000) {
                     phase = "قراءة مجموعات خيارات وجبتك دون تغيير سلة هنقرستيشن"
                     val root = service.rootInActiveWindow ?: error("اختفت سلة هنقرستيشن.")
-                    try { requireProviderWindow(root); verifyActiveFrame(source, root.windowId) }
-                    finally { @Suppress("DEPRECATION") root.recycle() }
-                    val edit = HungerStationCartProductCommand.create(source, original, System.currentTimeMillis())
+                    val currentSource = try { requireProviderWindow(root); capture(root) }
+                        finally { @Suppress("DEPRECATION") root.recycle() }
+                    check(BasketEvidenceReader.hungerStation(currentSource, true) == original) { "تغيرت سلة هنقرستيشن قبل قراءة الخيارات." }
+                    val edit = HungerStationCartProductCommand.create(currentSource, original, System.currentTimeMillis())
                         ?: error("لم أثبت عنصر الوجبة لقراءة خياراتها؛ لم أغير السلة.")
-                    act(source, CatalogAction.OPEN_PRODUCT, { it == edit.target }, cartProductCommand = edit)
+                    act(currentSource, CatalogAction.OPEN_PRODUCT, { it == edit.target }, cartProductCommand = edit)
                     val productFrame = await { HungerStationCatalog.screen(it) == CatalogScreen.PRODUCT }
                     val rowName = probe.items.single().name
                     val heading = productFrame.nodes.filter { !it.clickable &&
@@ -468,18 +468,29 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     requestFingerprint = verified.cart.fingerprint
                     meal = verified
                     rememberPrepared(verified.cart, proof.resolved, HungerStationCatalog.TESTED_VERSION)
-                    readFinalTotal(verified.cart, cartFrame, proof)
                 }) { "تعذر بدء قراءة خيارات هنقرستيشن." }
                 job?.join()
                 currentCoroutineContext().ensureActive()
                 check(graph.catalog.value.error == null) { graph.catalog.value.error.orEmpty() }
                 val verified = checkNotNull(meal) { "لم تكتمل قراءة خيارات الوجبة." }
-                check(begin(operation = CatalogOperation.BUILD_CART, timeoutMillis = 600_000) {
-                    prepareConfiguredKeeta(verified)
-                }) { "تعذر بدء تجهيز خيارات كيتا." }
-                job?.join()
-                currentCoroutineContext().ensureActive()
-                check(graph.catalog.value.error == null) { graph.catalog.value.error.orEmpty() }
+                CartComparisonFlow().run(readMenus = {}, available = { true }, prepare = { id ->
+                    check(begin(operation = CatalogOperation.BUILD_CART, timeoutMillis = 600_000) {
+                        if (id == ProviderId.KEETA) prepareConfiguredKeeta(verified)
+                        else {
+                            requestFingerprint = verified.cart.fingerprint
+                            readImportedHungerTotal(verified.cart, original, verified)
+                        }
+                    }) { graph.catalog.value.error ?: "تعذر بدء مرحلة المقارنة." }
+                    job?.join()
+                    currentCoroutineContext().ensureActive()
+                    stepInterrupted?.let { throw CancellationException(it) }
+                    check(graph.catalog.value.error == null) { graph.catalog.value.error.orEmpty() }
+                    null
+                }, unchanged = { graph.draft.value?.fingerprint == verified.cart.fingerprint }, progress = { progress ->
+                    graph.catalog.value = graph.catalog.value.copy(comparisonProgress = graph.catalog.value.comparisonProgress +
+                        (progress.provider to progress))
+                }, totalAvailable = { id -> graph.catalog.value.finalTotals[id]?.fresh(verified.cart, System.currentTimeMillis()) == true },
+                    providerOrder = listOf(ProviderId.KEETA, ProviderId.HUNGERSTATION))
                 check(ProviderId.entries.all { graph.catalog.value.finalTotals[it]?.fresh(verified.cart, System.currentTimeMillis()) == true }) {
                     "لم تكتمل قراءة الإجماليين؛ لا توجد مقارنة نهائية بعد."
                 }
@@ -495,6 +506,27 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             }
         }
         comparisonJob?.start()
+    }
+
+    /** Resume the untouched source after Keeta; never reuse a stale accessibility tree. */
+    private suspend fun readImportedHungerTotal(desired: CanonicalCart, original: BasketEvidence,
+        meal: SingleChoiceMeal? = null) {
+        check(provider == ProviderId.HUNGERSTATION)
+        phase = "العودة لسلة هنقرستيشن والتحقق منها قبل قراءة الإجمالي"
+        val launch = service.packageManager.getLaunchIntentForPackage(provider.packageName)
+            ?: error("هنقرستيشن غير مثبت.")
+        service.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        val resumed = await { HungerStationCatalog.screen(it) in setOf(CatalogScreen.CART, CatalogScreen.MENU) }
+        val frame = if (HungerStationCatalog.screen(resumed) == CatalogScreen.CART) refreshNativeBasketProof(resumed)
+            else readCompleteHungerBasket(resumed, desired).first
+        val raw = BasketEvidenceReader.hungerStation(frame, true)
+        check(raw == original) { "تغيرت سلة هنقرستيشن بعد تجهيز كيتا؛ لم أعتمد إجماليًا لطلب مختلف." }
+        val proof = meal?.let {
+            app.octopus.local.safety.ConfiguredBasketVerification.source(it, frame, raw, System.currentTimeMillis())
+                ?: error("لم يتجدد إثبات خيارات سلة هنقرستيشن.")
+        }
+        rememberPrepared(desired, proof?.resolved ?: raw, HungerStationCatalog.TESTED_VERSION)
+        readFinalTotal(desired, frame, proof)
     }
 
     private suspend fun prepareConfiguredKeeta(meal: SingleChoiceMeal) {
@@ -515,8 +547,25 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             closeKeetaReadSheet(frame)
             frame = await { keetaMenu.menu(it) }
         }
-        check(keetaBasket.emptyMenu(frame)) { "توجد سلة سابقة لهذا المطعم في كيتا؛ لم أضف فوقها أو أكرر الوجبة." }
-        requireFirstBasketAdd(desired)
+        val existing: BasketEvidence? = if (keetaMenu.basketDrawer(frame) || keetaBasket.footerBag(frame) != null) {
+            if (!keetaMenu.basketDrawer(frame)) {
+                keetaBasketAction { keetaBasket.footerBag(it) }
+                frame = await { keetaMenu.basketDrawer(it) }
+            }
+            val observed = keetaBasket.evidence(frame)
+                ?: error("تعذرت قراءة سلة كيتا السابقة كاملة؛ لم أضف فوقها.")
+            // Preliminary identity only. Review admission still needs fresh Keeta group acknowledgement below.
+            check(meal.resolve(observed, System.currentTimeMillis()) != null) {
+                "سلة كيتا السابقة تختلف عن طلبك؛ لم أضف فوقها أو أكرر الوجبة."
+            }
+            closeKeetaReadSheet(frame, meal)
+            frame = await { keetaMenu.menu(it) }
+            observed
+        } else {
+            check(keetaBasket.emptyMenu(frame)) { "لم أثبت أن سلة كيتا فارغة؛ لم أكرر الإضافة." }
+            requireFirstBasketAdd(desired)
+            null
+        }
         openKeetaPreviewProduct(frame)
         frame = awaitKeetaProduct()
         val selection = KeetaMealChoices(desired)
@@ -555,14 +604,22 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             frame = try { requireProviderWindow(root); capture(root) } finally { @Suppress("DEPRECATION") root.recycle() }
         }
         check(complete && selection.ready) { "لم تكتمل مطابقة كل الخيارات؛ لم أضف الوجبة." }
-        phase = "إضافة الوجبة مرة واحدة والتحقق من سلة كيتا"
-        var dispatched = false
-        keetaBasketAction(cartMutation = true) { current -> selection.addTarget(current, keetaMenu)?.takeIf {
-            if (dispatched) false else { dispatched = true; true }
-        } }
+        if (existing == null) {
+            phase = "إضافة الوجبة مرة واحدة والتحقق من سلة كيتا"
+            var dispatched = false
+            keetaBasketAction(cartMutation = true) { current -> selection.addTarget(current, keetaMenu)?.takeIf {
+                if (dispatched) false else { dispatched = true; true }
+            } }
+        } else {
+            phase = "التحقق من السلة المطابقة في كيتا دون تكرار الإضافة"
+            closeKeetaReadSheet(frame)
+        }
         frame = await { keetaMenu.menu(it) && keetaBasket.footerBag(it) != null }
         keetaBasketAction { keetaBasket.footerBag(it) }
         frame = await { keetaMenu.basketDrawer(it) }
+        if (existing != null) check(keetaBasket.evidence(frame) == existing) {
+            "تغيرت سلة كيتا أثناء التحقق من الخيارات؛ لم أكرر الإضافة ولم أعتمد إجماليًا."
+        }
         val proof = app.octopus.local.safety.ConfiguredBasketVerification.target(meal, selection, keetaMenu, frame, System.currentTimeMillis())
             ?: error("لم تتطابق سلة كيتا كاملة بعد الإضافة؛ لم أكرر الإضافة ولم أعتمد سعرًا.")
         check(withContext(Dispatchers.IO) {
@@ -2035,7 +2092,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     }
 
     /** Back from an evidenced basket preview only. No checkout control is selected. */
-    private suspend fun closeKeetaReadSheet(previous: CatalogFrame) {
+    private suspend fun closeKeetaReadSheet(previous: CatalogFrame, meal: SingleChoiceMeal? = null) {
         currentCoroutineContext().ensureActive(); checkSession()
         var drawerReturn: KeetaOwnedDrawerReturn? = null
         val root = service.rootInActiveWindow ?: throw UserInterrupted("اختفت معاينة كيتا؛ توقفت المقارنة.")
@@ -2058,7 +2115,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     val evidence = keetaBasket.evidence(frame) ?: error("لم تثبت سلة كاملة للخروج منها.")
                     @Suppress("DEPRECATION")
                     val version = service.packageManager.getPackageInfo(provider.packageName, 0).versionName
-                    val command = KeetaOwnedDrawerReturn.create(frame, evidence, desired, version, System.currentTimeMillis())
+                    val command = (if (meal != null) KeetaOwnedDrawerReturn.createConfigured(frame, evidence, meal, version, System.currentTimeMillis())
+                        else KeetaOwnedDrawerReturn.create(frame, evidence, desired, version, System.currentTimeMillis()))
                         ?: error("تعذر تحديد إغلاق معاينة السلة.")
                     verifyActiveFrame(frame, root.windowId)
                     currentCoroutineContext().ensureActive(); checkSession()
