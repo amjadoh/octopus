@@ -25,4 +25,4 @@ Validation completed 2026-10-30: 564 unit tests passed, lint passed, diagnostic 
 
 Legacy source/history/test reports are in sibling `checkpoint-before-cart-import-20261030/`. New build logs and temporary-emulator results are saved separately under sibling `native-cart-compare-*` files. Phone screenshots, native carts, credentials and signing materials are not part of source commits.
 
-Remote upload has not been authorized: automatic approval review rejected pushing the checkpoint. Keep work local until explicit user approval to upload the source branches/tag to the configured GitHub repository.
+Remote upload explicitly approved on 2026-10-30: both source branches and `checkpoint-before-cart-import-20261030` were pushed and independently verified with `ls-remote`. Remote main remains `f500983`. Draft PR #3 targets the preserved legacy branch to isolate the new-flow diff; no merge or release is authorized.
