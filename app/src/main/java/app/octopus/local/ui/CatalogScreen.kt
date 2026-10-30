@@ -71,6 +71,9 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
     val menuIdentity = if (comparisonOnly) null else state.menu?.restaurant?.catalogKey
     // Navigation resets position; a refreshed menu or progress update keeps the user's scroll.
     LaunchedEffect(comparisonOnly, menuIdentity) { listState.scrollToItem(0) }
+    LaunchedEffect(state.error, localError) {
+        if (state.error != null || localError != null) listState.scrollToItem(0)
+    }
     LaunchedEffect(Unit) { while (true) { delay(15_000); quoteTime = System.currentTimeMillis() } }
     val currentQuoteTime = maxOf(quoteTime, System.currentTimeMillis())
     fun finishManualReading() {
@@ -104,6 +107,14 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
     }
     Column(Modifier.fillMaxSize()) {
     LazyColumn(Modifier.weight(1f), state = listState, contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        (localError ?: state.error)?.let { error -> item {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("توقفت المقارنة", fontWeight = FontWeight.Bold)
+                    Text(error, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
+                }
+            }
+        } }
         if (!comparisonOnly && state.menu == null) item {
             MosabHomeHeader(query,
                 onQuery = { query = it.take(100) }, enabled = !state.busy,
@@ -316,7 +327,6 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                 }
             }
         } else item { Text(state.message, fontSize = 12.sp, color = OctopusPalette.Muted) }
-        (localError ?: state.error)?.let { error -> item { Text(error, color = MaterialTheme.colorScheme.error, fontSize = 13.sp) } }
         if (!comparisonOnly && state.menu == null && state.restaurants.isNotEmpty()) {
             item {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
