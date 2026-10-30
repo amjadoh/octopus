@@ -11,8 +11,11 @@ android {
         applicationId = "app.octopus.local"
         minSdk = 28
         targetSdk = 35
-        versionCode = 10
-        versionName = "1.3.2"
+        // Test-only older identity exercises a real upgrade to the currently published signed APK.
+        // Release validation rejects this identity; no fixture flag is used by CI publishing.
+        val updateFixture = providers.gradleProperty("octopusUpdateFixture").orNull == "true"
+        versionCode = if (updateFixture) 13 else 23
+        versionName = if (updateFixture) "1.3.5" else "1.3.15"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     val previewStoreFile = System.getenv("OCTOPUS_SIGNING_STORE_FILE")
@@ -25,7 +28,10 @@ android {
         }
     }
     buildTypes {
-        debug { if (!previewStoreFile.isNullOrBlank()) signingConfig = signingConfigs.getByName("stablePreview") }
+        debug {
+            if (!previewStoreFile.isNullOrBlank()) signingConfig = signingConfigs.getByName("stablePreview")
+            if (providers.gradleProperty("octopusLiveBridge").orNull == "true") versionNameSuffix = "-device-tools"
+        }
         release { isMinifyEnabled = false }
     }
     flavorDimensions += "purpose"
@@ -48,9 +54,18 @@ android {
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true; buildConfig = true }
     testOptions { unitTests.isReturnDefaultValues = true }
+    // Explicit local device tooling only. Never part of the app APK or ordinary CI UI tests.
+    if (providers.gradleProperty("octopusLiveProbe").orNull == "true") {
+        sourceSets.getByName("androidTest").java.srcDir(rootProject.file("tools/live-device-probe"))
+    }
+    if (providers.gradleProperty("octopusLiveBridge").orNull == "true") {
+        sourceSets.getByName("debug").java.srcDir(rootProject.file("tools/live-device-bridge"))
+        sourceSets.getByName("debug").manifest.srcFile(rootProject.file("tools/live-device-bridge/AndroidManifest.xml"))
+    }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
 dependencies {
+    implementation("com.google.code.gson:gson:2.11.0")
     implementation(platform("androidx.compose:compose-bom:2025.04.01"))
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.compose.ui:ui")

@@ -14,10 +14,10 @@ out = root / 'release'
 out.mkdir(exist_ok=True)
 tool = Path(os.environ['ANDROID_HOME']) / 'build-tools/35.0.0'
 suites = [ET.parse(p).getroot() for p in (root / 'app/build/test-results').rglob('TEST-*.xml')]
-assert suites and sum(int(s.get('tests', 0)) for s in suites) >= 206
+assert suites and sum(int(s.get('tests', 0)) for s in suites) >= 556
 assert all(int(s.get(k, 0)) == 0 for s in suites for k in ('failures', 'errors', 'skipped'))
 ui_suites = [ET.parse(p).getroot() for p in (root / 'app/build/outputs/androidTest-results/connected').rglob('TEST-*.xml')]
-assert ui_suites and sum(int(s.get('tests', 0)) for s in ui_suites) >= 7, 'Actual emulator UI test results required'
+assert ui_suites and sum(int(s.get('tests', 0)) for s in ui_suites) >= 47, 'Actual emulator UI test results required'
 assert all(int(s.get(k, 0)) == 0 for s in ui_suites for k in ('failures', 'errors', 'skipped'))
 lint = {}
 for variant in ('diagnosticDebug',):
@@ -33,8 +33,8 @@ for variant in ('diagnostic',):
     assert len(certs) == 1 and certs[0].replace(':', '').lower() == expected_cert, 'Unexpected APK signing certificate'
     manifest = subprocess.check_output([str(tool / 'aapt'), 'dump', 'xmltree', str(apk), 'AndroidManifest.xml'], text=True)
     badging = subprocess.check_output([str(tool / 'aapt'), 'dump', 'badging', str(apk)], text=True)
-    assert "versionCode='10'" in badging and "versionName='1.3.2-diagnostic'" in badging, 'Wrong APK version'
-    assert 'android.permission.INTERNET' not in manifest
+    assert "versionCode='23'" in badging and "versionName='1.3.15-diagnostic'" in badging, 'Wrong APK version'
+    assert 'android.permission.INTERNET' in manifest, 'Private in-app updater requires HTTPS connectivity'
     with zipfile.ZipFile(apk) as z:
         dex = b''.join(z.read(n) for n in z.namelist() if n.endswith('.dex'))
     assert (b'Lapp/octopus/local/demo/DemoCatalog;' in dex) == (variant == 'demo')
@@ -43,17 +43,24 @@ for variant in ('diagnostic',):
         blocks = manifest.split('E: service ')
         service = next(b for b in blocks[1:] if 'app.octopus.local.automation.OctopusAccessibilityService' in b)
         assert 'android:enabled' in service and '0x0' in service.split('E: intent-filter')[0]
-    dest = out / 'octopus-1.3.2.apk'
+    dest = out / 'octopus-1.3.15.apk'
     shutil.copy2(apk, dest)
     apks.append({'file': dest.name, 'bytes': dest.stat().st_size, 'sha256': hashlib.sha256(dest.read_bytes()).hexdigest(), 'signatureVerified': True})
-summary = {'version': '1.3.2-alpha', 'versionCode': 10, 'commit': os.environ['GITHUB_SHA'],
+gate = json.loads((root / 'docs/COMPARISON_RELEASE_GATE.json').read_text(encoding='utf-8'))
+assert gate['ready'] is True
+summary = {'version': '1.3.15', 'versionCode': 23, 'commit': os.environ['GITHUB_SHA'],
            'runUrl': f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
            'unitTestExecutions': sum(int(s.get('tests', 0)) for s in suites), 'lint': lint, 'apks': apks,
            'demoIsolatedFromDiagnosticApk': True, 'deviceUiTestsExecuted': True,
            'uiTestExecutions': sum(int(s.get('tests', 0)) for s in ui_suites), 'uiTestDevice': 'Android API 35 emulator; not Honor',
-           'deliveryAppReadingsDeviceVerified': False, 'realTwoProviderComparisonVerified': False,
-           'realProviderCartPreparationVerified': False, 'realFinalTotalsVerified': False,
-           'realSelectedCartHandoffVerified': False, 'releaseScope': 'preview_current_work', 'signing': 'stable preview certificate',
+           'deliveryAppReadingsDeviceVerified': gate['realFinalTotalsVerified'],
+           'realTwoProviderComparisonVerified': gate['realTwoProviderComparisonVerified'],
+           'realProviderCartPreparationVerified': gate['realProviderCartPreparationVerified'],
+           'realFinalTotalsVerified': gate['realFinalTotalsVerified'],
+           'realSelectedCartHandoffVerified': gate['realSelectedCartHandoffVerified'],
+           'physicalDeviceAcceptance': gate['latestScopedAcceptance'],
+           'automaticCheapestApprovalVerified': False, 'productionAiActivated': False,
+           'releaseScope': gate['scope'], 'signing': 'stable preview certificate',
            'signingCertificateSha256': expected_cert}
 (out / 'validation-summary-ci.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
 print(json.dumps(summary, ensure_ascii=False, indent=2))

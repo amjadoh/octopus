@@ -58,6 +58,36 @@ class ProductConfigurationTest {
         wrong.observe(frame("وجبة أخرى" to false,"غالبًا ما يتم طلبه مع" to false))
         assertThrows(IllegalArgumentException::class.java) { wrong.finish(1000) }
     }
+    private fun optionalMadwar(end: Boolean = true, extraControl: Boolean = false): ConfiguredProduct {
+        val reader = HungerStationProductReader(LiveRestaurant("مدور", null, "مدور"),
+            LiveMenuItem("فطيرة جبن فيتا", 700, "gridMenuCell-1-1"))
+        val rows = mutableListOf("تمويه" to true, "فطيرة جبن فيتا" to false,
+            "تنبيهات" to true, "يمكنك اضافة" to false, "اختيار واحد" to false,
+            "بطاطس\n\u202a(§\n6\n+)\u202c" to true)
+        if (extraControl) rows += "اختيار اثنين" to false
+        if (end) { rows += "غالبًا ما يتم طلبه مع" to false; rows += "بطاطس\n§\n6" to true }
+        reader.observe(frame(*rows.toTypedArray()))
+        return reader.finish(1000)
+    }
+    @Test fun observedOptionalSingleChoiceCanBeOmittedOrSelectedWithoutLosingTheAddition() {
+        val details = optionalMadwar()
+        assertTrue(details.optionsComplete)
+        val group = details.product.groups.single()
+        assertEquals(0, group.minimum)
+        assertEquals(1, group.maximum)
+        assertEquals(listOf("بطاطس"), group.choices.map { it.title })
+        val validator = MenuSelectionValidator()
+        val plain = validator.selectConfigured(details, ProductSelection(details.product.id, emptyMap(), 1), 2000)
+        assertTrue(plain is SelectionResult.Accepted)
+        assertTrue((plain as SelectionResult.Accepted).item.options.isEmpty())
+        val selected = validator.selectConfigured(details, ProductSelection(details.product.id,
+            mapOf(group.id to setOf("بطاطس")), 1), 2000) as SelectionResult.Accepted
+        assertEquals(listOf(CartOption(group.title, "بطاطس", 1)), selected.item.options)
+    }
+    @Test fun optionalSectionStillRequiresAnEndMarkerAndKnownSelectionGrammar() {
+        assertFalse(optionalMadwar(end = false).optionsComplete)
+        assertFalse(optionalMadwar(extraControl = true).optionsComplete)
+    }
     @Test fun anotherProductUsesTheSameCompleteObservedOptionGrammar() {
         val other = HungerStationProductReader(restaurant,item.copy(name="وجبة أخرى"))
         other.observe(frame("وجبة أخرى" to false,"غالبًا ما يتم طلبه مع" to false))

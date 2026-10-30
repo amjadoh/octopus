@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-26",
+  "startedLocal": "02:02:03",
+  "completedByLocal": "02:04:01",
+  "timezone": "Asia/Riyadh",
+  "apk": "normal 1.3.8 without device bridge",
+  "apkSha256": "C38F4DB782F7D0987028C193E77EC13B47A8A0C5E7F6378F0C04585B6C8B0BAE",
+  "change": "Read-only full-request plain multi-item menu collection and Keeta menu scroll/title handling",
+  "unitTestsPassed": 369,
+  "lintErrors": 0,
+  "lintWarnings": 5,
+  "actualUiCompareButtonSmokePassed": true,
+  "request": {
+    "additions": [],
+    "item": "بطاطس وسط",
+    "quantity": 3,
+    "restaurant": "كودو"
+  },
+  "keetaFinalTotalHalala": 4081,
+  "hungerStationFinalTotalHalala": 3750,
+  "evidenceLocalIgnored": "work/device-20261025/octopus-menu-plan-smoke.png",
+  "providerInterventionsAfterCompare": 0,
+  "multiItemCartPreparationVerified": false,
+  "addressBranchEquivalenceVerified": false,
+  "published": false
+}

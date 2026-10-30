@@ -1,0 +1,75 @@
+{
+  "date": "2026-10-25",
+  "published": false,
+  "phoneUsed": false,
+  "baseCommit": "3fa574455e858d21ffac622ab7e91d0c0e2fa242",
+  "userDirection": {
+    "primaryJourney": "Native restaurant and meal selection inside Octopus; prepare provider baskets and read final totals only on Compare.",
+    "latestCatalogPreference": "Refresh nearby restaurant listings over the network in the background, without navigating HungerStation.",
+    "manualImport": "Explicit fallback while a verified public network catalog source is not connected. Never describe this as background synchronization."
+  },
+  "implementedLocally": [
+    "Persistent bounded Room catalog library; no seeded restaurants or prices.",
+    "Native cached restaurant search/menu/product selection independent of Accessibility service connection.",
+    "Saved menu intent validation separate from fresh automation evidence; opening saved data does not refresh its timestamp.",
+    "Explicit manual read-only importer with Save and return overlay; no provider clicks, gestures or timed focus takeover.",
+    "Automatic provider movement restricted to an active comparison or explicit verified-cart handoff.",
+    "Comparison abort propagation on user departure, stale action frames and security stops.",
+    "HungerStation menu quantity-before-footer path with exact runtime guards and requested quantity ceiling.",
+    "Outermost review scroll selection and provider-scoped parsing of the observed HungerStation currency glyph."
+  ],
+  "validation": {
+    "apkBuild": "passed",
+    "unitTests": {
+      "passed": 326,
+      "failed": 0,
+      "errors": 0
+    },
+    "lint": {
+      "errors": 0,
+      "warnings": 5
+    },
+    "newNativeUiTests": {
+      "passed": 8,
+      "failed": 0,
+      "target": "temporary read-only API 36 emulator"
+    },
+    "uiFirstRun": "20 ran, 17 passed, 3 failed because the test scroll matcher selected both the vertical list and horizontal category strip. Corrected the test matcher and reran all 8 new native tests successfully; production UI was unchanged by that correction.",
+    "builtApkSha256": "2515c82e59f90a9b7216736a1f46bcae89ceb875dda92da923bad21da9c3b43a",
+    "realProviderEndToEnd": false
+  },
+  "backgroundCatalog": {
+    "implemented": false,
+    "officialPublicListingVisible": true,
+    "officialPublicMenuVisible": true,
+    "directLocalHttpVerified": false,
+    "localHttpResult": "Redirected to the workplace Cloudflare blocked page; no bypass or protection change attempted.",
+    "sources": [
+      "https://hungerstation.com/sa-ar/restaurants/regions/الرياض/النرجس",
+      "https://hungerstation.com/sa-ar/restaurants/regions/الرياض/النرجس?page=2",
+      "https://hungerstation.com/sa-ar/restaurants/regions/الرياض/النرجس/المشوي-والشواية-64579",
+      "https://developer.android.com/topic/architecture/data-layer/offline-first",
+      "https://developer.android.com/develop/background-work/background-tasks/persistent/getting-started/define-work"
+    ],
+    "nextImplementation": [
+      "Obtain and inspect a successful direct public response before writing or claiming a working HTML parser.",
+      "Use a saved city/district as the catalog scope; no implicit background precise-location permission.",
+      "Separate public web provenance and stable vendor identity from native captured selector IDs.",
+      "Load saved rows immediately, refresh the chosen area asynchronously, fetch additional pages and menus only when needed.",
+      "Reject unexpected redirects, login/challenge/block pages and invalid schemas; retain the last successful cache with its actual timestamp.",
+      "Never use public list prices as account-specific final totals, availability or delivery-address verification."
+    ]
+  },
+  "remainingDeviceChecks": [
+    "Verify the menu quantity control identifiers; the saved menu tree does not establish Add/Subtract semantic IDs.",
+    "Observe and handle the HungerStation intermediate screen with an evidenced safe close/skip selector.",
+    "Verify final-review recognition and stable explicit ORDER_TOTAL in both current provider versions.",
+    "Verify basket contents, branch/address/account equivalence and selected-cart handoff."
+  ],
+  "limits": [
+    "Existing automated preparation remains limited to one plain item with supported configuration; arbitrary multi-item/options preparation is not implemented.",
+    "Saved review evidence contains HungerStation delivery/service fields but not its final total for the current request.",
+    "No new APK release, Git push, order confirmation or payment was performed."
+  ],
+  "supersededForPublicCatalogBy": "public-catalog-native.json"
+}

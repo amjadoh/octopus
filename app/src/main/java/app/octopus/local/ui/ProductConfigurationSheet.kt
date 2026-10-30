@@ -22,7 +22,7 @@ fun ProductConfigurationSheet(graph: AppGraph, details: ConfiguredProduct, onDis
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val selection = ProductSelection(details.product.id, choices, quantity)
-    val valid = MenuSelectionValidator().selectConfigured(details, selection, System.currentTimeMillis()) is SelectionResult.Accepted
+    val valid = MenuSelectionValidator().selectIntent(details, selection) is SelectionResult.Accepted
     fun save(replace: Boolean) {
         saving = true
         scope.launch {
@@ -40,17 +40,24 @@ fun ProductConfigurationSheet(graph: AppGraph, details: ConfiguredProduct, onDis
         LazyColumn(Modifier.fillMaxWidth().heightIn(max = 580.dp), contentPadding = PaddingValues(22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item { Text(details.product.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
             item { Text("${details.restaurant} • اختيار للطلب داخل الأخطبوط؛ لا تُعدّل سلة المنصة الآن.", style = MaterialTheme.typography.bodySmall) }
+            item { Text("خيارات من قائمة محفوظة؛ يُعاد التحقق من السعر والتوفر عند المقارنة.", style = MaterialTheme.typography.bodySmall) }
             if (!details.optionsComplete) item { Text("خيارات الوجبة لم تُقرأ كاملة أو قواعدها غير مدعومة. لا يمكن إضافتها بخيارات ناقصة.", color = MaterialTheme.colorScheme.error) }
             if (!details.product.available) item { Text("الوجبة غير متاحة في القراءة الحالية.", color = MaterialTheme.colorScheme.error) }
             details.product.groups.forEach { group ->
                 item(key = "group:${group.id}") {
-                    Text("${group.title} — اختيار إلزامي", fontWeight = FontWeight.Bold)
+                    Text("${group.title} — " + if (group.minimum == 0) "اختياري، اختيار واحد كحد أقصى" else "اختيار إلزامي", fontWeight = FontWeight.Bold)
                     group.choices.forEach { choice ->
+                        val selected = choice.id in choices[group.id].orEmpty()
+                        fun choose() {
+                            choices = choices + (group.id to if (group.minimum == 0 && selected) emptySet() else setOf(choice.id))
+                            error = null
+                        }
                         Row(Modifier.fillMaxWidth().clickable(enabled = !saving && choice.available) {
-                            choices = choices + (group.id to setOf(choice.id)); error = null
+                            choose()
                         }) {
-                            RadioButton(selected = choice.id in choices[group.id].orEmpty(), enabled = !saving && choice.available,
-                                onClick = { choices = choices + (group.id to setOf(choice.id)); error = null })
+                            if (group.minimum == 0) Checkbox(checked = selected, enabled = !saving && choice.available,
+                                onCheckedChange = { choose() })
+                            else RadioButton(selected = selected, enabled = !saving && choice.available, onClick = { choose() })
                             Text(choice.title + if (!choice.available) " (غير متاح)" else "", Modifier.padding(top = 13.dp))
                         }
                     }
@@ -69,7 +76,7 @@ fun ProductConfigurationSheet(graph: AppGraph, details: ConfiguredProduct, onDis
                     Text(if (saving) "جارٍ الحفظ…" else "أضف إلى طلبي في الأخطبوط")
                 }
             }
-            item { Text("بعد إضافة وجباتك إلى طلب الأخطبوط، افتح المقارنة ثم اختر التطبيق لتجهيز سلته.", style = MaterialTheme.typography.bodySmall) }
+            item { Text("عند الضغط على «قارن الإجمالي وجهّز السلتين» يبدأ التنقل للتحقق من طلبك والأسعار. لا يُؤكد طلب أو دفع.", style = MaterialTheme.typography.bodySmall) }
         }
     }
     if (replacing) AlertDialog(onDismissRequest = { replacing = false }, title = { Text("تغيير مطعم الطلب المحلي؟") },

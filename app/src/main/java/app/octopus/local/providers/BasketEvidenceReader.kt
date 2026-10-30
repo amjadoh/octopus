@@ -27,7 +27,9 @@ object BasketEvidenceReader {
             val edit = parts.indexOf("تعديل")
             val plain = parts.size == 3 && parts.last() == "§" && MoneyParser.parse(parts[1]) != null
             if (!plain && (edit < 1 || parts.size != edit + 3 || parts.last() != "§")) return@mapNotNull null
-            val choices = if (plain) emptyList() else parts.subList(1, edit).flatMap(::choices)
+            val optionLines = if (plain) emptyList() else parts.subList(1, edit)
+            val choices = if (optionLines == listOf("لايوجد تعديلات أو إضافات")) emptyList()
+                else optionLines.flatMap(::choices)
             val quantities = frame.descendants(card.index).filter { it.id == "menuItemActionDualButtonValue" }
             val quantity = quantities.singleOrNull()?.label?.let(::quantity)
             BasketLineEvidence(parts.first(), choices, quantity, MoneyParser.parse(parts[if (plain) 1 else edit+1]))
@@ -99,7 +101,14 @@ object BasketItemMatcher {
         if (!actual.complete) issues += BasketItemMismatch.PARTIAL
         if (actual.restaurant == null || IdentityText.clean(actual.restaurant) != IdentityText.clean(desired.restaurant)) issues += BasketItemMismatch.RESTAURANT
         val remaining = actual.lines.toMutableList()
-        val wanted = desired.items.groupBy(CartIdentity::itemKey).values.map { group -> group.first().copy(quantity = group.sumOf { it.quantity }) }
+        val wanted = desired.items.groupBy(CartIdentity::itemKey).values.mapNotNull { group ->
+            val quantity = group.sumOf { it.quantity.toLong() }
+            if (quantity !in 1L..99L) {
+                issues += BasketItemMismatch.QUANTITY
+                null
+            } else group.first().copy(quantity = quantity.toInt())
+        }
+        if (desired.items.isEmpty()) issues += BasketItemMismatch.ITEM
         for (item in wanted) {
             if (!item.note.isNullOrBlank()) issues += BasketItemMismatch.NOTES_UNKNOWN
             val expected = (listOfNotNull(item.size) + item.options.map { it.value }).map(IdentityText::clean).sorted()

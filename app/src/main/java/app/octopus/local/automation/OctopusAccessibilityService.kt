@@ -38,14 +38,25 @@ object ReadOnlyServiceBridge {
 
 object LiveCatalogBridge {
     private var navigator = WeakReference<CatalogNavigator>(null)
+    private var graph = WeakReference<AppGraph>(null)
+    fun attachGraph(value: AppGraph) { graph = WeakReference(value) }
     fun attach(value: CatalogNavigator?) { navigator = WeakReference(value) }
+    fun beginManualCatalog(): Boolean = navigator.get()?.beginManualCatalog() ?: false
+    fun beginNativeCartComparison(): Boolean = navigator.get()?.beginManualCatalog(compareBasket = true) ?: false
+    fun captureManualCatalog(): Boolean = navigator.get()?.captureManualCatalog() ?: false
+    fun endManualCatalog() { navigator.get()?.endManualCatalog() }
     fun compareDraft(): Boolean = navigator.get()?.compareDraft() ?: false
+    fun compareAndPrepare(): Boolean = navigator.get()?.compareAndPrepare() ?: false
+    fun inspectKeetaMenuForVerification():Boolean = navigator.get()?.inspectKeetaMenuForVerification() ?: false
+    fun inspectHungerMenuSearchForVerification(query:String):Boolean = navigator.get()?.inspectHungerMenuSearchForVerification(query) ?: false
+    fun preparePlainHungerForVerification(readReview:Boolean=false,showCart:Boolean=false): Boolean = navigator.get()?.preparePlainHungerForVerification(readReview,showCart) ?: false
+    fun preparePlainKeetaForVerification(readReview:Boolean=false,clearTestCart:Boolean=false): Boolean = navigator.get()?.preparePlainKeetaForVerification(readReview,clearTestCart) ?: false
     fun prepareComparedHungerStation(): Boolean = navigator.get()?.prepareComparedHungerStation() ?: false
     fun prepareComparedKeeta(handoff: Boolean = false): Boolean = navigator.get()?.prepareComparedKeeta(handoff) ?: false
-    fun browseRestaurants(): Boolean = navigator.get()?.browseRestaurants() ?: false
-    fun search(query: String): Boolean = navigator.get()?.search(query) ?: false
-    fun openMenu(restaurant: app.octopus.local.providers.LiveRestaurant): Boolean = navigator.get()?.openMenu(restaurant) ?: false
-    fun openProduct(restaurant: app.octopus.local.providers.LiveRestaurant, item: app.octopus.local.providers.LiveMenuItem): Boolean = navigator.get()?.openProduct(restaurant, item) ?: false
+    fun browseRestaurants(): Boolean = graph.get()?.showLocalRestaurants() ?: false
+    fun search(query: String): Boolean = graph.get()?.showLocalRestaurants(query) ?: false
+    fun openMenu(restaurant: app.octopus.local.providers.LiveRestaurant): Boolean = graph.get()?.showLocalMenu(restaurant) ?: false
+    fun openProduct(restaurant: app.octopus.local.providers.LiveRestaurant, item: app.octopus.local.providers.LiveMenuItem, returnToOctopus: Boolean = true): Boolean = graph.get()?.showLocalProduct(restaurant, item) ?: false
     fun prepareRidan(details: ConfiguredProduct, selection: ProductSelection): Boolean = navigator.get()?.prepareRidan(details, selection) ?: false
     fun openPreparedRidanBasket(): Boolean = navigator.get()?.openPreparedRidanBasket() ?: false
     fun stop() { navigator.get()?.stop() }
@@ -81,9 +92,10 @@ class OctopusAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         stopRead("SERVICE_RECONNECTED", "أعيد اتصال الخدمة؛ لن تُستأنف القراءة تلقائيًا.")
         ReadOnlyServiceBridge.attach(this)
-        catalogNavigator?.stop()
+        catalogNavigator?.stop("")
         catalogNavigator = CatalogNavigator(this, graph).also(LiveCatalogBridge::attach)
         graph.serviceConnected.value = true
+        graph.catalog.value = graph.catalog.value.copy(message = "")
         // A service reconnect must never resume a previous session.
         graph.session.value = SessionState()
     }
@@ -91,10 +103,10 @@ class OctopusAccessibilityService : AccessibilityService() {
         // Contents of AccessibilityEvent are not copied or logged.
         // Sampling verifies the current foreground package independently.
     }
-    override fun onInterrupt() { catalogNavigator?.stop("انقطع اتصال الخدمة."); stopRead("SERVICE_INTERRUPTED", "توقفت الخدمة؛ ابدأ اختبارًا جديدًا عند العودة.") }
+    override fun onInterrupt() { catalogNavigator?.stop("توقفت العملية؛ أعد المحاولة عند جاهزية الخدمة."); stopRead("SERVICE_INTERRUPTED", "توقفت الخدمة؛ ابدأ اختبارًا جديدًا عند العودة.") }
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
-        catalogNavigator?.stop("تغير تخطيط الهاتف؛ توقفت العملية بأمان.")
+        catalogNavigator?.takeIf { it.active }?.stop("تغير تخطيط الهاتف؛ توقفت العملية بأمان.")
         stopRead("LAYOUT_CHANGED", "تغير تخطيط الشاشة؛ أعد الاختبار بعد استقرار وضع الجهاز.")
     }
     override fun onDestroy() {

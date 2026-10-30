@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-30",
+  "scope": "native_configured_cart_candidate",
+  "local": {
+    "unitTestsPassed": 582,
+    "unitTestFailures": 0,
+    "androidUiTestsPassed": 49,
+    "androidUiTestFailures": 0,
+    "gatewayTestsPassed": 5,
+    "lintPassed": true,
+    "diagnosticApkBuildPassed": true,
+    "androidTestApkBuildPassed": true,
+    "integratedSyntheticOptionBasketReviewTestPassed": true
+  },
+  "physicalComponents": {
+    "sourceConfiguredSchemaAndUnchangedCartObserved": true,
+    "sourceReviewTotalObserved": true,
+    "targetAutomaticOptionSelectionAndSingleAddObserved": true,
+    "targetConfiguredDrawerRecognitionObserved": true,
+    "targetReviewTotalAfterLatestFixObserved": false,
+    "completeConfiguredComparisonObserved": false,
+    "repeatConfiguredComparisonVerified": false,
+    "ordinaryApkAcceptanceVerified": false,
+    "phoneControlStopped": true
+  },
+  "limitations": [
+    "One configured meal, quantity one, required single-choice selections only.",
+    "Configured target preparation requires an empty target basket; automatic replacement or reuse is not implemented.",
+    "Source menu continuity can reject transient unrecognized screens.",
+    "Component evidence and synthetic tests do not prove a complete live comparison."
+  ],
+  "releaseReady": false,
+  "newVersionPublished": false,
+  "privacy": "No private provider captures, actual basket details or signing material are included."
+}

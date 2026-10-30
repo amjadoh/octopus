@@ -1,0 +1,2 @@
+# Recorded TSV frames intentionally retain an empty final label column.
+app/src/test/resources/recorded-keeta/*.tsv whitespace=-blank-at-eol

@@ -1,10 +1,26 @@
 {
   "ready": false,
+  "nativeCartImportVerifiedOnPhone": false,
+  "configuredNativeCartVerifiedOnPhone": false,
   "realProviderCartPreparationVerified": false,
   "realFinalTotalsVerified": false,
   "realTwoProviderComparisonVerified": false,
   "realSelectedCartHandoffVerified": false,
   "providersVerified": [],
-  "note": "Live Ridan menu components, quantities, basket creation and handoff verified on Honor; see componentEvidence. Full final-review totals and equal delivery context remain unverified. Review navigation awaits explicit user clarification after automatic approval review rejected HungerStation Go to payment. No complete-comparison release is claimed.",
-  "componentEvidence": ["verification/2026-10-19/honor-menu-offers.json", "verification/2026-10-19/honor-basket-validation.json", "verification/2026-10-20/honor-final-device.json"]
+  "note": "Native configured-cart components were observed on the phone, but the complete two-provider review-total and return flow, repeatability and ordinary APK acceptance remain unverified. Local or CI success permits code review, not publication.",
+  "latestScopedAcceptance": "verification/2026-10-30/native-configured-cart-status.json",
+  "historicalPlainCartAcceptance": "verification/2026-10-29/comparison-acceptance.json",
+  "componentEvidence": [
+    "verification/2026-10-19/honor-menu-offers.json",
+    "verification/2026-10-19/honor-basket-validation.json",
+    "verification/2026-10-20/honor-final-device.json",
+    "verification/2026-10-25/physical-phone-components.json",
+    "verification/2026-10-25/normal-two-row-ui-comparison.json",
+    "verification/2026-10-25/hs-search-empty-two-row.json",
+    "verification/2026-10-25/offline-read-timeout-isolation.json"
+  ],
+  "scope": "scoped_native_comparison_update",
+  "automaticCheapestApprovalVerified": false,
+  "productionAiActivated": false,
+  "ordinaryApkComparisonVerified": false
 }

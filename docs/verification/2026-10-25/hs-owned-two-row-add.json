@@ -1,0 +1,14 @@
+{
+  "installedApkSha256": "976814c35608f582cac7e28d8243e6c3b622f119478b3915b6d4db64e36e6c11",
+  "stage": {
+    "recordedAt": 1792971976673,
+    "stage": "COMPLETE",
+    "dispatchedAdds": 1,
+    "observedRows": 2
+  },
+  "request": "Kudo medium fries x3 + nachos cheese x1; no additions",
+  "itemSubtotalHalala": 4000,
+  "completeRowsVerified": 2,
+  "finalReviewRead": false,
+  "published": false
+}

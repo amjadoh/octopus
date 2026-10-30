@@ -1,4 +1,66 @@
+## Current publication request — 2026-10-26: 1.3.11 / versionCode19 / normal release
+
+Human explicitly requested publishing latest fixes, then said «انشره عادي». `docs/RELEASE_PLAN.json` authorizes a normal GitHub release of current work, not a claim of complete general comparison. Read `docs/verification/2026-10-26/release-1.3.11-request.json` and release notes. Source includes local commits2cbc4fa/5c21be8; local456 unit tests and29 isolated emulator UI tests passed, stable signing/code19 verified. CI must repeat all456/29 checks before publication. Tag v1.3.11 is distinct from older alpha releases, which are preserved. Repo/assets remain PRIVATE. Current final publication state must be verified against exact commit/CI/asset SHA/signature, never inferred from this instruction. No phone actions authorized. Native deletion buttons are manual app handoffs, not automatic clearing; other live journey/positive-empty/address/branch gaps remain documented. No future pushes/releases absent a new human request.
+
+## Current release request - 2026-10-26: 1.3.10 / versionCode18
+
+Human explicitly authorized publishing the latest local fixes, then reconfirmed continuing1.3.10 so he can update inside Octopus. See `docs/RELEASE_PLAN.json`, `docs/PREVIEW_RELEASE.md` and `docs/verification/2026-10-26/preview-1.3.10-request.json`. The private prerelease pipeline must pass439 unit tests, lint and actual emulator UI tests, verify stable signing/no device bridge, then publish the new tag. Final publication state is the GitHub release plus its `validation-summary-ci.json`; never infer success from this request alone. Preserve1.3.9 and all private credentials.
+
+Includes af7bf66 notes-sheet stop classification,757781e generic context rejection, and an updater fix choosing a newer lazy assets fragment over an older already-expanded APK (numeric1.3.10 >1.3.9). This is a current-work experimental update, NOT completed arbitrary-restaurant comparison. No new Honor test/reconnection or phone actions are authorized by the publication request. Keep the full-comparison gate false; historical Kudo results do not apply to the current Fatera draft. See the latest top of `docs/development/multi-item-runtime-status.md` for device gaps.
+
+The recurring offline heartbeat was deleted after useful offline work was exhausted. Do not recreate it merely to poll unchanged state; user can explicitly reconnect for actual testing. Do not ask him to repeat earlier manual tests.
+
+## Release1.3.8 current-work update
+User requested saving current work and publishing an experimental update before disconnecting the phone. Latest public-only captures confirmed HS MENU row->quantityStepper controls; no completed HS quantity3/total. Live report is docs/verification/2026-10-25/physical-phone-components.json. Raw phone files remain ignored under work/. Read docs/PREVIEW_RELEASE.md for exact scope. Do not present test fixture matches or Keeta-only total as a complete two-provider comparison. Stop actions when disconnected; no order or payment was submitted.
+## Latest quantity implementation and live blocker
+See work/device-20261025/progress-product-quantity.md. Product quantity, existing plain-variant sheet commands, precise close handling, and exact network-error detection are now implemented. Latest build-provider-offline.txt passed all347 JVM tests. Physical phone still has prior variant-menu-target build; do not overwrite active quote state merely to install offline-message changes. Last runtime has Keeta final3063 halala; HS qty3/final total not verified. Phone now shows HS no-internet page. User was asked whether VPN is still off; do not disable security controls yourself. No purchase/payment, push, or publication.
+## 2026-10-25 latest physical-phone outcome
+- User disabled Cloudflare; HS recovered from its offline error. USB device stayed connected.
+- Installed current device-tools build; 342 JVM tests passed, zero failures/errors.
+- Keeta 3.13.203 review action child works; exact observed review title is إتمام الدفع. Provider-specific recognition now accepts this title only for reading.
+- Actual comparison runtime successfully stored Keeta finalTotalReading=3063 halala for مدور / 3 feta pies / no additions. This is not an equivalence-verified two-provider comparison.
+- HS still fails before basket opening. Current selected menu row has title+price but NO menuItemActionDualButtonValue subtree; disabled cart footer reads quantity1 / amount700. Do not guess inline quantity identifiers. Next implementation should inspect quantity controls on the actual PRODUCT sheet, before adding requested quantity, instead of relying on nonexistent inline menu controls.
+- ExistingQuantityConsent is request-bound and expires after five minutes; UI/bridge permission wired to bounded same-row quantity attempt. This cannot help when actual controls are absent.
+- Latest raw public-menu diagnostics are local work/device-20261025. No checkout screenshots/card fields saved.
+- Latest instrumented read-only menu probe returned14 nodes after process restart; it did not prove menu capture. Do not use it as menu evidence.
+- No order/payment confirmation occurred. No new GitHub publication or push.
 # الأخطبوط — ابدأ من هنا لاستكمال العمل
+
+## أحدث عمل محلي — 25 أكتوبر: المطاعم داخل الأخطبوط
+
+أُضيف مصدر عام فعلي من صفحات هنقرستيشن، مع قاعدة Room مستقلة وآخر قراءة محفوظة، وزر «تحديث قائمة المطاعم»، وتحديث عند الفتح ومهمة دورية تتطلب الشبكة. يحدد المستخدم المدينة والحي مرة واحدة؛ لا يوجد GPS أو حي افتراضي. تُقرأ قائمة المطعم عند اختياره، ويختار المستخدم الوجبة والكمية داخل الأخطبوط ويحفظ طلبه محليًا. تحديث المطاعم يحافظ على الطلب والقائمة المختارة، ولا يفتح تطبيقات التوصيل. يتحرك مسار الإتاحة فقط بعد «قارن» أو تسليم سلة متحققة بطلب صريح.
+
+نجح 337 اختبار وحدة وlint (0 أخطاء، 5 تحذيرات)، و17 اختبار واجهة على محاكي API 36 مستقل، واختبار حي للموقع العام، و3 اختبارات دخان على APK النهائي. نجح جلب قائمة حقيقية واختيار وجبة بكمية 3 وحفظها محليًا دون فتح منصة. انتهت الحاجة لاتصال الموقع، وأُبلغ المستخدم بإمكان تشغيل Cloudflare مجددًا. التفاصيل في docs/PUBLIC_CATALOG.md وdocs/verification/2026-10-25/public-catalog-native.json.
+
+العمل غير منشور وغير مدفوع إلى GitHub، وهو فوق إصدار 1.3.7 المحلي. لا تصف سعر القائمة بأنه إجمالي حساب. المقارنة الفعلية مع إجماليين وسلتين من الحسابين لم تُتحقق معًا؛ لم يتغير حد تجهيز صنف واحد دون خيارات. لا تعرض نجاح اختبار الموقع كنجاح اختبارات تطبيقات التوصيل، ولا تطلب من المستخدم إعادة اختباراته السابقة.
+
+
+## استكمال دون الهاتف — 21 أكتوبر
+
+تم توحيد قراءة خيارات هنقرستيشن في التصفح والمقارنة والتجهيز عبر HungerStationProductReadSession، مع حد صفحات وإيقاف عند علامة نهاية الخيارات ومنع التصرف بعد الإلغاء. أصلح القارئ تكرار عنصري تمويه وتنبيهات عبر الصفحات؛ كان وجود مجموعات محفوظة يجعل العنصر الثابت يُعامل كخيار مجهول. أصبح فتح المطعم يستخدم إعادة محاولة إدخال البحث نفسها، قبل تنفيذ الإجراء فقط. أضيف مسار قراءة سعر منتج كيتا 3.13.203 من البنية المحفوظة دون اشتراط ظهور عنوان توصيل مخفي أو دخول مسار القسائم القديم. أضيف PreparedBasketLedger لحفظ سجل كل منصة مستقلًا بحسب بصمة الطلب مع الحفاظ على درجة اكتمال الدليل كما هي، وإعادة الفحص عند الفتح. اجتاز 235 اختبار وحدة والبناء وlint. فشل بناء وسيط أثناء تعديل الملفات؛ البناء النهائي بعد اكتمال التعديلات ناجح. لم يحدث اختبار جهاز جديد، ولا تجهيز مثبت للسلتين أو قراءة إجماليي مراجعة. سجل سلة كيتا الحالية ومحددات مراجعة الطلب غير متاحة في الأدلة المحفوظة؛ منع تعديل سلة كيتا الحالية وبوابة المقارنة الكاملة ما زالا قائمين. تفاصيل العمل في docs/verification/2026-10-21/offline-continuation.json. لا تُعرض اختبارات إعادة التشغيل المحلية كاختبارات فعلية جديدة للمنصتين، ولا تطلب من المستخدم تكرار خطواته السابقة.
+
+## حفظ الأدلة قبل انقطاع الشبكة — 21 أكتوبر
+
+حُفظت محليًا 12 لقطة بنية منقحة من مخزن تشخيص الأخطبوط، إضافة إلى شجرة منتج كيتا الحالية وقراءات القائمة. لا تُرفع النسخة المحلية الخاصة من قاعدة التشخيص إلى المستودع. نجح تمرير المقارنة إلى الوجبة حيًا، ثم فشل اكتمال خيارات المنتج. أضيف إيقاف القراءة عند علامة نهاية الخيارات، كما في مسار القراءة الذي نجح بالفعل. اجتاز الإصلاح البناء وlint و226 اختبار وحدة. تثبّت على الهاتف، لكن إعادة المقارنة الأخيرة توقفت بقفل الجهاز قبل أي تغيير للسلال. لم تقرأ إجماليات المراجعة ولم ينشر إصدار. لا تعِد الاختبارات السابقة للمستخدم؛ استكمل من الملفات المسجلة، واعتبر إعادة التحقق الحي للإصلاح الأخير غير منفذة.
+
+## أحدث تحقق حي — 21 أكتوبر
+
+قرئت خيارات فطيرة جبن فيتا من مدور في هنقرستيشن، وعُرض الخيار الاختياري داخل الأخطبوط وحُفظ طلب محلي بصنف واحد، كمية 1، دون إضافات. قرئت الوجبة نفسها في كيتا 3.13.203 بسعر قائمة 7 ريالات، مع توثيق بنية نافذة المنتج الحالية. اجتاز 226 اختبار وحدة وlint والبناء قبل إصلاح التمرير الأخير. المقارنة الحية توقفت لأن الوجبة لم تكن في الجزء الظاهر من قائمة هنقرستيشن؛ أضيف تمرير محدود إلى الاسم المطابق وإعادة التحقق الحي جارية. لم تتغير سلال المنصتين ولم تقرأ إجماليات المراجعة. دعم بناء سلة كيتا الحالية يظل محظورًا حتى التحقق من بنيتها. لا توجد مقارنة نهائية ناجحة ولا إصدار جديد منشور. الأقسام التالية تاريخية عند التعارض.
+
+## تحقق حي — 21 أكتوبر، بعد إعادة الاتصال
+
+تثبّتت نسخة أدوات الفحص المحلية بتوقيع التحديث نفسه، ولم تُنشر كإصدار. أُعيد إعداد إبقاء الشاشة أثناء الشحن إلى قيمته الأصلية 0. عولج سباق تحديث شاشة البحث بإعادة قراءة محدودة قبل أي إجراء فقط، مع بقاء فحص التطابق الكامل. نجح البحث الفعلي وظهرت نتيجتان، وقرئت قائمة مدور كاملة (31 صنفًا). فُتحت فطيرة جبن فيتا وقرئت، لكن قواعد خياراتها غير مدعومة؛ زر الإضافة المحلي بقي معطلًا، والطلب المحلي فارغ. لم تُعدّل سلال المنصات ولم تُقرأ مراجعتان نهائيتان. نجح البناء و217 اختبار وحدة وlint، وأربعة اختبارات حماية قراءة على Honor. كيتا الحالي 3.13.203 ولا يجوز اعتباره إصدار المحول القديم 3.12.501. راجع docs/verification/2026-10-21/live-session.json.
+
+
+## نتيجة مراجعة فشل 1.3.2 — 21 أكتوبر 2026
+
+أكد المستخدم استمرار التوقف المالي بعد الإصلاح المنشور. لم يُعرف عنصر التوقف الفعلي من البلاغ. فُحصت اللقطات الفعلية السابقة في مجلد العمل، ولا تحتوي أي معرّف يطابق الحاجز المالي الحالي؛ لذلك لا تعيد توسيع استثناءاته بالتخمين. الإصدار المنشور1.3.2 منf500983 اجتاز206 اختبارات وحدة و7 اختبارات واجهة للأخطبوط على المحاكي، لكنها لا تثبت رحلة كيتا وهنقرستيشن النهائية. لا تنشر إصدارًا جديدًا استنادًا إلى نجاح البناء فقط.
+
+أُصلح محليًا فقدان دليل التوقف: يُلتقط سببه البنيوي قبل الاستثناء، دون نصوص أو حقول مالية، ويُحفظ عبر سجل الفحص المحلي مع الإصدار والمنصة الفعلية والعملية وآخر شاشة معروفة بوصفها سابقة فقط. لا ينتظر هذا السجل استقرار الشاشة. صار التوقف ملزمًا لبقية الجلسة؛ مسارا معالجة أخطاء كيتا لا يحولانه إلى محاولة بديلة. لا توجد صلاحيات مالية جديدة ولا تغيير في أزرار الحظر. نجح تجميع الكود و214 اختبار وحدة وlint دون أخطاء؛ لم تُختبر التغييرات على تطبيقي التوصيل الفعليين. التغييرات غير منشورة، وحالة التحقق في `docs/verification/2026-10-21/catalog-stop-audit.json`.
+
+المانع الأوسع موثق في الكود: `compareDraft` يقرأ أسعار القائمة والعروض؛ `MenuCostPreview.finalTotal` يبقىnull. لا يوجد تنفيذ حي لـ`ComparisonProviderPort` ولا استدعاء من الواجهة لـ`ComparisonCoordinator`. الطلب المحفوظ يفتقد سياق الفرع والعنوان اللازم للتحقق. تجهيز السلة الحالي منفصل ومحدود بصنف واحد دون خيارات. ملاحظة مراجعة كيتا السابقة تثبت مبلغًا شوهد يدويًا، ولا تتضمن بنية قارئ آلي. المطلوب مسار واحد: اختيار داخل الأخطبوط، تجهيز المنصتين، قراءة مراجعتين متحققتين، ترتيب الإجماليين، ثم إعادة فحص السلة المختارة. هذا المسار لم يكتمل، ولا يصح وصف إصلاح التوقف بأنه إكمال له.
+
+المستخدم سبق أن أذن بفتح مراجعة الطلب للقراءة فقط، مع منع تأكيد الطلب والدفع، ولا يريد إعادة اختبارات الهاتف السابقة. لا تعِد طلب التفويض نفسه، ولا تدّع وجود جهاز متصل أو بيانات مراجعة غير موجودة. الأقسام أدناه تاريخية عند التعارض مع هذا القسم.
 
 ## إصلاح قراءة السلة بطلب نشر صريح — 20 أكتوبر 2026
 

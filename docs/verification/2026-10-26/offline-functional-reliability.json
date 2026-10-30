@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-26",
+  "scope": "Offline functional reliability; no phone or provider actions",
+  "baseCommit": "ccce39f",
+  "changes": [
+    "Invalidate prices, prepared evidence and quantity consent when catalog area changes; retain draft/manual catalog",
+    "Serialize region changes against active comparison and check area before accepting preparation/final quotes",
+    "Require complete basket row amounts to reconcile to subtotal before edits/acknowledgements",
+    "Show provider preflight failure before Compare and menu-verification progress before preparation",
+    "Return promptly when all foreground location sources fail; cancel remaining requests on accepted fix/cancellation"
+  ],
+  "verification": {
+    "androidTestBuild": "passed",
+    "emulatorUiTests": 10,
+    "diffCheck": "passed",
+    "normalApkBuild": "passed",
+    "lintWarnings": 5,
+    "emulatorUiClasses": [
+      "CatalogSourceRegressionUiTest",
+      "CartManagementUiTest"
+    ],
+    "lintErrors": 0,
+    "unitFailures": 0,
+    "emulator": "isolated API36 emulator-5582",
+    "unitTests": 477
+  },
+  "limitations": [
+    "No live GPS/provider journey performed; user requested offline work",
+    "Tests do not establish real same-run fresh empty baskets or arbitrary restaurants/options",
+    "Public restaurant branch/source identity still needs request-bound provenance; catalog area guard is not provider address equality",
+    "Native foreign-cart replacement and positive empty recovery remain incomplete",
+    "Candidate uses existing local version; not a published in-app update"
+  ],
+  "published": false,
+  "phoneUsed": false
+}

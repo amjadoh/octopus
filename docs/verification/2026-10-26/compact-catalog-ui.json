@@ -1,0 +1,33 @@
+{
+  "status": "local-only; not published",
+  "scope": [
+    "Compact white/petrol native home header scrolls with the restaurant list",
+    "Display actual selected catalog area instead of asserting an unverified provider delivery address",
+    "Compact restaurant cards and shorter guidance; retain saved-source and price labels",
+    "Arabic display search tolerates hamza variants, diacritics, tatweel, whitespace and reordered words",
+    "Search normalization is not used for product identity, basket matching or provider clicks",
+    "Dark status icons for the light home background"
+  ],
+  "verification": {
+    "unitTests": 468,
+    "unitFailures": 0,
+    "lintErrors": 0,
+    "lintWarnings": 5,
+    "emulator": "isolated octopus_regression_1311, emulator-5582; no provider accounts or human phone",
+    "uiTests": "CatalogSourceRegressionUiTest: four passed. Initial runner crashed; retry exposed ambiguous test scroll matcher, corrected to vertical list. Final run passed.",
+    "preview": "work/compact-home.png is actual app UI with explicitly named test restaurant, not live provider data"
+  },
+  "comparisonCompletionPriorities": [
+    "Retain exact restaurant and branch identity from selection through native matching; verify delivery context",
+    "Observe complete existing cart, adjust only requested differences, and recover from interrupted actions without duplicate Adds",
+    "Implement positive empty-cart and approval-bound replacement using actual provider structures",
+    "Support only options whose identities and required selections were actually read; surface unsupported cases before native movement",
+    "Verify normal UI journey from both empty carts to complete rows and fresh final totals, repeat Compare with zero duplicate additions, then handoffs"
+  ],
+  "limitations": [
+    "This UI/search change does not add universal restaurant, option, scrolling-cart or foreign-cart preparation support",
+    "Historical comparison totals are not current request evidence",
+    "No live provider journey, order or payment performed in this checkpoint",
+    "Default local APK remains same-version unreleased candidate; do not replace the published artifact"
+  ]
+}

@@ -10,3 +10,8 @@ local.properties
 .env
 .env.*
 *.hprof
+*.dpapi
+**/ai-recovery-config.json
+
+/work/
+/release/

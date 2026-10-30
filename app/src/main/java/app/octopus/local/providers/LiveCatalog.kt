@@ -8,7 +8,7 @@ import java.util.Locale
 data class CatalogNode(val index: Int, val parent: Int, val id: String, val label: String, val className: String,
     val clickable: Boolean, val editable: Boolean, val scrollable: Boolean, val enabled: Boolean = true,
     val omittedText: Boolean = false, val enteredText: Boolean = false)
-enum class CatalogScreen { HOME, BROWSE, BROWSE_PROMO, SEARCH, RESULTS, RESTAURANT_NOTICE, MENU, PRODUCT, CART, UNKNOWN }
+enum class CatalogScreen { HOME, BROWSE, BROWSE_PROMO, SPIN_PROMO, SEARCH, RESULTS, RESTAURANT_NOTICE, MENU, PRODUCT, CART, UNKNOWN }
 data class CatalogFrame(val nodes: List<CatalogNode>, val complete: Boolean) {
     fun hasId(suffix: String) = nodes.any { it.id == suffix || it.id.endsWith(":id/$suffix") }
     fun descendants(index: Int): List<CatalogNode> {
@@ -17,20 +17,61 @@ data class CatalogFrame(val nodes: List<CatalogNode>, val complete: Boolean) {
         return nodes.filter { it.index in found }
     }
 }
+enum class CatalogOrigin { MANUAL, PUBLIC }
+
 data class LiveRestaurant(val name: String, val description: String?, val searchQuery: String,
-    val source: ProviderId = ProviderId.HUNGERSTATION)
+    val source: ProviderId = ProviderId.HUNGERSTATION, val origin: CatalogOrigin = CatalogOrigin.MANUAL) {
+    val catalogKey: String get() = "${source.name}:${origin.name}:$name"
+}
 data class LiveMenuItem(val name: String, val listedPrice: Long?, val selector: String)
 data class LiveMenu(val restaurant: LiveRestaurant, val items: List<LiveMenuItem>, val capturedAtMillis: Long,
     val reachedEnd: Boolean)
 data class LiveCatalogState(
+    val finalTotals: Map<ProviderId, FinalTotalReading> = emptyMap(),
+    val selectedRestaurant: String? = null,
+    val selectedCatalogOrigin: CatalogOrigin? = null,
+    val comparisonRunning: Boolean = false,
+    val comparisonProgress: Map<ProviderId, app.octopus.local.automation.CartComparisonProgress> = emptyMap(),
     val previews: List<MenuCostPreview> = emptyList(),
     val busy: Boolean = false,
-    val message: String = "ابحث لقراءة المطاعم المتاحة من هنقرستيشن.",
+    val manualCaptureActive: Boolean = false,
+    val message: String = "اختر من القوائم المحفوظة، أو أضف قراءة تتحكم بها من هنقرستيشن.",
     val restaurants: List<LiveRestaurant> = emptyList(),
     val menu: LiveMenu? = null,
     val error: String? = null,
     val product: ConfiguredProduct? = null,
     val preparedBasket: BasketEvidence? = null,
+    val preparedBaskets: PreparedBasketLedger = PreparedBasketLedger(),
+)
+
+/** Manual native-cart management invalidates readiness before leaving Octopus. */
+fun LiveCatalogState.withoutProviderBasket(provider: ProviderId) = copy(
+    finalTotals = finalTotals - provider,
+    comparisonProgress = comparisonProgress - provider,
+    preparedBasket = preparedBasket?.takeUnless { it.provider == provider },
+    preparedBaskets = preparedBaskets.invalidate(provider),
+)
+
+/** An edited order cannot inherit either provider's quote, progress or ready-cart badge. */
+fun LiveCatalogState.forChangedDraft(cart: app.octopus.local.domain.CanonicalCart?) = copy(
+    finalTotals = emptyMap(),
+    selectedRestaurant = cart?.restaurant,
+    previews = emptyList(),
+    comparisonProgress = emptyMap(),
+    preparedBasket = null,
+    preparedBaskets = PreparedBasketLedger(),
+    message = if (cart == null) "اختر مطعمك ووجباتك لبدء طلب جديد."
+        else "تغير طلبك؛ أعد المقارنة للتحقق من الأسعار والعروض والسلة.",
+    error = null,
+)
+
+/** Region changes invalidate quotes and public selection, never the user's saved draft or native carts. */
+fun LiveCatalogState.forChangedArea(manualRestaurants: List<LiveRestaurant>) = copy(
+    restaurants = manualRestaurants.filter { it.origin == CatalogOrigin.MANUAL },
+    menu = null, product = null, selectedRestaurant = null, selectedCatalogOrigin = null,
+    previews = emptyList(), finalTotals = emptyMap(), comparisonProgress = emptyMap(),
+    preparedBasket = null, preparedBaskets = PreparedBasketLedger(), error = null,
+    message = "تغيرت منطقة المطاعم؛ احتُفظ بطلبك، ويلزم اختيار المطعم والتحقق من الأسعار والعنوان مجددًا.",
 )
 
 /** Selectors recorded on Honor / HS 8.0.302. Unknown screens never authorize an action. */
@@ -38,9 +79,11 @@ object HungerStationCatalog {
     const val TESTED_VERSION = "8.0.303"
     fun screen(frame: CatalogFrame): CatalogScreen = when {
         !frame.complete -> CatalogScreen.UNKNOWN
+        HungerStationSpinPromo.closeTarget(frame) != null -> CatalogScreen.SPIN_PROMO
         frame.hasId("pdpCloseButton") -> CatalogScreen.PRODUCT
         frame.hasId("FlutterCart_title") -> CatalogScreen.CART
         frame.hasId("menuBackButton") && frame.hasId("menuSearchButton") -> CatalogScreen.MENU
+        HungerMenuSearchScreen.closeTarget(frame) != null -> CatalogScreen.SEARCH
         frame.hasId("searchVendorsRecycler") -> CatalogScreen.RESULTS
         frame.hasId("vendor_list") && frame.hasId("close_button") -> CatalogScreen.BROWSE_PROMO
         frame.hasId("vendorsRecycler") && (frame.hasId("hsBackButton") ||
@@ -52,12 +95,12 @@ object HungerStationCatalog {
         else -> CatalogScreen.UNKNOWN
     }
 
-    /** Honor / 8.0.303: category captions are baked into images. Admit only the observed seven-card grid. */
+    /** Honor / 8.0.303: observed seven/eight-card grids; first card is Restaurants. */
     fun browseEntry(frame: CatalogFrame): CatalogNode? {
         if (screen(frame) != CatalogScreen.HOME) return null
         val groups = frame.nodes.filter { it.id.endsWith(":id/home_modules_parent") }.mapNotNull { group ->
             val cards = frame.nodes.filter { it.parent == group.index }
-            if (cards.size != 7 || cards.any { !it.clickable || !it.enabled || it.id.isNotEmpty() ||
+            if (cards.size !in setOf(7, 8) || cards.any { !it.clickable || !it.enabled || it.id.isNotEmpty() ||
                     it.className != "android.view.ViewGroup" || frame.descendants(it.index).none { child ->
                         child.parent == it.index && child.id.endsWith(":id/banner_image") } }) null
             else cards.first()
@@ -115,7 +158,7 @@ object HungerStationCatalog {
 
     fun menuItem(cell: CatalogNode): LiveMenuItem? {
         if (!(cell.clickable && (cell.id.matches(Regex("gridMenuCell-\\d+-\\d+")) ||
-            (cell.id.isEmpty() && cell.className == "android.view.View")))) return null
+            (cell.id.isEmpty() && cell.className in setOf("android.view.View", "android.widget.ImageView"))))) return null
         val lines = cell.label.replace(Regex("[\\u200e\\u200f\\u061c\\u202a-\\u202e\\u2066-\\u2069]"), "")
             .lineSequence().map(String::trim).filter(String::isNotBlank).toList()
         val name = lines.firstOrNull { line -> line.any(Char::isLetter) && !line.contains("سعرة") &&

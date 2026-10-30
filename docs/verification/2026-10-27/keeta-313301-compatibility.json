@@ -1,0 +1,80 @@
+{
+  "dateLocal": "2026-10-27",
+  "scope": "Evidence-grounded compatibility for installed Keeta 3.13.301, one plain item only. Normal application Compare verification is a separate pending result.",
+  "privacy": "Private repository and local device captures. Copied test fixtures contain the redacted catalog frame only, without account, address, payment or raw accessibility labels. Food prices below are historical captured observations, not live quotes.",
+  "actualEvidence": {
+    "directory": "work/device-20261027",
+    "captures": [
+      "keeta-313301-home.json",
+      "keeta-313301-results.json",
+      "keeta-313301-menu.json",
+      "keeta-313301-pdp-fries.json",
+      "keeta-313301-product-fries.json",
+      "keeta-313301-cart-menu.json",
+      "keeta-313301-drawer-one.json",
+      "keeta-313301-cart-menu-three.json",
+      "keeta-313301-drawer-three.json",
+      "keeta-313301-review-frame.json",
+      "keeta-313301-review-quote.json",
+      "keeta-313301-drawer-before-back.json",
+      "keeta-313301-menu-after-back.json",
+      "keeta-313301-menu-reopened-after-back.json",
+      "keeta-313301-drawer-after-reopen.json",
+      "keeta-313301-drawer-before-direct-review.json",
+      "keeta-313301-direct-drawer-review.json"
+    ],
+    "fixtureRequest": "Kudo medium fries, no additions, first quantity 1 and then quantity 3",
+    "unitPriceHalala": 900,
+    "quantity3ItemsHalala": 2700,
+    "manualFixtureFinalHalala": 4581,
+    "directDrawerReviewCaptureMillis": 1793090904014,
+    "manualSetupIsMainCompareProof": false,
+    "description": "Parent collected actual public-food structures and manually prepared the fixture cart. Quantity 3, subtotal 27 SAR and review total 45.81 SAR were observed. Direct drawer-to-review navigation succeeded on the device; this does not establish that the normal Compare button prepared both provider carts.",
+    "initialProbeLimit": "The initial menu/PDP probe omitted some public food text. Updated product-fries passes the resource identifier and captures the public description. Missing initial text is not invented as an accessibility fixture."
+  },
+  "profile": {
+    "exactInstalledVersion": "3.13.301",
+    "schema": "CURRENT_313",
+    "retainsActualVersionInPlansRecordsAndCommands": true,
+    "capabilities": ["READ_MENU", "PREPARE_CART", "PREPARE_OWNED_PLAIN_CART", "REVIEW", "OWNED_DRAWER_RETURN", "DIRECT_DRAWER_REVIEW"],
+    "multipleItemReading": false,
+    "multipleItemPreparation": false,
+    "multipleItemReview": false,
+    "unknownVersions": "Rejected exactly; no prefix, range or version substitution",
+    "admission": "Normal preflight requires single plain request support and reading/preparation/review capabilities before either provider opens. Owned preparation separately checks the full line count. Sizes, modifiers and notes remain outside single-item admission."
+  },
+  "observedLayoutDifference": {
+    "drawerClose": "A visible X has no corresponding readable close target in the actual drawer tree. The previous close selector correctly returns null; no guessed coordinate is used.",
+    "backTransition": "One Android Back from the fully observed owned drawer returned to exact Kudo search results, not the menu. The file named menu-after-back contains those search results. Reopening the observed matching result restored the menu and a freshly reread unchanged quantity-3 basket.",
+    "readOnlyRecovery": "KeetaOwnedDrawerReturn binds exact source frame, complete own basket, full request, actual installed version and 30-second lifetime. It consumes at most one Back and one known same-query result reopen, then requires the same restaurant menu and unchanged count. This is not address or branch-equivalence proof, not a cart mutation permit, and not review authority.",
+    "directReview": "For 3.13.301 the final-review path keeps the complete source drawer instead of closing it or leaving the restaurant. PreparedReviewAdmission binds the exact full-request record, provider, actual version, complete parsed rows and amounts, source frame, 15-second freshness and one consumed navigation. ReviewNavigationGuard rejects changed/missing evidence and identifies the known two-child footer action. The actual direct fixture target is node 285."
+  },
+  "testsAdded": {
+    "executedByThisSubtask": false,
+    "executionOwner": "Parent agent ran the shared candidate build/test suite and reported success before starting the normal UI device run.",
+    "candidateSource": "Shared uncommitted working tree; not a release or publication",
+    "parentReportedUnitTests": 512,
+    "parentReportedUnitFailures": 0,
+    "parentReportedLintErrors": 0,
+    "parentReportedBuildSucceeded": true,
+    "parentReportedNormalApkInstalled": true,
+    "actualCompareStartedLocal": "2026-10-27T11:56:00+03:00",
+    "actualCompareStatusAtThisCheckpoint": "Running from the normal UI Compare button; no result asserted here",
+    "newTestCount": 24,
+    "files": {
+      "Keeta313301ReadOnlyCompatibilityTest.kt": 10,
+      "KeetaVersionProfileTest.kt": 5,
+      "KeetaOwnedDrawerReturnTest.kt": 5,
+      "KeetaDirectDrawerReviewTest.kt": 4
+    },
+    "coverage": "Actual redacted structures plus explicitly altered negative cases: exact supported versions, unchanged actual version, single-use/expiry/request binding, source/frame changes, wrong row/quantity/amount, missing admission, incomplete tree and disabled footer. Negative mutations are test cases, not additional device observations."
+  },
+  "remaining": [
+    "See docs/verification/2026-10-27/normal-ui-comparison-313301.json for the later first normal Compare result: Keeta 45.81 SAR / HungerStation 37.50 SAR with HungerStation initially empty and Keeta already matching x3. This does not establish a both-initially-empty journey; the report retains the result-capture freshness limitation.",
+    "Actual retry and handoff verification remain pending. The separate run report records a first repeat failure during HungerStation reading before preparation, unchanged physical cart x3 / 27 SAR, and the 518-test candidate's 12:18 run stopping with ScreenChangedBeforeAction before Keeta preparation despite a valid HungerStation product checkpoint. A bounded Keeta search-replanning candidate is being built; no later build, hash or run success is established here.",
+    "Real address and branch equivalence; no confirmed cheapest ranking from these captures alone.",
+    "Multiple items, modifiers, notes, scrolling/partially visible carts and production foreign-cart replacement are not broadened by this change."
+  ],
+  "noOrderOrPaymentConfirmed": true,
+  "publicationPerformedByThisSubtask": false
+}

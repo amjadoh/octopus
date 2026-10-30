@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-26",
+  "status": "local_candidate_not_published",
+  "version": "1.3.11-diagnostic",
+  "versionCode": 19,
+  "baseCommit": "2cbc4fadd15fa2d10b3005da326e4f4af2c745c3",
+  "humanRequest": "Add deletion options for Octopus, HungerStation and Keeta carts. Human previously chose offline testing without phone.",
+  "implemented": {
+    "entry": "Comparison page: إدارة السلال وحذفها",
+    "octopus": "Confirmation-bound active-draft deletion, persisted through active-order delete, invalidates associated quotes/readiness/consent. Menus and unresolved native mutation journal survive.",
+    "nativeApps": "Separate explicit launcher handoffs for manual deletion by the user; invalidate only selected provider readiness/total before launch. These do not clear a native basket or claim success.",
+    "guards": "Reject deletion during active sessions or when the confirmed request fingerprint changed."
+  },
+  "verification": {
+    "unit": {
+      "tests": 456,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "emulatorUi": {
+      "tests": 29,
+      "failures": 0,
+      "target": "emulator-5582",
+      "networkTestsExcluded": true,
+      "log": "work/cart-management-all-ui.txt"
+    },
+    "lintErrors": 0,
+    "lintWarnings": 5,
+    "apk": {
+      "file": "work/octopus-1.3.11-cart-management.apk",
+      "bytes": 64851223,
+      "sha256": "99e99d75b45f00a86da7d4e8e3a083397433988a77bff21e794d7852b34e79f3",
+      "certificateSha256": "842ebe50a04e11219671b951a4bf77259974fbc47c298a56c90bada6f67dc56d"
+    }
+  },
+  "notCompleted": [
+    "Automatic native-cart deletion and its confirmations are not implemented or verified.",
+    "Actual native app launching, cart deletion and positive-empty recovery were not tested on the phone.",
+    "Manual native deletion does not erase the durable mutation ambiguity guard; previous empty-cart recovery gap remains."
+  ],
+  "phoneActions": false,
+  "providerAppsOperated": false,
+  "pushed": false,
+  "published": false,
+  "inAppUpdateAvailable": false,
+  "priorLimits": "docs/verification/2026-10-26/local-1.3.11-fixes.json"
+}
