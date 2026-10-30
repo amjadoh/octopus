@@ -4,72 +4,73 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import org.junit.Rule
 import org.junit.Test
+import org.junit.Before
 
 /** Requires an emulator or device; source alone is not a passing device test. */
 class DiagnosticUiTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+    @Before fun resetVisibleComparisonState() {
+        compose.waitUntil(10000) { (compose.activity.application as OctopusApplication).graph.draftReady.value }
+        compose.runOnIdle {
+            val graph=(compose.activity.application as OctopusApplication).graph
+            graph.catalog.value=app.octopus.local.providers.LiveCatalogState()
+            graph.draft.value=null
+        }
+    }
     private fun scrollToText(text: String) {
         compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(text))
     }
-    @Test fun savedOrderDoesNotBecomeANewSelectionOnStartup() {
-        compose.waitUntil(5_000) { (compose.activity.application as OctopusApplication).graph.draftReady.value }
-        compose.runOnIdle {
-            val graph = (compose.activity.application as OctopusApplication).graph
-            graph.draft.value = app.octopus.local.domain.CanonicalCart("مدور", null,
-                listOf(app.octopus.local.domain.CanonicalItem("وجبة محفوظة", null, emptyList(), 1)))
-            graph.catalog.value = graph.catalog.value.copy(selectedRestaurant = null)
-        }
-        compose.onNodeWithText("مدور").assertDoesNotExist()
-        compose.onNodeWithText("راجع الطلب وقارن").assertDoesNotExist()
-        compose.onNodeWithText("المقارنة").performClick()
-        scrollToText("استئناف الطلب المحفوظ")
-        compose.onNodeWithText("قارن الإجمالي وجهّز السلتين").assertDoesNotExist()
-        compose.onNodeWithText("استئناف الطلب المحفوظ").performClick()
-        scrollToText("طلبك • مدور")
-        compose.onNodeWithText("طلبك • مدور").assertIsDisplayed()
-    }
-    @Test fun choosingDifferentRestaurantHidesOldDraftComparison() {
-        compose.waitUntil(5_000) { (compose.activity.application as OctopusApplication).graph.draftReady.value }
-        compose.runOnIdle {
-            val graph = (compose.activity.application as OctopusApplication).graph
-            graph.draft.value = app.octopus.local.domain.CanonicalCart("مدور", null,
-                listOf(app.octopus.local.domain.CanonicalItem("فطيرة جبن فيتا", null, emptyList(), 3)))
-            graph.catalog.value = graph.catalog.value.copy(selectedRestaurant = "مطعم آخر")
-        }
-        compose.onNodeWithText("راجع الطلب وقارن").assertDoesNotExist()
-        compose.onNodeWithText("المقارنة").performClick()
-        scrollToText("المطعم المختار: مطعم آخر")
-        compose.onNodeWithText("المطعم المختار: مطعم آخر").assertIsDisplayed()
-        compose.onNodeWithText("قارن الإجمالي وجهّز السلتين").assertDoesNotExist()
-    }
-    @Test fun restaurantMenuKeepsTheSelectedOrderInAFooterAndOpensItsComparison() {
-        compose.waitUntil(5_000) { (compose.activity.application as OctopusApplication).graph.draftReady.value }
-        compose.runOnIdle {
-            val graph = (compose.activity.application as OctopusApplication).graph
-            val cart = app.octopus.local.domain.CanonicalCart("مطعم جديد", null,
-                listOf(app.octopus.local.domain.CanonicalItem("وجبة جديدة", null, emptyList(), 2)))
-            graph.draft.value = cart
-            graph.catalog.value = graph.catalog.value.copy(selectedRestaurant = cart.restaurant)
-        }
-        compose.onNodeWithText("راجع الطلب وقارن").assertIsDisplayed().performClick()
-        scrollToText("طلبك • مطعم جديد")
-        compose.onNodeWithText("طلبك • مطعم جديد").assertIsDisplayed()
-        scrollToText("قارن الإجمالي وجهّز السلتين")
-        compose.onNodeWithText("قارن الإجمالي وجهّز السلتين").assertIsDisplayed()
-    }
-    @Test fun startsWithRestaurantSearchAndNoInventedPrices() {
-        compose.onNodeWithText("المطاعم").assertIsDisplayed()
-        compose.onNode(hasSetTextAction()).assertIsDisplayed().performTextInput("مدور")
-        compose.onNode(hasSetTextAction()).assertTextContains("مدور")
+    @Test fun homeStartsWithOnlyNativeActionsAndNoRestaurantCatalog() {
+        compose.onNodeWithText("ابدأ في هنقرستيشن").assertIsDisplayed()
+        compose.onNodeWithText("قارن").assertIsDisplayed()
+        compose.onNode(hasSetTextAction()).assertDoesNotExist()
+        compose.onNodeWithText("تحديث قائمة المطاعم").assertDoesNotExist()
+        compose.onNodeWithText("التطبيقات").assertDoesNotExist()
         compose.onNodeWithText("0.00 ر.س").assertDoesNotExist()
     }
-    @Test fun providerControlsAndNoFakePrice() {
-        compose.onNodeWithText("التطبيقات", useUnmergedTree = true).performClick()
-        scrollToText("كيتا")
-        compose.onNodeWithText("كيتا").assertIsDisplayed()
-        scrollToText("هنقرستيشن")
-        compose.onNodeWithText("هنقرستيشن").assertIsDisplayed()
-        compose.onNodeWithText("0.00 ر.س").assertDoesNotExist()
+    @Test fun savedOrderDoesNotAutomaticallyBecomeANewNativeComparison() {
+        compose.waitUntil(5000) { (compose.activity.application as OctopusApplication).graph.draftReady.value }
+        compose.runOnIdle {
+            val graph=(compose.activity.application as OctopusApplication).graph
+            graph.draft.value=app.octopus.local.domain.CanonicalCart("مطعم محفوظ",null,
+                listOf(app.octopus.local.domain.CanonicalItem("وجبة",null,emptyList(),1)))
+            org.junit.Assert.assertFalse(graph.catalog.value.comparisonRunning)
+        }
+        compose.onNodeWithText("مطعم محفوظ").assertDoesNotExist()
+        compose.onNodeWithText("قارن").assertIsDisplayed()
+    }
+    @Test fun nativeHomeShowsDifferenceOnlyForFreshTotalsOfTheSameRequest() {
+        compose.waitUntil(5000) { (compose.activity.application as OctopusApplication).graph.draftReady.value }
+        compose.runOnIdle {
+            val graph=(compose.activity.application as OctopusApplication).graph
+            val cart=app.octopus.local.domain.CanonicalCart("مطعم تجريبي",null,
+                listOf(app.octopus.local.domain.CanonicalItem("وجبة",null,emptyList(),1)))
+            graph.draft.value=cart
+            graph.catalog.value=graph.catalog.value.copy(finalTotals=mapOf(
+                app.octopus.local.domain.ProviderId.HUNGERSTATION to app.octopus.local.providers.FinalTotalReading(
+                    app.octopus.local.domain.ProviderId.HUNGERSTATION,"test",cart.fingerprint,
+                    mapOf(app.octopus.local.domain.PriceField.ORDER_TOTAL to 2500L),System.currentTimeMillis()),
+                app.octopus.local.domain.ProviderId.KEETA to app.octopus.local.providers.FinalTotalReading(
+                    app.octopus.local.domain.ProviderId.KEETA,"test",cart.fingerprint,
+                    mapOf(app.octopus.local.domain.PriceField.ORDER_TOTAL to 2000L),System.currentTimeMillis())))
+        }
+        compose.onNodeWithText("كيتا أوفر بـ 5.00 ر.س").assertIsDisplayed()
+        compose.runOnIdle {
+            val graph=(compose.activity.application as OctopusApplication).graph
+            graph.draft.value=graph.draft.value!!.copy(items=listOf(graph.draft.value!!.items.single().copy(quantity=2)))
+        }
+        compose.onNodeWithText("كيتا أوفر بـ 5.00 ر.س").assertDoesNotExist()
+        compose.onNodeWithText("25.00 ر.س").assertDoesNotExist()
+    }
+    @Test fun nativeHomeShowsFailureWithoutLosingTheRequest() {
+        val message="لم تثبت سلة المطعم؛ لم أكرر الإضافة."
+        compose.runOnIdle {
+            val graph=(compose.activity.application as OctopusApplication).graph
+            graph.catalog.value=graph.catalog.value.copy(error=message)
+        }
+        compose.onNodeWithText(message).assertIsDisplayed()
+        compose.onNodeWithText("ابدأ في هنقرستيشن").assertIsDisplayed()
+        compose.onNodeWithText("قارن").assertIsDisplayed()
     }
     @Test fun inspectionPageIsExplicitAndDoesNotStartCaptureOnOpen() {
         compose.onNodeWithContentDescription("الإعدادات").performClick()

@@ -1,5 +1,8 @@
 package app.octopus.local
 
+import androidx.activity.compose.setContent
+import androidx.compose.material3.MaterialTheme
+import app.octopus.local.ui.CatalogScreen
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -23,6 +26,8 @@ class ManualBrowseUiTest {
         compose.runOnIdle {
             graph.catalog.value = LiveCatalogState()
             graph.draft.value = null
+            // Retain library/state regression coverage without restoring the removed product entry point.
+            compose.activity.setContent { MaterialTheme { CatalogScreen(graph, {}, {}) } }
         }
     }
     private fun scrollTo(text: String) {
@@ -30,7 +35,7 @@ class ManualBrowseUiTest {
             .performScrollToNode(hasText(text))
     }
 
-    @Test fun homeHasRefreshButtonAndDoesNotBeginProviderReadingOnOpen() {
+    @Test fun legacyCatalogRenderedInIsolationDoesNotBeginProviderReadingOnOpen() {
         ready()
         compose.onNodeWithText("تحديث قائمة المطاعم").assertIsDisplayed()
         scrollTo("ابدأ من هنقرستيشن")
@@ -73,7 +78,7 @@ class ManualBrowseUiTest {
                 previews = listOf(MenuCostPreview(ProviderId.HUNGERSTATION, cart.fingerprint,
                     2100, emptyList(), System.currentTimeMillis(), HungerStationCatalog.TESTED_VERSION)))
         }
-        compose.onNodeWithText("المقارنة").performClick()
+        compose.runOnIdle { compose.activity.setContent { MaterialTheme { CatalogScreen(graph, {}, {}, comparisonOnly = true) } } }
         scrollTo("قارن الإجمالي وجهّز السلتين")
         compose.onNodeWithText("قارن الإجمالي وجهّز السلتين").assertIsNotEnabled()
         runBlocking {
@@ -102,7 +107,7 @@ class ManualBrowseUiTest {
             graph.draft.value = cart
             graph.catalog.value = LiveCatalogState(selectedRestaurant = cart.restaurant)
         }
-        compose.onNodeWithText("المقارنة").performClick()
+        compose.runOnIdle { compose.activity.setContent { MaterialTheme { CatalogScreen(graph, {}, {}, comparisonOnly = true) } } }
         scrollTo("قارن الإجمالي وجهّز السلتين")
         compose.onNodeWithText("قارن الإجمالي وجهّز السلتين").assertIsNotEnabled()
         compose.runOnIdle {

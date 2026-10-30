@@ -1,5 +1,8 @@
 package app.octopus.local
 
+import androidx.activity.compose.setContent
+import androidx.compose.material3.MaterialTheme
+import app.octopus.local.ui.CatalogScreen
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import app.octopus.local.domain.*
@@ -24,7 +27,7 @@ class CartManagementUiTest {
             assertTrue(graph.addDraftProduct(product, ProductSelection("feta", emptyMap(), 3)) is DraftChange.Changed)
         } }
         compose.runOnIdle { graph.approveExistingMatchingQuantity() }
-        compose.onNodeWithText("المقارنة").performClick()
+        compose.runOnIdle { compose.activity.setContent { MaterialTheme { CatalogScreen(graph, {}, {}, comparisonOnly = true) } } }
         compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("إدارة السلال وحذفها"))
         compose.onNodeWithText("إدارة السلال وحذفها").performClick()
         return graph.draft.value!!

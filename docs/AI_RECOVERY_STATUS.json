@@ -1,6 +1,6 @@
 {
   "model": "gpt-6.1-terra",
-  "purpose": "Read an unexpected, redacted provider overlay and propose a grounded recovery action",
+  "purpose": "Advise on known advert dismissal and fixed native comparison recovery proposals after a read stall or source Home landing",
   "liveConfigured": true,
   "liveModelVerified": true,
   "deviceGatewayVerified": true,
@@ -10,11 +10,13 @@
   "cloudRevision": "octopus-ai-00001-qdj",
   "connectionScope": "Authorized Android device verified over HTTPS without USB reverse forwarding; separate in-app consent enabled",
   "verifiedScenario": "Android-to-cloud recorded advert approved in 2250 ms with no USB forwarding and no live click. 9 Terra consent/client tests, all 47 local Android UI tests, 556 unit tests, lint/build and 5 gateway tests passed. Ordinary signed APK read Kudu fries x5 totals 4120/4380 halala and repeated without duplication. CI did not start due to GitHub account billing/spending limit.",
-  "runtimeScope": "Advice for an already native-validated explicit HungerStation advert close control; existing native fallback on gateway unavailability. Not a general autonomous screen navigator.",
+  "runtimeScope": "Known advert close plus bounded fixed continuation advice for native source reopen/screen read. At most three distinct generic proposals per native session; no arbitrary screen text, basket, address or image is sent and no cart mutation is replayed. Native guards remain authoritative.",
   "imageInputTested": false,
   "releaseReady": false,
   "requiredBeforeActivation": [
-    "Live advert dismissal acceptance remains unverified; recorded redacted advert and transport/privacy/revocation tests are verified"
+    "Live advert dismissal remains unverified.",
+    "Generic recovery must be exercised on Android against real provider screens; local/client tests and synthetic cloud approval are not physical acceptance.",
+    "Complete configured-cart comparison and duplicate-free repetition after this fix remain unverified."
   ],
   "notAuthorizedByModelOutput": [
     "payment",
@@ -23,5 +25,8 @@
     "credentials",
     "address changes",
     "unverified cart mutation"
-  ]
+  ],
+  "latestVerification": "verification/2026-10-30/terra-native-recovery-status.json",
+  "genericContinuationCloudVerified": true,
+  "genericContinuationAndroidPhoneVerified": false
 }

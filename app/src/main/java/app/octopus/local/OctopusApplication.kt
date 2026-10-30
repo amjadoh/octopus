@@ -97,18 +97,8 @@ class AppGraph(private val app: Application, publicClient: PublicCatalogClient =
                 catch (_: Exception) { draftStorageError.value = "تعذرت قراءة الطلب المحفوظ. لم يُستبدل أو يُحذف." }
             }
         }
-        scope.launch {
-            catalogReady.first { it }
-            settings.map { it.catalogArea }.distinctUntilChanged().collect { area ->
-                publicMealSelection.value = null
-                if (publicCatalog.state.value.area != area) {
-                    existingQuantityConsent.value = null
-                    catalog.value = catalog.value.forChangedArea(catalogLibrary.value.restaurants.map { it.restaurant })
-                }
-                publicCatalog.configure(area)
-                if (area != null) PublicCatalogRefreshJob.schedule(app)
-            }
-        }
+        PublicCatalogRefreshJob.cancel(app)
+
     }
 
     fun refreshPublicRestaurants(force: Boolean = true): Boolean {

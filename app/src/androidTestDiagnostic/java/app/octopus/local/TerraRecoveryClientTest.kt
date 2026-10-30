@@ -4,6 +4,8 @@ import android.content.ContextWrapper
 import androidx.test.platform.app.InstrumentationRegistry
 import app.octopus.local.automation.TerraConnectionStore
 import app.octopus.local.automation.TerraRecoveryClient
+import app.octopus.local.automation.TerraRecoveryReason
+import app.octopus.local.domain.ProviderId
 import app.octopus.local.providers.CatalogFrame
 import app.octopus.local.providers.CatalogNode
 import kotlinx.coroutines.runBlocking
@@ -79,9 +81,35 @@ class TerraRecoveryClientTest {
         assertNull(TerraRecoveryClient(context) { connection }.approveAdvertClose(frame, close))
         assertTrue(connection.closed)
     }
+    @Test fun continuationSendsOnlyFixedRecoveryPlanAndNoScreenOrBasketContents() = runBlocking {
+        val connection = Reply(continuation = true, confidence = 0.84)
+        assertEquals(true, TerraRecoveryClient(context) { connection }.approveContinuation(frame,
+            ProviderId.KEETA, TerraRecoveryReason.RETRY_SCREEN_READ))
+        val sent = JSONObject(connection.request.toString("UTF-8"))
+        assertEquals("KEETA", sent.getString("provider"))
+        assertFalse(sent.getString("public_text").contains("private background"))
+        assertFalse(sent.getString("public_text").contains("Public offer"))
+        assertEquals(0, sent.getJSONArray("candidates").length())
+        assertTrue(sent.isNull("redacted_image"))
+        assertTrue(connection.closed)
+    }
+    @Test fun continuationRejectsLowConfidenceAndResponseForOtherFrame() = runBlocking {
+        assertNull(TerraRecoveryClient(context) { Reply(continuation=true,confidence=0.4) }
+            .approveContinuation(frame,ProviderId.HUNGERSTATION,TerraRecoveryReason.REOPEN_SOURCE_RESTAURANT))
+        assertEquals(false, TerraRecoveryClient(context) { Reply(continuation=true,wrongFrame=true) }
+            .approveContinuation(frame,ProviderId.HUNGERSTATION,TerraRecoveryReason.REOPEN_SOURCE_RESTAURANT))
+    }
+    @Test fun continuationDisabledOrRevokedNeverGrantsRecovery() = runBlocking {
+        store.setEnabled(false)
+        assertNull(TerraRecoveryClient(context) { error("No network") }
+            .approveContinuation(frame,ProviderId.HUNGERSTATION,TerraRecoveryReason.RETRY_SCREEN_READ))
+        store.setEnabled(true)
+        assertEquals(false, TerraRecoveryClient(context) { Reply(continuation=true,beforeReply={store.setEnabled(false)}) }
+            .approveContinuation(frame,ProviderId.HUNGERSTATION,TerraRecoveryReason.RETRY_SCREEN_READ))
+    }
 
     private class Reply(val status: Int = 200, val wrongFrame: Boolean = false,
-        val beforeReply: () -> Unit = {}) : HttpURLConnection(URL(TerraConnectionStore.CLOUD_ENDPOINT)) {
+        val beforeReply: () -> Unit = {}, val continuation: Boolean = false, val confidence: Double = 0.99) : HttpURLConnection(URL(TerraConnectionStore.CLOUD_ENDPOINT)) {
         val request = ByteArrayOutputStream()
         var closed = false
         override fun connect() = Unit
@@ -94,8 +122,9 @@ class TerraRecoveryClientTest {
             val sent = JSONObject(request.toString("UTF-8"))
             return JSONObject().put("request_id", sent.getString("request_id"))
                 .put("frame_fingerprint", if (wrongFrame) "other-frame" else sent.getString("frame_fingerprint"))
-                .put("advice", JSONObject().put("screen_type", "advert").put("action", "dismiss_overlay")
-                    .put("target_id", 3).put("confidence", 0.99)).toString().byteInputStream()
+                .put("advice", JSONObject().put("screen_type", if(continuation) "catalog" else "advert")
+                    .put("action", if(continuation) "continue" else "dismiss_overlay")
+                    .put("target_id", if(continuation) JSONObject.NULL else 3).put("confidence", confidence)).toString().byteInputStream()
         }
     }
 
