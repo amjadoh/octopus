@@ -64,6 +64,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private var overlay: View? = null
     private var manualJob: Job? = null
     private val manualCollector = ManualCatalogCollector()
+    private val nativeCartImport = NativeCartImport()
+    private var importingBasket = false
+    private var nativeCompareStarting = false
     private var manualSummary = ManualCaptureSummary()
     private var comparisonEpoch = 0L
     private var stepInterrupted: String? = null
@@ -151,7 +154,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     }
 
     /** Explicit manual import. Reading is passive: this path has no node action or gesture. */
-    fun beginManualCatalog(): Boolean {
+    fun beginManualCatalog(compareBasket: Boolean = false): Boolean {
         if (active || graph.session.value.active || !graph.catalogReady.value) return false
         provider = ProviderId.HUNGERSTATION
         graph.refreshInstallations()
@@ -161,6 +164,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         graph.publicCatalog.leaveMenu()
         graph.publicMealSelection.value = null
         manualCollector.reset()
+        nativeCartImport.reset()
+        importingBasket = compareBasket
+        nativeCompareStarting = false
         manualSummary = ManualCaptureSummary()
         catalogStop = CatalogStopState()
         operation = CatalogOperation.BROWSE
@@ -169,7 +175,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         targetSeen = false
         if (!showManualControls()) return false
         graph.catalog.value = graph.catalog.value.copy(manualCaptureActive = true, error = null,
-            message = "تصفح هنقرستيشن بنفسك، ثم اضغط «احفظ وارجع للأخطبوط». لا توجد نقرات أو تمرير تلقائي.")
+            message = if (compareBasket) "جهّز طلبك في هنقرستيشن وافتح السلة ثم اضغط «قارن». يبدأ بعدها تجهيز كيتا والعودة بالنتيجة."
+                else "تصفح هنقرستيشن بنفسك، ثم اضغط «احفظ وارجع للأخطبوط». لا توجد نقرات أو تمرير تلقائي.")
         val token = ++generation
         manualJob = graph.scope.launch(start = CoroutineStart.LAZY) {
             val started = SystemClock.elapsedRealtime()
@@ -210,6 +217,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
 
     private suspend fun saveManualFrame(root: AccessibilityNodeInfo) {
         val token = generation
+        if (importingBasket) {
+            nativeCartImport.observe(capture(root), System.currentTimeMillis())
+            return
+        }
         val library = graph.catalogLibrary.value
         val update = manualCollector.observe(capture(root), System.currentTimeMillis(),
             library.restaurants.map { it.restaurant }, library.menus.map { it.menu })
@@ -252,6 +263,92 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         }
         manualJob?.start()
         return true
+    }
+
+    /** Explicit Compare tap ends passive reading; source basket is never rebuilt or edited. */
+    private fun compareNativeBasket() {
+        if (!importingBasket || !graph.catalog.value.manualCaptureActive || nativeCompareStarting) return
+        nativeCompareStarting = true
+        val token = generation
+        val polling = manualJob
+        manualJob = graph.scope.launch(start = CoroutineStart.LAZY) {
+            polling?.cancelAndJoin()
+            if (generation != token) return@launch
+            try {
+                val root = service.rootInActiveWindow ?: error("افتح سلة هنقرستيشن أولًا.")
+                val source = try {
+                    requireProviderWindow(root)
+                    capture(root)
+                } finally { @Suppress("DEPRECATION") root.recycle() }
+                graph.refreshInstallations()
+                val imported = nativeCartImport.read(source,
+                    graph.installations.value.singleOrNull { it.provider == ProviderId.HUNGERSTATION }?.version,
+                    System.currentTimeMillis()) ?: error("تعذرت قراءة سلة كاملة مدعومة. افتح قائمة المطعم ثم السلة واضغط قارن خلال ٣٠ ثانية. الخيارات والإضافات غير مدعومة بعد.")
+                val desired = imported.first
+                ComparisonPreflight.failure(desired, graph.settings.value.catalogConsent,
+                    graph.settings.value.allowed, graph.installations.value)?.let { error(it) }
+                check(installedKeetaProfile()?.allowsOwnedPlainPreparation == true) { "إصدار كيتا لا يدعم نقل السلة حاليًا." }
+                check(graph.importNativeCart(desired) is DraftChange.Changed) { "تعذر حفظ السلة؛ لم يبدأ تجهيز كيتا." }
+                if (generation != token) return@launch
+                // Do not cancel this import job while handing ownership to the comparison job.
+                manualJob = null
+                endManualCatalog()
+                startImportedComparison(desired, source, imported.second)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) {
+                if (generation == token) {
+                    manualJob = null
+                    endManualCatalog()
+                    graph.catalog.value = graph.catalog.value.copy(error = failure.message)
+                    returnToApp()
+                }
+            }
+        }
+        manualJob?.start()
+    }
+
+    private fun startImportedComparison(desired: CanonicalCart, source: CatalogFrame, evidence: BasketEvidence) {
+        val epoch = ++comparisonEpoch
+        graph.catalog.value = graph.catalog.value.copy(comparisonRunning = true, finalTotals = emptyMap(),
+            comparisonProgress = emptyMap(), previews = emptyList(), error = null)
+        comparisonJob = graph.scope.launch(start = CoroutineStart.LAZY) {
+            try {
+                // Source first: read its actual review total before opening the target provider.
+                for (id in listOf(ProviderId.HUNGERSTATION, ProviderId.KEETA)) {
+                    currentCoroutineContext().ensureActive()
+                    check(graph.draft.value?.fingerprint == desired.fingerprint) { "تغير الطلب؛ توقفت المقارنة." }
+                    graph.catalog.value = graph.catalog.value.copy(comparisonProgress = graph.catalog.value.comparisonProgress +
+                        (id to CartComparisonProgress(id, CartComparisonStep.PREPARING_CART)))
+                    check(begin(operation = CatalogOperation.BUILD_CART, timeoutMillis = 600_000) {
+                        if (id == ProviderId.HUNGERSTATION) {
+                            requestFingerprint = desired.fingerprint
+                            val root = service.rootInActiveWindow ?: error("اختفت سلة هنقرستيشن.")
+                            try { requireProviderWindow(root); verifyActiveFrame(source, root.windowId) }
+                            finally { @Suppress("DEPRECATION") root.recycle() }
+                            rememberPrepared(desired, evidence, HungerStationCatalog.TESTED_VERSION)
+                            readFinalTotal(desired, source)
+                        } else prepareOwnedKeetaSteps(desired, true, PlainPreparationProgress())
+                    }) { graph.catalog.value.error ?: "تعذر بدء المقارنة." }
+                    job?.join()
+                    currentCoroutineContext().ensureActive()
+                    stepInterrupted?.let { throw CancellationException(it) }
+                    check(graph.catalog.value.error == null) { graph.catalog.value.error.orEmpty() }
+                    val total = graph.catalog.value.finalTotals[id]?.fresh(desired, System.currentTimeMillis()) == true
+                    graph.catalog.value = graph.catalog.value.copy(comparisonProgress = graph.catalog.value.comparisonProgress +
+                        (id to CartComparisonProgress(id, if (total) CartComparisonStep.TOTAL_READ else CartComparisonStep.REVIEW_UNAVAILABLE)))
+                }
+                graph.catalog.value = graph.catalog.value.copy(message = "انتهت المقارنة. راجع إجمالي كل منصة وتطابق عنوان التوصيل والفرع.")
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { graph.catalog.value = graph.catalog.value.copy(error = failure.message) }
+            finally {
+                if (comparisonEpoch == epoch) {
+                    comparisonJob = null
+                    graph.catalog.value = graph.catalog.value.copy(comparisonRunning = false)
+                    if (stepInterrupted == null) returnToApp()
+                }
+            }
+        }
+        comparisonJob?.start()
     }
 
     fun compareAndPrepare(): Boolean {
@@ -2741,7 +2838,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private fun showManualControls(): Boolean = try {
         val controls = LinearLayout(service).apply {
             orientation = LinearLayout.VERTICAL
-            addView(Button(service).apply { text = "احفظ وارجع للأخطبوط"; setOnClickListener { captureManualCatalog() } })
+            addView(Button(service).apply {
+                text = if (importingBasket) "قارن" else "احفظ وارجع للأخطبوط"
+                setOnClickListener { if (importingBasket) compareNativeBasket() else captureManualCatalog() }
+            })
             addView(Button(service).apply { text = "إيقاف القراءة ×"; setOnClickListener { endManualCatalog() } })
         }
         val params = WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,

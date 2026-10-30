@@ -42,6 +42,7 @@ object LiveCatalogBridge {
     fun attachGraph(value: AppGraph) { graph = WeakReference(value) }
     fun attach(value: CatalogNavigator?) { navigator = WeakReference(value) }
     fun beginManualCatalog(): Boolean = navigator.get()?.beginManualCatalog() ?: false
+    fun beginNativeCartComparison(): Boolean = navigator.get()?.beginManualCatalog(compareBasket = true) ?: false
     fun captureManualCatalog(): Boolean = navigator.get()?.captureManualCatalog() ?: false
     fun endManualCatalog() { navigator.get()?.endManualCatalog() }
     fun compareDraft(): Boolean = navigator.get()?.compareDraft() ?: false

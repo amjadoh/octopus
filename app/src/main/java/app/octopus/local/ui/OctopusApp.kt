@@ -87,6 +87,10 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
     val session by graph.session.collectAsStateWithLifecycle()
     val connected by graph.serviceConnected.collectAsStateWithLifecycle()
     var page by rememberSaveable { mutableStateOf(Page.HOME) }
+    val catalogState by graph.catalog.collectAsStateWithLifecycle()
+    LaunchedEffect(catalogState.comparisonRunning) {
+        if (catalogState.comparisonRunning) page = Page.COMPARE
+    }
     var selected by rememberSaveable { mutableStateOf(ProviderId.HUNGERSTATION) }
     var disclosure by remember { mutableStateOf(false) }
     var exportConfirmation by remember { mutableStateOf(false) }

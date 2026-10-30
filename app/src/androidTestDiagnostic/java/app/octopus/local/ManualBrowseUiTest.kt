@@ -33,8 +33,8 @@ class ManualBrowseUiTest {
     @Test fun homeHasRefreshButtonAndDoesNotBeginProviderReadingOnOpen() {
         ready()
         compose.onNodeWithText("تحديث قائمة المطاعم").assertIsDisplayed()
-        scrollTo("اختر هنا، وقارن عندما يكتمل طلبك")
-        compose.onNodeWithText("اختر هنا، وقارن عندما يكتمل طلبك").assertIsDisplayed()
+        scrollTo("ابدأ من هنقرستيشن")
+        compose.onNodeWithText("ابدأ من هنقرستيشن").assertIsDisplayed().assertIsEnabled()
         compose.runOnIdle {
             assertFalse(graph.catalog.value.manualCaptureActive)
             assertFalse(graph.catalog.value.busy)

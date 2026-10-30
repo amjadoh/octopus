@@ -149,6 +149,15 @@ class AppGraph(private val app: Application, publicClient: PublicCatalogClient =
         if (selected !is SelectionResult.Accepted) return@withLock DraftChange.Rejected("خيارات الوجبة ناقصة أو غير متاحة في القائمة المحفوظة.")
         commitDraft(DraftEditor.add(draft.value, details.restaurant, selected.item, replaceRestaurant))
     }
+    suspend fun importNativeCart(cart: CanonicalCart): DraftChange = draftLock.withLock {
+        if (!draftReady.value || catalog.value.busy || catalog.value.comparisonRunning)
+            return@withLock DraftChange.Rejected("انتظر انتهاء العملية الحالية.")
+        // Preserve the prior local order before replacing the active comparison request.
+        draft.value?.takeIf { it.fingerprint != cart.fingerprint }?.let { previous ->
+            withContext(Dispatchers.IO) { orders.save(previous, "before-native-import-${previous.fingerprint}") }
+        }
+        commitDraft(DraftChange.Changed(cart))
+    }
     suspend fun changeDraftQuantity(key: String, quantity: Int): DraftChange = draftLock.withLock {
         if (!draftReady.value) return@withLock DraftChange.Rejected("جارٍ تحميل الطلب المحفوظ.")
         commitDraft(DraftEditor.quantity(draft.value, key, quantity))
