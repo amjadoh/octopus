@@ -18,15 +18,21 @@ class NativeCartImport {
         }
     }
     fun read(frame: CatalogFrame, version: String?, now: Long): Pair<CanonicalCart, BasketEvidence>? {
-        if (version != HungerStationCatalog.TESTED_VERSION || now < menuAt || now - menuAt > 30_000 ||
-            HungerStationCatalog.screen(frame) != CatalogScreen.CART ||
-            frame.nodes.any { it.enteredText || it.omittedText }) return null
-        val evidence = BasketEvidenceReader.hungerStation(frame, true)
-        if (!HungerStationCompleteCartProof.matchesMenu(menu ?: return null, evidence) ||
-            evidence.lines.any { it.choices.isNotEmpty() }) return null
+        val evidence = evidence(frame, version, now) ?: return null
+        if (evidence.lines.any { it.choices.isNotEmpty() }) return null
         val cart = runCatching { CanonicalCart(evidence.restaurant ?: return null, null,
             evidence.lines.map { CanonicalItem(it.name, null, emptyList(), it.quantity ?: return null) }) }.getOrNull() ?: return null
         if (!BasketItemMatcher.compare(cart, evidence).matches) return null
         return cart to evidence
+    }
+
+    /** Complete source contents, before a configured-product schema resolves option counts. */
+    fun evidence(frame: CatalogFrame, version: String?, now: Long): BasketEvidence? {
+        if (version != HungerStationCatalog.TESTED_VERSION || now < menuAt || now - menuAt > 30_000 ||
+            HungerStationCatalog.screen(frame) != CatalogScreen.CART ||
+            frame.nodes.any { it.enteredText || it.omittedText }) return null
+        val evidence = BasketEvidenceReader.hungerStation(frame, true)
+        if (!HungerStationCompleteCartProof.matchesMenu(menu ?: return null, evidence)) return null
+        return evidence
     }
 }

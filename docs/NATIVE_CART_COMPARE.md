@@ -14,7 +14,7 @@ Branch: `feature/native-cart-compare`. Legacy checkpoint: `checkpoint-before-car
 
 ## Current limits
 
-- Development admission supports one or two plain items, supported installed provider versions only. Options, sizes, entered notes, omitted text, incomplete rows and ambiguous duplicates are rejected rather than dropped or guessed.
+- Development admission supports one or two plain items. A new, not-yet-device-accepted path supports one configured meal, quantity one, only when a fresh complete source product schema proves every selected group is required and single-choice. Sizes, optional/multiple-choice groups, entered notes, incomplete rows and ambiguous selections remain unsupported.
 - A previous, different Keeta basket is not cleared or replaced. Changing matching pre-existing quantities still needs the existing explicit consent.
 - Item/subtotal completeness is not proof of delivery address, branch identity or final price. The user must check the two addresses/branches; the existing UI warning remains.
 - Legacy unit tests and UI regression sources remain. `NativeCartImportTest` adds completeness, freshness, version, notes/options, quantity and continuity checks. Android UI tests cover the new entry button and preservation/concurrent replacement of local orders.
@@ -40,3 +40,16 @@ The user authorized replacing native baskets with a test basket and made the pho
 - GitHub Actions run 41024347766 for commit `1c6211d` completed successfully: diagnostic build/unit/lint/UI checks and ai-gateway checks. No main merge or release was performed.
 - Follow-up UI change: saved-area controls removed from home and menu at the user's request. Diagnostic build and lint passed; installed over the phone test build and visually confirmed the home location field is absent. The provider rejection remains independent of this display change. Automatic return to Octopus after that rejection was observed; successful target-cart completion remains unverified.
 - Follow-up device validation: configured meals remain rejected by the existing unsupported-options admission check. Target preparation did not start and the prior local request was preserved. Successful configured-meal transfer remains unverified. Basket details and diagnostic evidence remain local and are excluded from this report.
+
+## Fully automatic configured-meal candidate (2026-10-30)
+
+The user requires automatic option filling; no manual selection fallback is part of this path. Phone operation paused when the user needed the device. Subsequent work is offline and does not establish native-provider acceptance.
+
+- Read the source product schema without changing its basket, return to the source basket and require its complete contents to remain unchanged. Unknown option counts are resolved only through required single-choice groups; raw evidence is retained separately.
+- Preserve the old local request before importing the verified configured meal. The active comparison can commit only with fresh source proof and an unchanged previous draft.
+- In Keeta 3.13.301, select exact option labels, require each group to acknowledge selection, follow partially visible groups, and scroll within the product sheet rather than the background restaurant menu.
+- Add once only after all required groups and the end of the sheet are verified. Journal the mutation before dispatch. Require the complete resulting basket, all choices, quantities and reconciled money before navigating to review.
+- Review admission binds the fresh raw screen and resolved contents to the exact request and is single-use. Payment/order submission remains outside the flow. Normal completion returns to Octopus automatically.
+- This candidate requires an empty target restaurant basket. Replacing/reusing an existing configured target basket is not implemented. Exact source schema recognition, configured target basket layout and full two-provider completion still require physical-device acceptance. This is not general support for arbitrary restaurants or modifier types.
+- Synthetic regression tests cover missing/ambiguous/duplicate/multiple options, stale evidence, exact review admission, acknowledged selection, partial group visibility and product-scoped scrolling. Phone captures and user basket contents remain private and outside Git.
+- Final offline candidate checks: 574 unit tests passed with zero failures/errors; lint passed (zero errors, five warnings); signed diagnostic app and Android-test APK builds passed. The new candidate was not installed on the physical phone. The earlier 25 emulator UI tests predate this configured-meal change; no new UI execution or full native-provider success is claimed.

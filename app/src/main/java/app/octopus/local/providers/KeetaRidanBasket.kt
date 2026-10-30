@@ -151,7 +151,8 @@ open class KeetaBasketReader(private val catalog: KeetaMenuReader, private val r
         if(named.size !in 1..2 || (named.size==2 && !plainSkuLabel(f,named[1]))) return null
         if (!names.add(name)) return null
         if (body.size > 65 || body.any { it.omittedText || it.editable } ||
-            body.filter { it.label.isNotEmpty() }.any { it.label != name && quantity(it) == null && !it.label.contains('﷼') } ||
+            body.filter { it.label.isNotEmpty() }.any { it.label != name && quantity(it) == null && !it.label.contains('﷼') &&
+                catalog.configuredChoices(it.label) == null } ||
             body.count { it.label == name } !in 1..2 || body.count { quantity(it) != null && it.clickable } != 1 ||
             body.count { it.label.contains('﷼') && MoneyParser.parse(it.label) != null } != 1) return null
         }
@@ -169,7 +170,11 @@ open class KeetaBasketReader(private val catalog: KeetaMenuReader, private val r
             val name = body.first { it.label in requestedTitles }.label
             val count = body.singleOrNull { quantity(it) != null && it.clickable }?.let(::quantity) ?: return null
             val amount = body.singleOrNull { it.label.contains('﷼') }?.label?.let(MoneyParser::parse) ?: return null
-            BasketLineEvidence(name, emptyList(), count, amount)
+            val choices = body.filter { it.label.isNotEmpty() && it.label != name && quantity(it) == null && !it.label.contains('﷼') }
+                .flatMap { catalog.configuredChoices(it.label) ?: return null }
+            if (choices.map { it.value }.distinct().size != choices.size) return null
+            if (catalog.requestedChoices.isNotEmpty() && choices.map { it.value }.toSet() != catalog.requestedChoices) return null
+            BasketLineEvidence(name, choices, count, amount)
         }
         val subtotal = runCatching { lines.fold(0L) { total, line -> Math.addExact(total,line.lineAmount!!) } }.getOrNull() ?: return null
         return BasketEvidence(ProviderId.KEETA, catalog.restaurant, lines, subtotal, true)

@@ -116,7 +116,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
             Card(colors = CardDefaults.cardColors(containerColor = OctopusPalette.Soft), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Text(if (state.menu == null) "جهّز في هنقرستيشن، وقارن هنا" else "اختر هنا، وقارن عندما يكتمل طلبك", fontWeight = FontWeight.Bold)
-                    Text("اختر عنوانك والمطعم ووجباتك في هنقرستيشن. افتح السلة واضغط «قارن» لنقل الطلب إلى كيتا والعودة بالنتيجة. يدعم حاليًا صنفًا أو صنفين دون إضافات؛ راجع تطابق عنوان التطبيقين.",
+                    Text("اختر عنوانك والمطعم ووجباتك في هنقرستيشن. افتح السلة واضغط «قارن» لنقل الطلب إلى كيتا والعودة بالنتيجة. يدعم صنفًا أو صنفين دون إضافات، أو وجبة واحدة بخيارات يُختار واحد منها في كل مجموعة. راجع تطابق عنوان التطبيقين.",
                         fontSize = 12.sp, color = OctopusPalette.Muted)
                     Button(onClick = { requestManualReading(nativeCart = true) },
                         enabled = !state.busy && !state.manualCaptureActive && ready,
@@ -185,6 +185,10 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
             }
         }
         if (comparisonOnly) draft?.let { cart ->
+            val nativeConfigured = cart.items.singleOrNull()?.let {
+                it.quantity == 1 && it.size == null && it.note.isNullOrBlank() && it.options.isNotEmpty() &&
+                    it.options.all { option -> option.quantity == 1 }
+            } == true
             val preflightFailure = app.octopus.local.automation.ComparisonPreflight.failure(
                 cart, settings.catalogConsent, settings.allowed, installations)
             if (!ComparisonRequestSelection.matches(state.selectedRestaurant, cart)) {
@@ -242,26 +246,30 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                         Button(onClick = {
                             finishManualReading()
                             localError = null
+                            if (nativeConfigured) requestManualReading(nativeCart = true)
+                            else {
                             if(allowMatchingQuantity) graph.approveExistingMatchingQuantity() else graph.existingQuantityConsent.value=null
                             if (!LiveCatalogBridge.compareAndPrepare()) localError = graph.catalog.value.error
                                 ?: "تعذر بدء تجهيز السلتين؛ تحقق من اتصال خدمة الأخطبوط."
-                        }, enabled = !state.busy && !changing && connected && preflightFailure == null,
+                            }
+                        }, enabled = !state.busy && !changing && connected && (nativeConfigured || preflightFailure == null),
                             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                            Icon(Icons.Outlined.CompareArrows, null); Spacer(Modifier.width(8.dp)); Text("قارن الإجمالي وجهّز السلتين")
+                            Icon(Icons.Outlined.CompareArrows, null); Spacer(Modifier.width(8.dp))
+                            Text(if (nativeConfigured) "أعد المقارنة من سلة هنقرستيشن" else "قارن الإجمالي وجهّز السلتين")
                         }
                         if (!state.busy && !connected) TextButton(onClick = onSetup) { Text("ربط خدمة الأخطبوط لتشغيل المقارنة") }
-                        if (!state.busy && preflightFailure != null) {
+                        if (!state.busy && preflightFailure != null && !nativeConfigured) {
                             Text(preflightFailure, fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
                             TextButton(onClick = onProviders) { Text("مراجعة إعدادات المنصات") }
                         }
                         if (preflightFailure == null && PlainComparisonSupport.existingTwoRow(cart)) Text("المقارنة الحالية تدعم صنفين دون خيارات. يفحص التطبيق السلة أولًا؛ السلة المختلفة لا تُستبدل تلقائيًا.",fontSize=12.sp,color=OctopusPalette.Muted)
-                        if (!PreviewEvidence.supports(cart) && !PlainComparisonSupport.existingTwoRow(cart)) Text("حُفظ طلبك كاملًا. راجع سبب عدم الجاهزية أعلاه قبل بدء المقارنة.", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                        if (!nativeConfigured && !PreviewEvidence.supports(cart) && !PlainComparisonSupport.existingTwoRow(cart)) Text("حُفظ طلبك كاملًا. راجع سبب عدم الجاهزية أعلاه قبل بدء المقارنة.", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
                         Text("يجهّز السلتين ويقرأ إجمالي المراجعة إذا تعرّف على مسارها، دون تأكيد طلب أو دفع. النتيجة غير المقروءة لا تُقدّر.", fontSize = 12.sp, color = OctopusPalette.Muted)
                         state.comparisonProgress.values.forEach { result ->
                             Text("${result.provider.title}: ${result.detail ?: "جارٍ تجهيز السلة والتحقق منها…"}", fontSize = 12.sp)
                         }
                         ProviderId.entries.forEach { id ->
-                            if (state.preparedBaskets.forRequest(cart, id) != null) TextButton(onClick = {
+                            if (!nativeConfigured && state.preparedBaskets.forRequest(cart, id) != null) TextButton(onClick = {
                                 finishManualReading()
                                 val opened = if (id == ProviderId.KEETA) LiveCatalogBridge.prepareComparedKeeta(true)
                                     else LiveCatalogBridge.openPreparedRidanBasket()

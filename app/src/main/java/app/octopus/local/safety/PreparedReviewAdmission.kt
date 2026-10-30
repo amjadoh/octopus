@@ -3,7 +3,7 @@ import app.octopus.local.domain.*
 import app.octopus.local.providers.*
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** Short-lived, one-navigation admission from a complete just-verified plain basket. */
+/** Short-lived, one-navigation admission from a complete just-verified basket. */
 class PreparedReviewAdmission private constructor(
     internal val sourceFrame:CatalogFrame,
     internal val record:PreparedBasketRecord,
@@ -11,6 +11,7 @@ class PreparedReviewAdmission private constructor(
     private val fingerprint:String,
     private val version:String,
     private val at:Long,
+    internal val configured: ConfiguredBasketVerification? = null,
 ) {
     private val used=AtomicBoolean(false)
     internal fun validFor(id:ProviderId,cart:CanonicalCart,observedVersion:String,now:Long):Boolean =
@@ -20,14 +21,16 @@ class PreparedReviewAdmission private constructor(
         validFor(id,cart,observedVersion,now) &&
             ReviewNavigationGuard.target(id,frame,cart,observedVersion,this,now)==target && used.compareAndSet(false,true)
     companion object {
-        fun create(id:ProviderId,cart:CanonicalCart,record:PreparedBasketRecord,source:CatalogFrame,version:String,now:Long):PreparedReviewAdmission? {
-            // The ledger can retain configured evidence, but these navigation
-            // executors are verified only for plain requests.
-            if(cart.items.any { it.size!=null || it.options.isNotEmpty() || !it.note.isNullOrBlank() }) return null
+        fun create(id:ProviderId,cart:CanonicalCart,record:PreparedBasketRecord,source:CatalogFrame,version:String,now:Long,
+            configured: ConfiguredBasketVerification? = null):PreparedReviewAdmission? {
+            // Configured requests additionally require the fresh raw/schema-bound proof.
+            val hasConfiguration = cart.items.any { it.size!=null || it.options.isNotEmpty() || !it.note.isNullOrBlank() }
+            if (hasConfiguration && (configured == null || !configured.matches(cart,source,version,now) ||
+                    configured.resolved != record.evidence || configured.raw.provider != id)) return null
             val multiple=cart.items.size>1
             val directSingle=id==ProviderId.KEETA && PreviewEvidence.supports(cart) &&
                 KeetaVersionProfile.resolve(version)?.allowsDirectDrawerReview==true
-            if((!multiple && !directSingle) || !record.matches(cart) || record.providerVersion!=version || record.evidence.provider!=id ||
+            if((!multiple && !directSingle && !hasConfiguration) || !record.matches(cart) || record.providerVersion!=version || record.evidence.provider!=id ||
                 !record.evidence.complete || !source.complete || now<record.observedAtMillis || now-record.observedAtMillis>15_000 ||
                 !BasketItemMatcher.compare(cart,record.evidence).matches)return null
             val actual=when(id) {
@@ -37,12 +40,13 @@ class PreparedReviewAdmission private constructor(
                 }
                 ProviderId.KEETA -> {
                     if(KeetaVersionProfile.resolve(version)?.allowsReview(multipleItems=multiple)!=true)return null
-                    val reader=KeetaMenuReader(cart.restaurant,cart.items.first().name,version)
+                    val reader=KeetaMenuReader(cart.restaurant,cart.items.first().name,version,
+                        if (hasConfiguration) cart.items.single().options.map { it.value }.toSet() else emptySet())
                     KeetaBasketReader(reader,cart.items.map {it.name}.toSet()).evidence(source) ?: return null
                 }
             }
-            if(actual!=record.evidence)return null
-            return PreparedReviewAdmission(source,record,id,cart.fingerprint,version,now)
+            if(actual != (if (hasConfiguration) configured!!.raw else record.evidence))return null
+            return PreparedReviewAdmission(source,record,id,cart.fingerprint,version,now,configured)
         }
     }
 }

@@ -58,7 +58,8 @@ object PreviewEvidence {
 /** Semantic observations on Honor / Keeta 3.12.501. No cart, quantity or payment command exists here. */
 enum class KeetaSearchAction { OPEN_SEARCH, EDIT_QUERY, ENTER_QUERY, SUBMIT_QUERY }
 
-open class KeetaMenuReader(val restaurant: String, val title: String, val VERSION: String = "3.12.501") {
+open class KeetaMenuReader(val restaurant: String, val title: String, val VERSION: String = "3.12.501",
+    val requestedChoices: Set<String> = emptySet()) {
     private var optionalPlainFrame: CatalogFrame? = null
     private var optionalPlainAt = 0L
     fun acceptOptionalPlain(frame: CatalogFrame, proof: KeetaOptionalPlainSession, now: Long): Boolean {
@@ -81,8 +82,17 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
         return MenuCostPreview(ProviderId.KEETA, cart.fingerprint, amount, emptyList(), at, VERSION,
             "سعر الوجبة مقروء؛ رسوم التوصيل والخدمة والعروض المطبقة على السلة لم تُقرأ.")
     }
+    fun configuredChoices(text: String): List<BasketChoiceEvidence>? {
+        if (requestedChoices.isEmpty()) return null
+        val parts = text.split(',', '،').map(String::trim)
+        if (parts.isEmpty() || parts.distinct().size != parts.size || parts.any { it !in requestedChoices }) return null
+        return parts.map { BasketChoiceEvidence(it, null) }
+    }
     fun functionalLabel(raw: String, resourceId: String = ""): String {
-        val text = raw.replace(Regex("[\\u200e\\u200f\\u061c\\u202a-\\u202e\\u2066-\\u2069]"), "").trim()
+        val text = raw.replace(Regex("[\\u200e\\u200f\\u061c\\u202a-\\u202e\\u2066-\\u2069\\ufeff]"), "").trim()
+        if (requestedChoices.isNotEmpty() && (text in requestedChoices ||
+                text in setOf("مطلوب", "اختر 1", "اختر ١", "تم", "اختياري") ||
+                configuredChoices(text) != null)) return text
         // Observed public menu title field. Retain visible titles so scrolling past unrelated
         // cards cannot look identical after redaction. Other unknown fields stay omitted.
         if (profile.usesCurrentLayout && resourceId == "com.sankuai.sailor.afooddelivery:id/product_name" &&
@@ -180,6 +190,9 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
         return content.count { it.label == title } == 1 && content.count { it.editable } <= 1 && content.none { it.omittedText } &&
             content.none { Regex("اختر|إلزامي|الزامي|مطلوب|اختياري").containsMatchIn(it.label) }
     }
+    fun configuredProductBody(frame: CatalogFrame): CatalogNode? =
+        if (requestedChoices.isNotEmpty() && VERSION == "3.13.301") currentReadOnlyProductBody(frame) else null
+
     fun productBody(frame: CatalogFrame): CatalogNode? {
         if (profile.usesCurrentLayout) return currentPlainProductBody(frame)
         val notes = frame.nodes.singleOrNull { it.label == "طلب خاص" } ?: return null
