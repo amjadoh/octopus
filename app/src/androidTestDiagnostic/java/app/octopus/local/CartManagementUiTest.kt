@@ -29,6 +29,24 @@ class CartManagementUiTest {
         compose.onNodeWithText("إدارة السلال وحذفها").performClick()
         return graph.draft.value!!
     }
+    @Test fun nativeImportPreservesPreviousOrderAndRejectsConcurrentReplacement() {
+        val previous = setup()
+        val imported = CanonicalCart("البيك", null, listOf(CanonicalItem("بيج بيك", null, emptyList(), 2)))
+        runBlocking { withContext(Dispatchers.Main) {
+            assertTrue(graph.importNativeCart(imported) is DraftChange.Changed)
+        } }
+        runBlocking { withContext(Dispatchers.IO) {
+            assertEquals(previous, graph.orders.load("before-native-import-${previous.fingerprint}"))
+            assertEquals(imported, graph.orders.load("active-order"))
+        } }
+        compose.runOnIdle { graph.catalog.value = graph.catalog.value.copy(busy = true) }
+        try {
+            runBlocking { withContext(Dispatchers.Main) {
+                assertTrue(graph.importNativeCart(previous) is DraftChange.Rejected)
+            } }
+            assertEquals(imported, graph.draft.value)
+        } finally { compose.runOnIdle { graph.catalog.value = graph.catalog.value.copy(busy = false) } }
+    }
     @Test fun disconnectedComparisonExplainsSetupBeforeAnyProviderMovement() {
         val request=setup()
         compose.onNodeWithText("رجوع").performClick()

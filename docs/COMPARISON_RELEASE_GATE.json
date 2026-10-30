@@ -1,5 +1,6 @@
 {
   "ready": false,
+  "nativeCartImportVerifiedOnPhone": false,
   "realProviderCartPreparationVerified": true,
   "realFinalTotalsVerified": true,
   "realTwoProviderComparisonVerified": true,

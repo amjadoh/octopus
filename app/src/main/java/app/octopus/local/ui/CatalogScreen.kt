@@ -57,6 +57,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
     var menuQuery by rememberSaveable(state.menu?.restaurant?.name) { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf("الكل") }
     var consent by remember { mutableStateOf(false) }
+    var nativeCartRequested by remember { mutableStateOf(false) }
     var changing by remember { mutableStateOf(false) }
     var allowMatchingQuantity by remember(draft?.fingerprint) { mutableStateOf(false) }
     var showProduct by remember(state.product?.source?.screenFingerprint) { mutableStateOf(true) }
@@ -77,10 +78,11 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
     }
     fun beginManualReading() {
         localError = null
-        if (!LiveCatalogBridge.beginManualCatalog())
+        if (!(if (nativeCartRequested) LiveCatalogBridge.beginNativeCartComparison() else LiveCatalogBridge.beginManualCatalog()))
             localError = graph.catalog.value.error ?: "تعذر فتح القراءة؛ تحقق من اتصال خدمة الأخطبوط والسماح لهنقرستيشن."
     }
-    fun requestManualReading() {
+    fun requestManualReading(nativeCart: Boolean = false) {
+        nativeCartRequested = nativeCart
         localError = null
         when {
             !connected -> onSetup()
@@ -114,9 +116,12 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
         if (!comparisonOnly) item {
             Card(colors = CardDefaults.cardColors(containerColor = OctopusPalette.Soft), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Text("اختر هنا، وقارن عندما يكتمل طلبك", fontWeight = FontWeight.Bold)
-                    Text("الاختيار لا يغيّر سلالك. يبدأ تجهيزها وقراءة الأسعار عند ضغط «قارن».",
+                    Text(if (state.menu == null) "جهّز في هنقرستيشن، وقارن هنا" else "اختر هنا، وقارن عندما يكتمل طلبك", fontWeight = FontWeight.Bold)
+                    Text("اختر عنوانك والمطعم ووجباتك في هنقرستيشن. افتح السلة واضغط «قارن» لنقل الطلب إلى كيتا والعودة بالنتيجة. يدعم حاليًا صنفًا أو صنفين دون إضافات؛ راجع تطابق عنوان التطبيقين.",
                         fontSize = 12.sp, color = OctopusPalette.Muted)
+                    Button(onClick = { requestManualReading(nativeCart = true) },
+                        enabled = !state.busy && !state.manualCaptureActive && ready,
+                        modifier = Modifier.fillMaxWidth()) { Text("ابدأ من هنقرستيشن") }
                     if (publicState.refreshing) {
                         LinearProgressIndicator(Modifier.fillMaxWidth())
                         Text("جارٍ تحديث قائمة المطاعم…", fontSize = 12.sp)
@@ -478,7 +483,9 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
         })
     }
     if (consent) AlertDialog(onDismissRequest = { consent = false }, title = { Text("السماح باستعراض المطاعم") },
-        text = { Text("يفتح هنقرستيشن لتتصفحه بنفسك. الأخطبوط لا ينقر ولا يمرّر أثناء الاستعراض. يحفظ محليًا بيانات المطاعم والوجبات وخياراتها التي تعرضها أثناء هذه الجلسة. زر «احفظ وارجع للأخطبوط» ينهي القراءة ويعيدك للاختيار هنا. لا يبدأ التنقل وتجهيز السلتين إلا بعد ضغط زر المقارنة. لا يُؤكد طلب أو دفع.") },
+        text = { Text(if (nativeCartRequested)
+            "يفتح هنقرستيشن لتختار طلبك بنفسك. عند ضغط الزر العائم «قارن» تُقرأ السلة كاملة ويُحفظ الطلب محليًا، ثم تُقرأ مراجعة هنقرستيشن ويُجهّز الطلب المطابق في كيتا وتعود النتيجة للأخطبوط. يتوقف عند سلة مختلفة أو خيار غير مدعوم. راجع تطابق عنوان التوصيل والفرع. لا يُؤكد طلب أو دفع."
+            else "يفتح هنقرستيشن لتتصفحه بنفسك. الأخطبوط لا ينقر ولا يمرّر أثناء الاستعراض. يحفظ محليًا بيانات المطاعم والوجبات وخياراتها التي تعرضها أثناء هذه الجلسة. زر «احفظ وارجع للأخطبوط» ينهي القراءة ويعيدك للاختيار هنا. لا يبدأ التنقل وتجهيز السلتين إلا بعد ضغط زر المقارنة. لا يُؤكد طلب أو دفع.") },
         confirmButton = { TextButton(onClick = {
             consent = false
             graph.scope.launch { graph.settingsStore.acceptCatalogConsent(); graph.settings.first { it.catalogConsent }; beginManualReading() }
