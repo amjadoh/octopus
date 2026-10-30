@@ -15,6 +15,14 @@ fun CatalogAction.operation(): ElementOperation = when (this) {
 }
 
 object CatalogCommands {
+    /** The native Add items control returns to this cart's restaurant, unlike Android Back. */
+    fun cartMenuTarget(frame: CatalogFrame): CatalogNode? {
+        if (!frame.complete || HungerStationCatalog.screen(frame) != CatalogScreen.CART) return null
+        val anchor = frame.nodes.singleOrNull { it.id == "FlutterCart_addMoreItemButton" && it.enabled && !it.editable }
+            ?: return null
+        return frame.nodes.singleOrNull { it.parent == anchor.index && it.clickable && it.enabled &&
+            !it.editable && !it.omittedText && it.className == "android.widget.Button" && it.label == "إضافة أصناف" }
+    }
     /** Back controls and the search control's child are present in the saved device observations. */
     fun backTarget(frame: CatalogFrame): CatalogNode? {
         HungerStationSpinPromo.closeTarget(frame)?.let { return it }

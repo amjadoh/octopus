@@ -1,13 +1,13 @@
 {
-  "version": "1.3.18",
-  "versionCode": 26,
-  "tag": "v1.3.18",
+  "version": "1.3.19",
+  "versionCode": 27,
+  "tag": "v1.3.19",
   "scope": "scoped_native_comparison_update",
   "userRequestedPublication": true,
   "realComparisonComplete": false,
   "prerelease": false,
   "note": "User explicitly requested publication for their own testing after disclosure that full configured comparison remains unverified.",
-  "verificationReport": "verification/2026-10-30/native-configured-cart-status.json",
+  "verificationReport": "verification/2026-10-30/terra-native-recovery-status.json",
   "publicationMode": "user_trial",
   "userTrialAuthorized": true
 }
