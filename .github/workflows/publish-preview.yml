@@ -30,7 +30,7 @@ jobs:
             assert set(evidence.get('providersVerified', [])) == {'keeta', 'hungerstation'}, 'Both real providers are required'
           assert plan.get('scope') == evidence.get('scope') == 'scoped_native_comparison_update'
           assert plan.get('userRequestedPublication') is True and plan.get('prerelease') is False
-          assert plan.get('tag') == 'v1.3.16' and plan.get('version') == '1.3.16' and plan.get('versionCode') == 24
+          assert plan.get('tag') == 'v1.3.17' and plan.get('version') == '1.3.17' and plan.get('versionCode') == 25
           acceptance = json.loads((Path('docs') / plan['verificationReport']).read_text(encoding='utf-8'))
           if user_trial:
             assert acceptance['releaseReady'] is False
@@ -87,7 +87,7 @@ jobs:
       - name: Verify APKs and prepare release files
         run: |
           python3 .github/scripts/prepare_preview.py
-          git archive --format=zip --prefix=octopus-android/ HEAD -o release/octopus-source-1.3.16.zip
+          git archive --format=zip --prefix=octopus-android/ HEAD -o release/octopus-source-1.3.17.zip
           cp docs/TEST_ON_PHONE.md release/TEST_ON_PHONE.md
           cp docs/PREVIEW_RELEASE.md release/release-notes.md
           cd release
@@ -107,7 +107,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      RELEASE_TAG: v1.3.16
+      RELEASE_TAG: v1.3.17
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -119,12 +119,12 @@ jobs:
           if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > draft-state.txt; then
             test "$(cat draft-state.txt)" = true
           else
-            gh release create "$RELEASE_TAG" --draft --prerelease=false --target "$GITHUB_SHA" --title 'الأخطبوط 1.3.16 — تجربة المقارنة من سلة هنقرستيشن' --notes-file release/release-notes.md
+            gh release create "$RELEASE_TAG" --draft --prerelease=false --target "$GITHUB_SHA" --title 'الأخطبوط 1.3.17 — تجربة المقارنة من سلة هنقرستيشن' --notes-file release/release-notes.md
           fi
           gh release edit "$RELEASE_TAG" --draft --prerelease=false --target "$GITHUB_SHA" --notes-file release/release-notes.md
-          gh release upload "$RELEASE_TAG" release/octopus-1.3.16.apk release/octopus-source-1.3.16.zip release/validation-summary-ci.json release/SHA256SUMS.txt release/TEST_ON_PHONE.md
+          gh release upload "$RELEASE_TAG" release/octopus-1.3.17.apk release/octopus-source-1.3.17.zip release/validation-summary-ci.json release/SHA256SUMS.txt release/TEST_ON_PHONE.md
           gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' > asset-names.txt
-          grep -Fx 'octopus-1.3.16.apk' asset-names.txt
+          grep -Fx 'octopus-1.3.17.apk' asset-names.txt
       - name: Publish requested normal release after successful upload
         run: |
           gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest=true

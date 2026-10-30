@@ -62,4 +62,26 @@ class NativeCartImportTest {
     @Test fun resetPreventsCrossSessionReuse() {
         val s=session(); s.reset(); assertNull(s.read())
     }
+    @Test fun rejectionExplainsMissingMenuAndChangedBasketWithoutBlamingOptions() {
+        val missing = NativeCartImport().failure(cart(), HungerStationCatalog.TESTED_VERSION, 2000)!!
+        assertTrue(missing.contains("عداد السلة"))
+        assertFalse(missing.contains("الخيارات"))
+        assertTrue(session().failure(cart(qty="1"), HungerStationCatalog.TESTED_VERSION, 2000)!!.contains("لم تتطابق"))
+        assertTrue(session().failure(cart(), HungerStationCatalog.TESTED_VERSION, 31_001)!!.contains("٣٠ ثانية"))
+        assertTrue(session().failure(menu(), HungerStationCatalog.TESTED_VERSION, 2000)!!.contains("ليست سلة"))
+        assertNull(session().failure(cart(), HungerStationCatalog.TESTED_VERSION, 2000))
+    }
+    @Test fun freshReopenedCartProofRecoversMissingHistoryButNeverAcceptsMissingRows() {
+        val session = NativeCartImport()
+        assertNull(session.read())
+        val menu = menu()
+        val proof = app.octopus.local.automation.HungerStationCompleteCartProof.fromMenu(
+            menu, "البيك", HungerStationCatalog.TESTED_VERSION, 2000)!!
+        session.observe(menu, 2000)
+        assertTrue(proof.command.consume(menu, HungerStationCatalog.TESTED_VERSION, true, 2100))
+        assertNotNull(proof.finish(cart(), HungerStationCatalog.TESTED_VERSION, 2200))
+        assertNotNull(session.read(now = 2200))
+        assertNull(session.read(cart(qty = "1"), now = 2200))
+        assertNull(session.read(now = 32_001))
+    }
 }

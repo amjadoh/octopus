@@ -22,6 +22,19 @@ class CatalogSourceRegressionUiTest {
     private val area = CatalogArea("الرياض", "النرجس")
     private val name = "مطعم مصدرين للاختبار"
     private val url get() = area.url + "/مطعم-123"
+    @Test fun nativeComparisonFailureIsVisibleImmediatelyAboveHomeContent() {
+        val graph = graph()
+        val reason = "لم تثبت قراءة حديثة لعداد السلة من قائمة المطعم."
+        try {
+            compose.runOnIdle {
+                compose.activity.setContent { MaterialTheme { CatalogScreen(graph, {}, {}) } }
+            }
+            compose.waitForIdle()
+            compose.runOnIdle { graph.catalog.value = graph.catalog.value.copy(error = reason) }
+            compose.onNodeWithText("توقفت المقارنة").assertIsDisplayed()
+            compose.onNodeWithText(reason).assertIsDisplayed()
+        } finally { cleanup(graph) }
+    }
     private fun html(menu: Boolean): String {
         val region = """"city":{"slug":{"ar":"الرياض"}},"district":{"slug":{"ar":"النرجس"}}"""
         val data = if (menu) """$region,"vendor":{"id":123,"chain_name":"$name","status":"OPEN"},
