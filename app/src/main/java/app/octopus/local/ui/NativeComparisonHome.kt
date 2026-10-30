@@ -17,6 +17,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.octopus.local.*
 import app.octopus.local.R
 import app.octopus.local.automation.LiveCatalogBridge
+import app.octopus.local.automation.BasketMutationJournal
+import app.octopus.local.domain.CanonicalCart
 import app.octopus.local.domain.ProviderId
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -30,6 +32,7 @@ import java.math.BigDecimal
     val ready by graph.catalogReady.collectAsStateWithLifecycle()
     val cart by graph.draft.collectAsStateWithLifecycle()
     var consent by remember { mutableStateOf(false) }
+    var clearedCart by remember { mutableStateOf<CanonicalCart?>(null) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val busy = state.busy || state.comparisonRunning
     LaunchedEffect(Unit) { while (true) { now = System.currentTimeMillis(); delay(5000) } }
@@ -52,7 +55,13 @@ import java.math.BigDecimal
         Text("جهّز طلبك في هنقرستيشن، وقارن سعره مع كيتا.", color = OctopusPalette.Muted, fontSize = 15.sp)
         state.error?.let { error ->
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
-                Text(error, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error)
+                Column(Modifier.padding(16.dp)) {
+                    Text(error, color = MaterialTheme.colorScheme.error)
+                    if (!busy && cart != null && error in setOf(BasketMutationJournal.HIDDEN,
+                            BasketMutationJournal.UNRESOLVED, BasketMutationJournal.LEGACY_UNRESOLVED)) {
+                        TextButton(onClick = { clearedCart = cart }) { Text("أفرغت سلة كيتا وأريد البدء من جديد") }
+                    }
+                }
             }
         }
         Button(onClick = ::start, enabled = !busy && ready, modifier = Modifier.fillMaxWidth().height(62.dp),
@@ -97,6 +106,15 @@ import java.math.BigDecimal
         }
         if (!connected) TextButton(onClick = onSetup) { Text("ربط خدمة الأخطبوط") }
     }
+    clearedCart?.let { confirmed -> AlertDialog(onDismissRequest = { clearedCart = null },
+        title = { Text("تأكيد إفراغ سلة كيتا") },
+        text = { Text("أكد فقط إذا حذفت جميع أصناف ${confirmed.restaurant} من كيتا بنفسك. سيعيد الأخطبوط فحص السلة عند المقارنة قبل أي إضافة.") },
+        confirmButton = { TextButton(enabled = !busy, onClick = {
+            try { graph.confirmProviderCartCleared(ProviderId.KEETA, confirmed.fingerprint) }
+            catch (_: Exception) { graph.catalog.value = graph.catalog.value.copy(error = "تغير الطلب أو توجد عملية نشطة؛ لم أعتمد إفراغ السلة.") }
+            clearedCart = null
+        }) { Text("نعم، حذفت جميع أصناف هذا المطعم") } },
+        dismissButton = { TextButton(onClick = { clearedCart = null }) { Text("رجوع") } }) }
     if (consent) AlertDialog(onDismissRequest = { consent = false }, title = { Text("السماح بالمقارنة") },
         text = { Text("يفتح الأخطبوط هنقرستيشن ويقرأ السلة التي تختارها، ثم يجهز المطابق في كيتا ويقرأ الإجماليين. لا يؤكد طلبًا أو دفعًا. يمكنك إيقاف المقارنة أثناء التنفيذ.") },
         confirmButton = { TextButton(onClick = { consent = false; graph.scope.launch {

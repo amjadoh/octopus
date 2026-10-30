@@ -72,6 +72,28 @@ class DiagnosticUiTest {
         compose.onNodeWithText("ابدأ في هنقرستيشن").assertIsDisplayed()
         compose.onNodeWithText("قارن").assertIsDisplayed()
     }
+    @Test fun nativeHomeClearAttestationIsExplicitAndKeepsTheRequest() {
+        val graph=(compose.activity.application as OctopusApplication).graph
+        val request=app.octopus.local.domain.CanonicalCart("مطعم إفراغ تجريبي",null,
+            listOf(app.octopus.local.domain.CanonicalItem("وجبة",null,emptyList(),1)))
+        val provider=app.octopus.local.domain.ProviderId.KEETA
+        compose.runOnIdle {
+            graph.draft.value=request
+            graph.basketMutationJournal.beforeDispatch(provider,request)
+            graph.catalog.value=graph.catalog.value.copy(error=app.octopus.local.automation.BasketMutationJournal.UNRESOLVED)
+        }
+        compose.onNodeWithText("أفرغت سلة كيتا وأريد البدء من جديد").performClick()
+        compose.onNodeWithText("رجوع").performClick()
+        compose.runOnIdle { org.junit.Assert.assertTrue(runCatching { graph.basketMutationJournal.requireFirstAdd(provider,request) }.isFailure) }
+        compose.onNodeWithText("أفرغت سلة كيتا وأريد البدء من جديد").performClick()
+        compose.onNodeWithText("نعم، حذفت جميع أصناف هذا المطعم").performClick()
+        compose.runOnIdle {
+            graph.basketMutationJournal.requireFirstAdd(provider,request)
+            org.junit.Assert.assertEquals(request,graph.draft.value)
+            org.junit.Assert.assertFalse(graph.catalog.value.comparisonRunning)
+        }
+        compose.onNodeWithText("أفرغت سلة كيتا وأريد البدء من جديد").assertDoesNotExist()
+    }
     @Test fun inspectionPageIsExplicitAndDoesNotStartCaptureOnOpen() {
         compose.onNodeWithContentDescription("الإعدادات").performClick()
         scrollToText("أدوات فحص القراءة")
