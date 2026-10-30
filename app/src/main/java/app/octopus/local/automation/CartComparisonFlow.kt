@@ -16,7 +16,9 @@ class CartComparisonFlow {
         unchanged: () -> Boolean,
         progress: (CartComparisonProgress) -> Unit,
         totalAvailable: (ProviderId) -> Boolean = { false },
+        providerOrder: List<ProviderId> = ProviderId.entries,
     ) {
+        require(providerOrder.size == ProviderId.entries.size && providerOrder.toSet() == ProviderId.entries.toSet())
         suspend fun checkRequest() {
             currentCoroutineContext().ensureActive()
             check(unchanged()) { "تغير الطلب؛ توقفت المقارنة دون تعديل سلة أخرى." }
@@ -25,7 +27,7 @@ class CartComparisonFlow {
         ProviderId.entries.forEach { progress(CartComparisonProgress(it, CartComparisonStep.READING_MENU,
             "التحقق من أسعار الأصناف وخياراتها قبل تجهيز السلتين؛ لم يبدأ تعديل السلة.")) }
         readMenus()
-        for (provider in ProviderId.entries) {
+        for (provider in providerOrder) {
             checkRequest()
             if (!available(provider)) {
                 progress(CartComparisonProgress(provider, CartComparisonStep.PREPARATION_FAILED,

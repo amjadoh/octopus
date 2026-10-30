@@ -14,8 +14,9 @@ class KeetaOwnedDrawerReturn private constructor(
     private val version: String,
     private val quantity: Int,
     private val at: Long,
+    private val choices: Set<String> = emptySet(),
 ) {
-    private val reader = KeetaMenuReader(request.restaurant, request.items.single().name, version)
+    private val reader = KeetaMenuReader(request.restaurant, request.items.single().name, version, choices)
     private val basket = KeetaBasketReader(reader)
     private var backUsed = false
     private var reopenUsed = false
@@ -58,6 +59,17 @@ class KeetaOwnedDrawerReturn private constructor(
     }
 
     companion object {
+        /** Read-only return for a matching configured drawer. This grants no Add or review authority. */
+        fun createConfigured(frame: CatalogFrame, evidence: BasketEvidence, meal: SingleChoiceMeal,
+            version: String?, now: Long): KeetaOwnedDrawerReturn? {
+            if (version != "3.13.301" || now < 0 || !frame.complete || evidence.provider != ProviderId.KEETA) return null
+            val resolved = meal.resolve(evidence, now) ?: return null
+            if (!BasketItemMatcher.compare(meal.cart, resolved).matches) return null
+            val reader = KeetaMenuReader(meal.cart.restaurant, meal.cart.items.single().name, version, meal.values)
+            if (KeetaBasketReader(reader).evidence(frame) != evidence) return null
+            return KeetaOwnedDrawerReturn(frame, meal.cart, version, 1, now, meal.values)
+        }
+
         fun create(frame: CatalogFrame, evidence: BasketEvidence, request: CanonicalCart,
             version: String?, now: Long): KeetaOwnedDrawerReturn? {
             val profile = KeetaVersionProfile.resolve(version) ?: return null
