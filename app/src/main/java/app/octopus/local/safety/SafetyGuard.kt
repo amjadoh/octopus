@@ -13,9 +13,25 @@ import app.octopus.local.providers.KeetaMenuReader
 import app.octopus.local.providers.CatalogNode
 
 enum class ProposedAction { CLICK, SCROLL, INPUT_TEXT, GESTURE, GLOBAL_ACTION, CREATE_ORDER, PAYMENT }
-enum class CatalogAction { OPEN_BROWSE, CLOSE_BROWSE_PROMO, SCROLL_RESTAURANTS, OPEN_SEARCH, SET_QUERY, SELECT_SUGGESTION, OPEN_RESTAURANT, VIEW_MENU_NOTICE, SCROLL_MENU, OPEN_PRODUCT, SCROLL_PRODUCT, RETURN_TO_CATALOG, ADD_RIDAN, OPEN_BASKET, ADJUST_RIDAN_QUANTITY }
+enum class CatalogAction { CLOSE_HUNGER_VARIANT, OPEN_BROWSE, CLOSE_BROWSE_PROMO, CLOSE_SPIN_PROMO, SCROLL_RESTAURANTS, OPEN_SEARCH, SET_QUERY, SELECT_SUGGESTION, OPEN_RESTAURANT, VIEW_MENU_NOTICE, SCROLL_MENU, OPEN_PRODUCT, SCROLL_PRODUCT, RETURN_TO_CATALOG, ADD_RIDAN, OPEN_BASKET, ADJUST_RIDAN_QUANTITY }
 
 class SafetyGuard {
+    fun allowsHungerMenuSearch(action:app.octopus.local.automation.HungerMenuSearchAction,
+        session:app.octopus.local.automation.HungerMenuSearchSession,frame:CatalogFrame,node:CatalogNode,
+        cart:app.octopus.local.domain.CanonicalCart,foregroundPackage:String?,version:String?,
+        consent:Boolean,active:Boolean,now:Long):Boolean = consent && active && frame.complete &&
+        foregroundPackage==ProviderId.HUNGERSTATION.packageName && version==HungerStationCatalog.TESTED_VERSION &&
+        frame.nodes.none {ProviderAccessRestrictions.detect(it.label)!=null} &&
+        session.target(action,frame,cart,version,now)==node
+
+    fun allowsSpinPromoClose(frame: CatalogFrame, node: CatalogNode, foregroundPackage: String?,
+        version: String?, consent: Boolean, active: Boolean): Boolean =
+        consent && active && foregroundPackage == ProviderId.HUNGERSTATION.packageName &&
+            version == HungerStationCatalog.TESTED_VERSION &&
+            app.octopus.local.providers.HungerStationSpinPromo.closeTarget(frame) == node &&
+            !Regex("تأكيد|دفع|شراء|pay|checkout|payment|confirm", RegexOption.IGNORE_CASE).containsMatchIn(node.label) &&
+            CatalogFinancialBoundary.classify(node.id, node.className, node.clickable, node.editable,
+                ProviderId.HUNGERSTATION) == CatalogFinancialBoundary.Decision.NORMAL
     fun allowsKeetaSearch(action: KeetaSearchAction, reader: KeetaMenuReader, frame: CatalogFrame,
         node: CatalogNode, foregroundPackage: String?, version: String?, consent: Boolean, active: Boolean): Boolean =
         consent && active && frame.complete && foregroundPackage == ProviderId.KEETA.packageName &&
@@ -63,7 +79,8 @@ class SafetyGuard {
         if (!consent || !active || !complete || foregroundPackage != ProviderId.HUNGERSTATION.packageName) return false
         if (Regex("تأكيد|إتمام|اتمام|ادفع|دفع|شراء|اشتراك|place order|pay now|confirm|subscribe", RegexOption.IGNORE_CASE).containsMatchIn(label)) return false
         return when (action) {
-            CatalogAction.ADD_RIDAN, CatalogAction.OPEN_BASKET, CatalogAction.ADJUST_RIDAN_QUANTITY -> false // Separately issued single-use commands only.
+            CatalogAction.ADD_RIDAN, CatalogAction.OPEN_BASKET, CatalogAction.ADJUST_RIDAN_QUANTITY,
+            CatalogAction.CLOSE_HUNGER_VARIANT, CatalogAction.CLOSE_SPIN_PROMO -> false // Separately issued typed checks only.
             CatalogAction.OPEN_BROWSE -> screen == CatalogScreen.HOME
             CatalogAction.CLOSE_BROWSE_PROMO -> screen == CatalogScreen.BROWSE_PROMO
             CatalogAction.SCROLL_RESTAURANTS -> screen == CatalogScreen.BROWSE

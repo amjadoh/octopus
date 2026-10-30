@@ -19,6 +19,13 @@ class RestaurantBrowseTest {
         assertNull(HungerStationCatalog.browseEntry(home().copy(complete=false)))
         assertNull(HungerStationCatalog.browseEntry(home().copy(nodes=home().nodes.dropLast(2))))
     }
+    @Test fun observedEightCardGridKeepsRestaurantsAsTheFirstEntry() {
+        val frame = home().copy(nodes = home().nodes + listOf(n(17,2,click=true),
+            n(18,17,"banner_image",cls="android.widget.ImageView")))
+        assertEquals(3,HungerStationCatalog.browseEntry(frame)?.index)
+        assertNull(HungerStationCatalog.browseEntry(frame.copy(nodes=frame.nodes + listOf(n(19,2,click=true),
+            n(20,19,"banner_image",cls="android.widget.ImageView")))))
+    }
     @Test fun listingReadsOnlyRestaurantNamesAndGenresInsideItsRecycler() {
         val frame=CatalogFrame(listOf(n(0,id="vendorsRecycler"),n(1,id="hsBackButton"),
             n(2,0),n(3,2,"vendor_name","الطازج"),n(4,2,"vendor_genre","مشويات"),

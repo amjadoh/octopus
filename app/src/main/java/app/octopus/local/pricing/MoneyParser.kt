@@ -17,7 +17,7 @@ object MoneyParser {
                 else -> c
             }) }
         }
-        value = currency.replace(value, "").replace(Regex("[\u200e\u200f\u061c]"), "").trim()
+        value = currency.replace(value, "").replace(Regex("[\u200e\u200f\u061c\u202a-\u202e\u2066-\u2069]"), "").trim()
         if (Regex("[0-9]\\s+[0-9]").containsMatchIn(value)) return null
         value = value.replace(Regex("[\\s\u00a0]"), "")
         if (!allowed.matches(value) || value.count { it == '.' } > 1) return null

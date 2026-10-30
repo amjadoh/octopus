@@ -72,4 +72,15 @@ class GenericRestaurantSelectionTest {
         assertFalse(allowed(node=target.copy(index=9)))
         assertFalse(guard.allowsKeetaSearch(KeetaSearchAction.SUBMIT_QUERY,reader,frame,target,ProviderId.KEETA.packageName,reader.VERSION,true,true))
     }
+    @Test fun observedKeeta313SearchButtonCanOpenCandidateButNotAmbiguousCards() {
+        val reader=KeetaMenuReader("مدور","فطيرة","3.13.203")
+        val frame=CatalogFrame(listOf(n(0,label="مدور",id="x:id/tv_keyword"),
+            n(1,id="x:id/titlebar"),n(2,id="x:id/flash_list_view"),
+            n(3,id="x:id/dl_item_root",cls="android.widget.FrameLayout"),
+            n(4,3,"feed shopcard",cls="android.widget.Button",click=true)),true)
+        assertEquals(4,reader.searchCandidate(frame)?.index)
+        assertNull(reader.searchCandidate(frame.copy(complete=false)))
+        assertNull(reader.searchCandidate(frame.copy(nodes=frame.nodes+frame.nodes.last().copy(index=5))))
+        assertNull(reader.searchCandidate(frame.copy(nodes=frame.nodes.map { if(it.index==0)it.copy(label="مطعم آخر") else it })))
+    }
 }

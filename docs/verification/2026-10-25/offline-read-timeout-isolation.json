@@ -1,0 +1,24 @@
+{
+  "checkpointLocal": "2026-10-26 07:07 Asia/Riyadh",
+  "deviceActions": 0,
+  "sourceChange": "A nested read timeout in one provider now produces an unavailable menu preview for that provider and lets the other read continue. Full comparison timeout,user cancellation,protected/unknown screen failures still interrupt the complete session. No price is fabricated and unavailable provider cannot prepare.",
+  "tests": 427,
+  "testFailures": 0,
+  "lintErrors": 0,
+  "lintWarnings": 5,
+  "normalApkSha256": "036C0EB31E92CD4482FF256E5A73FDEA91DB091BCDECFA8C67EF88A235943BB5",
+  "normalApkBuilt": true,
+  "normalApkInstalled": false,
+  "testReceiverInNormalManifest": false,
+  "realDeviceProofForNewTimeoutChange": false,
+  "notesFixtureSearch": "Existing tracked notes examples are synthetic3.12 reader tests, not actual Fatera3.13.203 structural captures. Saved local Keeta product JSON/XML checked have zero notes-field anchors. Do not use them as Fatera structure or claim new Add support.",
+  "fullJourneyReady": false,
+  "releasePublished": false,
+  "remaining": [
+    "Actual Fatera notes-PDP structured capture and guarded reader/admission",
+    "Normal UI Compare starting with both baskets empty, all rows/new final totals/both handoffs/retry",
+    "Approval-bound real foreign-cart replacement",
+    "Address/branch equivalence and unsupported modifiers/scrolling carts"
+  ],
+  "humanRequest": "User requests complete application release. Current build does not satisfy that scope. No partial publication labeled complete and no device action after disconnect."
+}

@@ -1,0 +1,31 @@
+{
+  "checkpointLocal": "2026-10-26 07:01 Asia/Riyadh",
+  "user": "User said he will disconnect phone. No further device actions until explicit reconnect authorization.",
+  "stopBroadcast": "DUMP-protected stop returned RUNTIME_STARTED at07:01:39; no active comparison was running.",
+  "installedSha256": "06C324768394741444569360F11A9C32BF546009B32B64ABA7B751E0A0700019",
+  "latestBuiltSha256": "CD5AC5525AC7DA6651E3ED7B886D065BC8E9AFC8043F2F0D297AAF2BE51AB0F1",
+  "latestBuildInstalled": false,
+  "tests": 423,
+  "lintErrors": 0,
+  "lintWarnings": 5,
+  "request": {
+    "restaurant": "فطيرة",
+    "items": [
+      {
+        "name": "جبن فيتا",
+        "quantity": 3
+      },
+      {
+        "name": "زعتر",
+        "quantity": 3
+      }
+    ]
+  },
+  "actualFatera": "Native Keeta reached Fatera feta PDP, visibly7SAR, plain notes-field layout. Main reader timed out because this alternative layout is not recognized under3.13.203. No Add dispatched, no total, HS stage not reached. Saved local screenshot is food-only under ignored work/device-20261025/keeta-search-0659.png. Actual structured frame still needs capture; do not fabricate it from screenshot.",
+  "newLocalCodeOnly": "Development probe can capture known matching food PDP with exactly one empty notes editor/title/notes/Add/rest anchors. This change passed build/tests/lint, NOT installed or used. It authorizes capture only, not Add.",
+  "physicalCarts": "HS actual verified Kudo nachos2/fries3, subtotal53 and historical06:44 final55.79. Keeta Kudo first Add rejected by genuine closed-store modal;0Adds/0rows, no matching cart proof. Fatera has no provider cart from these attempts.",
+  "normalBothEmptyCompareVerified": false,
+  "addressBranchEquivalenceVerified": false,
+  "published": false,
+  "nextOffline": "Review/implement guarded notes-PDP reader using saved historical structured fixtures where available. Do not invent Fatera nodes or generalize Add from screenshot. Review strict cart/preparation tests and foreign-cart replacement architecture. Device verification remains pending; no phone actions until user reconnects. No push/publication."
+}

@@ -4,7 +4,13 @@ import app.octopus.local.domain.ProviderId
 import app.octopus.local.pricing.MoneyParser
 
 /** Honor 3.12.501 cart drawer only. No checkout or clear-cart selector. */
-open class KeetaBasketReader(private val catalog: KeetaMenuReader) {
+open class KeetaBasketReader(private val catalog: KeetaMenuReader, private val requestedTitles: Set<String> = setOf(catalog.title)) {
+    init { require(requestedTitles.isNotEmpty() && catalog.title in requestedTitles && requestedTitles.all { it.isNotBlank() }) }
+    companion object {
+        fun requestedTitleCandidate(raw: String, requested: Set<String>): String? =
+            raw.replace(Regex("[\\u200e\\u200f\\u061c\\u202a-\\u202e\\u2066-\\u2069]"), "").trim()
+                .takeIf {it in requested}
+    }
     private val title get() = catalog.title
     private fun parent(f: CatalogFrame, n: CatalogNode) = f.nodes.singleOrNull { it.index == n.parent }
     private fun ancestors(f: CatalogFrame, n: CatalogNode): List<CatalogNode> {
@@ -23,10 +29,10 @@ open class KeetaBasketReader(private val catalog: KeetaMenuReader) {
     fun addTarget(f: CatalogFrame, expectedUnit: Long): CatalogNode? {
         if (!catalog.product(f) || catalog.price(f) != expectedUnit ||
             catalog.unitPrice(f) != expectedUnit) return null
-        val notes = f.nodes.singleOrNull { it.label == "طلب خاص" } ?: return null
-        val body = ancestors(f, notes).firstOrNull { it.className == "android.widget.ScrollView" } ?: return null
+        val body = catalog.productBody(f) ?: return null
         val content = f.descendants(body.index)
-        if (body.scrollable || content.filter { it.editable }.size != 1 || content.any { it.editable && it.enteredText }) return null
+        val expectedEditors = if (catalog.profile.usesCurrentLayout && !catalog.hasOptionalPlainProof(f)) 0 else 1
+        if ((body.scrollable && !catalog.hasOptionalPlainProof(f)) || content.filter { it.editable }.size != expectedEditors || content.any { it.editable && it.enteredText }) return null
         val add = f.nodes.singleOrNull { it.label == "إضافة إلى السلة" } ?: return null
         for (group in ancestors(f, add)) {
             val children = f.nodes.filter { it.parent == group.index }
@@ -68,7 +74,31 @@ open class KeetaBasketReader(private val catalog: KeetaMenuReader) {
         return f.descendants(bag.index).filter { !it.clickable }.mapNotNull(::quantity).singleOrNull()
     }
 
-    private fun row(f: CatalogFrame): CatalogNode? {
+    /** Restore only requested food names in the observed drawer's first text slot per row.
+     * Other requested names in a product/options sheet remain omitted and cannot authorize Add.
+     * Candidates are transient exact-name matches, never raw arbitrary screen text.
+     */
+    fun restoreRequestedRowTitles(f: CatalogFrame, candidates: Map<Int, String>): CatalogFrame {
+        val cards = visibleCards(f) ?: return f
+        val headers = cards.mapNotNull { card ->
+            val node = f.descendants(card.index).firstOrNull { it.className == "android.widget.TextView" } ?: return@mapNotNull null
+            val name = candidates[node.index]?.takeIf { it in requestedTitles } ?: return@mapNotNull null
+            if(node.clickable || node.editable || node.id.isNotEmpty() || node.label.isNotEmpty() || !node.omittedText) null
+            else node.index to name
+        }.toMap()
+        val scoped=f.copy(nodes=f.nodes.map { node -> headers[node.index]?.let { node.copy(label=it,omittedText=false) } ?: node })
+        val variants=cards.flatMap { card ->
+            val body=scoped.descendants(card.index)
+            val name=body.firstOrNull {it.className=="android.widget.TextView"}?.label?.takeIf {it in requestedTitles}
+                ?: return@flatMap emptyList()
+            body.filter {node -> candidates[node.index]==name && node.label.isEmpty() && node.omittedText &&
+                !node.clickable && !node.editable && node.id.isEmpty() && plainSkuLabel(scoped,node,name)
+            }.map {it.index to name}
+        }.toMap()
+        return scoped.copy(nodes=scoped.nodes.map {node -> variants[node.index]?.let {node.copy(label=it,omittedText=false)} ?: node})
+    }
+
+    private fun visibleCards(f: CatalogFrame): List<CatalogNode>? {
         if (!catalog.basketDrawer(f)) return null
         val heading = f.nodes.singleOrNull { it.label == "الأصناف المضافة" } ?: return null
         val pane = parent(f, parent(f, heading) ?: return null) ?: return null
@@ -76,23 +106,123 @@ open class KeetaBasketReader(private val catalog: KeetaMenuReader) {
         // A scrolling/multi-row pane has not proved its full contents.
         if (scroll.scrollable) return null
         val content = f.nodes.singleOrNull { it.parent == scroll.index } ?: return null
-        val rows = f.nodes.filter { it.parent == content.index }.firstOrNull() ?: return null
-        val cards = f.nodes.filter { it.parent == rows.index }
-        val card = cards.singleOrNull()?.takeIf { it.clickable && it.enabled } ?: return null
+        // Observed 3.13.203 wraps each row in its own section; older captures
+        // put several rows in one section. Account for every direct section/child.
+        val sections=f.nodes.filter {it.parent==content.index}
+        if(sections.isEmpty())return null
+        val cards=mutableListOf<CatalogNode>()
+        for(section in sections) {
+            if (section == sections.last() && promotionalSummary(f, section) != null) continue
+            if(section.className!="android.view.ViewGroup" || section.clickable || section.editable ||
+                section.scrollable || section.label.isNotEmpty() || section.omittedText)return null
+            val children=f.nodes.filter {it.parent==section.index}
+            val rows=children.filter {it.clickable && it.enabled && it.className=="android.view.ViewGroup"}
+            if(rows.isEmpty())return null
+            for(separator in children-rows.toSet()) {
+                val body=f.descendants(separator.index)
+                if(body.size>2 || body.any {it.className!="android.view.ViewGroup" || it.clickable || it.editable ||
+                        it.scrollable || it.label.isNotEmpty() || it.omittedText})return null
+            }
+            cards+=rows
+        }
+        if(cards.size>requestedTitles.size)return null
+        return cards
+    }
+
+    private fun promotionalSummary(f: CatalogFrame, section: CatalogNode): Long? {
+        if (catalog.VERSION != "3.13.301" || catalog.requestedChoices.isEmpty()) return null
+        val body = f.descendants(section.index)
+        val labels = setOf("تفاصيل العرض الترويجي", "يتم تأكيد المبلغ النهائي عند صفحة إتمام الدفع", "الإجمالي الفرعي", "الخصم", "الأصناف الترويجية", "الإجمالي")
+        val promotionLabel = body.singleOrNull { it.label == "الأصناف الترويجية" } ?: return null
+        val promotionLink = parent(f, promotionLabel)?.takeIf { it.className == "android.view.ViewGroup" &&
+            f.descendants(it.index).size == 2 && !promotionLabel.clickable }
+        if (body.any { (it.clickable && it != promotionLink) || it.editable || it.scrollable || it.omittedText } ||
+            labels.any { label -> body.count { it.label == label } != 1 } ||
+            body.any { it.label.isNotBlank() && it.label !in labels && MoneyParser.parse(it.label) == null }) return null
+        fun amount(label: String): Long? {
+            val text = body.single { it.label == label }
+            val group = parent(f, text) ?: return null
+            return f.descendants(group.index).filter { it.label.contains('﷼') }.singleOrNull()?.label?.let(MoneyParser::parse)
+        }
+        val base = amount("الإجمالي الفرعي") ?: return null
+        val discount = amount("الخصم") ?: return null
+        val total = amount("الإجمالي") ?: return null
+        return total.takeIf { base >= 0 && discount <= 0 && total >= 0 &&
+            runCatching { Math.addExact(base, discount) }.getOrNull() == total }
+    }
+
+    private fun plainSkuLabel(f:CatalogFrame,node:CatalogNode,name:String=node.label):Boolean {
+        val control=parent(f,node) ?: return false
+        val wrapper=parent(f,control) ?: return false
+        val parts=f.nodes.filter {it.parent==wrapper.index}
+        return control.clickable && control.enabled && control.className=="android.view.ViewGroup" &&
+            f.descendants(control.index).size==2 && parts.size==2 && parts[1]==control &&
+            f.descendants(parts[0].index).size==3 &&
+            f.descendants(parts[0].index).count {it.className=="android.widget.ImageView"}==1 &&
+            f.descendants(parts[0].index).count {it.label==name && !it.clickable}==1 &&
+            f.descendants(parts[0].index).none {it.label.isNotEmpty() && it.label!=name || it.omittedText || it.clickable}
+    }
+
+    private fun rowAmount(f: CatalogFrame, body: List<CatalogNode>): Long? {
+        val prices = body.filter { it.label.contains('﷼') }
+        if (prices.size == 1) return MoneyParser.parse(prices.single().label)
+        if (catalog.VERSION != "3.13.301" || catalog.requestedChoices.isEmpty() || prices.size != 2 ||
+            body.count { it.label.matches(Regex("خصم [0-9٠-٩]{1,2}%")) } != 1) return null
+        val current = prices[0]
+        val group = parent(f, current) ?: return null
+        val parts = f.nodes.filter { it.parent == group.index }
+        if (parts.size != 2 || parts[0] != current || parts[1].className != "android.view.ViewGroup" ||
+            f.descendants(parts[1].index).filter { it.label.contains('﷼') } != listOf(prices[1])) return null
+        val amount = MoneyParser.parse(current.label) ?: return null
+        val original = MoneyParser.parse(prices[1].label) ?: return null
+        return amount.takeIf { it >= 0 && it < original }
+    }
+
+    private fun rows(f: CatalogFrame): List<CatalogNode>? {
+        val cards = visibleCards(f) ?: return null
+        val names = mutableSetOf<String>()
+        for (card in cards) {
+        if (!card.clickable || !card.enabled) return null
         val body = f.descendants(card.index)
+        val named = body.filter { it.label in requestedTitles }
+        val name = named.map {it.label}.distinct().singleOrNull() ?: return null
+        if(named.size !in 1..2 || (named.size==2 && !plainSkuLabel(f,named[1]))) return null
+        if (!names.add(name)) return null
         if (body.size > 65 || body.any { it.omittedText || it.editable } ||
-            body.filter { it.label.isNotEmpty() }.any { it.label != title && quantity(it) == null && !it.label.contains('﷼') } ||
-            body.count { it.label == title } != 1 || body.count { quantity(it) != null && it.clickable } != 1 ||
-            body.count { it.label.contains('﷼') && MoneyParser.parse(it.label) != null } != 1) return null
-        return card
+            body.filter { it.label.isNotEmpty() }.any { it.label != name && quantity(it) == null && !it.label.contains('﷼') &&
+                catalog.configuredChoices(it.label) == null &&
+                !(catalog.requestedChoices.isNotEmpty() && it.label.matches(Regex("خصم [0-9٠-٩]{1,2}%"))) } ||
+            body.count { it.label == name } !in 1..2 || body.count { quantity(it) != null && it.clickable } != 1 ||
+            rowAmount(f, body) == null) return null
+        }
+        return cards
+    }
+
+    private fun row(f: CatalogFrame): CatalogNode? = rows(f)?.singleOrNull { card ->
+        f.descendants(card.index).any { it.label == title }
     }
 
     fun evidence(f: CatalogFrame): BasketEvidence? {
-        val row = row(f) ?: return null
-        val body = f.descendants(row.index)
-        val count = body.singleOrNull { quantity(it) != null && it.clickable }?.let(::quantity) ?: return null
-        val amount = body.singleOrNull { it.label.contains('﷼') }?.label?.let(MoneyParser::parse) ?: return null
-        return BasketEvidence(ProviderId.KEETA, catalog.restaurant, listOf(BasketLineEvidence(title, emptyList(), count, amount)), amount, true)
+        val cards = rows(f) ?: return null
+        val lines = cards.map { card ->
+            val body = f.descendants(card.index)
+            val name = body.first { it.label in requestedTitles }.label
+            val count = body.singleOrNull { quantity(it) != null && it.clickable }?.let(::quantity) ?: return null
+            val amount = rowAmount(f, body) ?: return null
+            val choices = body.filter { it.label.isNotEmpty() && it.label != name && quantity(it) == null && !it.label.contains('﷼') &&
+                !it.label.matches(Regex("خصم [0-9٠-٩]{1,2}%")) }
+                .flatMap { catalog.configuredChoices(it.label) ?: return null }
+            if (choices.map { it.value }.distinct().size != choices.size) return null
+            if (catalog.requestedChoices.isNotEmpty() && choices.map { it.value }.toSet() != catalog.requestedChoices) return null
+            BasketLineEvidence(name, choices, count, amount)
+        }
+        val subtotal = runCatching { lines.fold(0L) { total, line -> Math.addExact(total,line.lineAmount!!) } }.getOrNull() ?: return null
+        val summary = f.nodes.singleOrNull { it.label == "تفاصيل العرض الترويجي" }
+        if (summary != null) {
+            val section = ancestors(f, summary).firstOrNull { promotionalSummary(f, it) != null } ?: return null
+            if (promotionalSummary(f, section) != subtotal) return null
+        }
+        return BasketEvidence(ProviderId.KEETA, catalog.restaurant, lines, subtotal, true)
     }
 
     fun quantityTarget(f: CatalogFrame, increase: Boolean): CatalogNode? {

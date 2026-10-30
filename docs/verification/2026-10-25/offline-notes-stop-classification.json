@@ -1,0 +1,39 @@
+{
+  "checkpointLocal": "2026-10-26 07:44 Asia/Riyadh",
+  "deviceActions": 0,
+  "scope": "Unreleased diagnostic rejection improvement only; NOT notes-product support or Fatera Add authority",
+  "change": "For tested3.13.203, a complete matching restaurant/title/notes/Add sheet with exactly one empty notes editor that existing product reader does not recognize now returns a fixed unsupported-layout error after stable observation instead of waiting for the product timeout. Per-provider read catches retain unavailable price and permit other provider reading; no raw exception/provider text is exposed. Recognized products remain unchanged.",
+  "notAuthorized": [
+    "No Close/Add/quantity/payment action from the diagnostic classifier",
+    "No inferred price or complete options",
+    "No invented actual Fatera structure from screenshot"
+  ],
+  "tests": {
+    "unitTotal": 432,
+    "failures": 0,
+    "newRejectionTests": 5,
+    "newTestsAreSynthetic": true,
+    "recordedFixtureRegression": "Existing actual Herfy single-SKU frame remains outside notes classifier"
+  },
+  "lintErrors": 0,
+  "lintWarnings": 5,
+  "localCandidateApkSha256": "09AA7C4F2EC2707D22C5181DAFDAEEC5ECA999C3A6CBE1A9B9109514DF03AC8A",
+  "candidateInstalled": false,
+  "candidatePushed": false,
+  "candidatePublished": false,
+  "candidateEmulatorUiTestsRun": false,
+  "candidateRealDeviceTestsRun": false,
+  "publishedRelease": {
+    "version": "1.3.9",
+    "versionCode": 17,
+    "commit": "ac565f5569b820a6e0d6c74688d251a8242db423",
+    "unitTests": 427,
+    "emulatorUiTests": 21,
+    "sha256": "da36a4cfb91f5e8f8204d5a4d5c1e781bdcad646c4ae261cee9b62595a0d0bc3",
+    "private": true,
+    "prerelease": true,
+    "alreadyNotified": true
+  },
+  "fullJourneyReady": false,
+  "next": "No phone actions until explicit reconnect. Actual notes-sheet structure still required before a guarded read/Add implementation. Continue evidence-based offline work, no new push/release absent human authorization."
+}

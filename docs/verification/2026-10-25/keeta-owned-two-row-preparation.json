@@ -1,0 +1,86 @@
+{
+  "date": "2026-10-26",
+  "timezone": "Asia/Riyadh",
+  "apk": "1.3.8 diagnostic device-tools",
+  "apkSha256": "7DF60918B32099B3BF96E1AABC1FBCDBA40DAC5E2970856BAFEBA6F58EA2B287",
+  "scope": "Keeta two plain rows in a fully visible non-scrolling drawer; no checkout or final quote",
+  "request": {
+    "items": [
+      {
+        "quantity": 3,
+        "name": "بطاطس وسط"
+      },
+      {
+        "quantity": 1,
+        "name": "جبنة الناتشوز"
+      }
+    ],
+    "additions": [],
+    "restaurant": "كودو"
+  },
+  "currentVerifiedBasket": {
+    "provider": "KEETA",
+    "rows": [
+      {
+        "name": "بطاطس وسط",
+        "quantity": 3,
+        "lineAmountHalala": 2700
+      },
+      {
+        "name": "جبنة الناتشوز",
+        "quantity": 1,
+        "lineAmountHalala": 1300
+      }
+    ],
+    "itemSubtotalHalala": 4000,
+    "complete": true
+  },
+  "verifiedTransitions": [
+    {
+      "allRowsVerified": true,
+      "additionalAddDispatches": 0,
+      "transition": "Read and retain existing matching two-row basket",
+      "completedByLocal": "02:23:33"
+    },
+    {
+      "unchangedFriesQuantity": 3,
+      "allRowsVerified": true,
+      "transition": "Nachos 1 to 2",
+      "completedByLocal": "02:23:58",
+      "itemSubtotalHalala": 5300
+    },
+    {
+      "unchangedFriesQuantity": 3,
+      "allRowsVerified": true,
+      "transition": "Nachos 2 to 1",
+      "completedAt": "2026-10-26T02:24:17.1950000+03:00",
+      "itemSubtotalHalala": 4000
+    }
+  ],
+  "developmentFailures": [
+    "First 150-second attempt timed out after entering the change phase. A later actual drawer contained the missing nachos row once. Same-run successful add acknowledgement was not established in that attempt.",
+    "Following attempt stopped before editing because the reader did not understand separately wrapped rows.",
+    "Normalizing directional formatting alone did not fix the baseline; the next attempt safely stopped with zero adds. The redacted drawer shape revealed independent row sections and an empty separator.",
+    "Initial new fixture tests selected a background title/scroll region; fixed to the drawer ancestry. A JSON fixture used Android stub objects, so converted to the existing real TSV loader. Final suite passes."
+  ],
+  "safety": [
+    "Full request fingerprint and provider version are checked throughout.",
+    "Every new session requires a complete known plain subset of the requested basket; unknown/duplicate/modified/incomplete rows stop.",
+    "Exactly one pending edit is consumed before dispatch. All row quantities are checked afterwards. Failure/timeout cannot retry the action in that session.",
+    "Requested food names are restored only in the known drawer title slot; product modifiers remain omitted and unsafe.",
+    "No clear-cart, remove-last-item, checkout, order confirmation or payment command exists in the new driver."
+  ],
+  "unitTestsPassed": 379,
+  "unitFailures": 0,
+  "lintErrors": 0,
+  "lintWarnings": 5,
+  "limits": [
+    "Device verification entry only; main full Compare remains single plain item.",
+    "Fresh missing-row addition with successful same-run complete acknowledgement still needs a separate verified run.",
+    "Empty-cart and scrolling/large-cart preparation are unsupported by this driver.",
+    "HungerStation still has only the prior fries x3 cart; no two-row preparation or final quote exists for this request.",
+    "Address and branch equivalence remain unverified. No final quote was read for this two-row request.",
+    "The installed APK currently includes the DUMP-protected device test receiver; it is not published."
+  ],
+  "published": false
+}

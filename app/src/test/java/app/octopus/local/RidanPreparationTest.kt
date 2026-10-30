@@ -20,6 +20,31 @@ class RidanPreparationTest {
         return reader.finish(now)
     }
     private val selection = ProductSelection("item", emptyMap(), 1)
+    private fun occupiedMenu()=emptyMenu.copy(nodes=emptyMenu.nodes+listOf(
+        node(10,"FlutterMenu_goToCartButton"),node(11,text="عرض السلة\n30\n§",click=true,cls="android.widget.Button",parent=10),
+        node(12,"FlutterMenu_goToCartQuantity","1",parent=11)))
+    private val previous=BasketEvidence(ProviderId.HUNGERSTATION,"ريدان",listOf(BasketLineEvidence("صنف سابق",emptyList(),1,3000)),3000,true)
+    private val mixed=CanonicalCart("ريدان",null,listOf(CanonicalItem("صنف سابق",null,emptyList(),1),CanonicalItem(RidanCartProgram.TITLE,null,emptyList(),1)))
+    @Test fun occupiedCartAdditionRequiresOwnedMissingLineAndChecksAllContentsAfterward() {
+        val owner=PlainBasketPreparationSession.create(mixed,previous,HungerStationCatalog.TESTED_VERSION)!!
+        val edit=(owner.next(mixed,previous,HungerStationCatalog.TESTED_VERSION,now) as PlainBasketPreparationSession.Step.Change).edit
+        val permit=RidanCartProgram.createForOwnedAddition(details(),selection,occupiedMenu(),mixed,previous,owner,edit,now)!!
+        assertTrue(permit.consumeAdd(product,add,now))
+        assertFalse(permit.consumeAdd(product,add,now))
+        val after=previous.copy(lines=previous.lines+BasketLineEvidence(RidanCartProgram.TITLE,emptyList(),1,3000),subtotal=6000)
+        assertTrue(owner.acknowledge(edit,mixed,after,HungerStationCatalog.TESTED_VERSION,now+1))
+        assertEquals(PlainBasketPreparationSession.Step.Ready,owner.next(mixed,after,HungerStationCatalog.TESTED_VERSION,now+2))
+        assertNull(RidanCartProgram.create(details(),selection,occupiedMenu(),now))
+    }
+    @Test fun occupiedCartPermitRejectsChangedFooterPartialObservationAndAnotherSessionsEdit() {
+        val owner=PlainBasketPreparationSession.create(mixed,previous,HungerStationCatalog.TESTED_VERSION)!!
+        val edit=(owner.next(mixed,previous,HungerStationCatalog.TESTED_VERSION,now) as PlainBasketPreparationSession.Step.Change).edit
+        val changed=occupiedMenu().copy(nodes=occupiedMenu().nodes.map {if(it.id=="FlutterMenu_goToCartQuantity")it.copy(label="2") else it})
+        assertNull(RidanCartProgram.createForOwnedAddition(details(),selection,changed,mixed,previous,owner,edit,now))
+        assertNull(RidanCartProgram.createForOwnedAddition(details(),selection,occupiedMenu(),mixed,previous.copy(complete=false),owner,edit,now))
+        val other=PlainBasketPreparationSession.create(mixed,previous,HungerStationCatalog.TESTED_VERSION)!!
+        assertNull(RidanCartProgram.createForOwnedAddition(details(),selection,occupiedMenu(),mixed,previous,other,edit,now))
+    }
     @Test fun fixedMealHasNoRequiredOptionsAndCanBeSelected() {
         assertTrue(details().optionsComplete)
         assertTrue(RidanCartProgram.supports(details(),selection,now))
@@ -38,6 +63,51 @@ class RidanPreparationTest {
         val program=checkNotNull(RidanCartProgram.create(details(),selection,emptyMenu,now))
         assertTrue(program.consumeAdd(product,add,now))
         assertFalse(program.consumeAdd(product,add,now))
+    }
+    @Test fun providerBidiFormattingDoesNotChangeTheValidatedAddAmount() {
+        val formatted = product.copy(nodes=product.nodes.map {
+            if(it.id=="flutterAddButton") it.copy(label="إضافة\n\u202a§\n30\u202c") else it
+        })
+        val program=checkNotNull(RidanCartProgram.create(details(formatted),selection,emptyMenu,now))
+        assertTrue(program.consumeAdd(formatted,formatted.nodes.last(),now))
+        assertNull(app.octopus.local.pricing.MoneyParser.parse("7\u202c 6"))
+    }
+    private fun optionalProduct(extraPrice: String = "6", total: String = "30"): CatalogFrame {
+        val changedAdd = add.copy(label = "إضافة\n§\n$total")
+        return product.copy(nodes = listOf(product.nodes[0], product.nodes[1],
+            node(10,text="يمكنك اضافة"), node(11,text="اختيار واحد"),
+            node(12,text="بطاطس\n(§\n$extraPrice\n+)",click=true), product.nodes[2], product.nodes[3], changedAdd))
+    }
+    @Test fun observedPaidOptionalChoiceCanBeOmittedOnlyWhenAddTotalStaysAtBasePrice() {
+        val frame = optionalProduct()
+        val program = checkNotNull(RidanCartProgram.create(details(frame),selection,emptyMenu,now))
+        assertTrue(program.consumeAdd(frame,frame.nodes.last(),now))
+        val selected = optionalProduct(total="36")
+        val denied = checkNotNull(RidanCartProgram.create(details(frame),selection,emptyMenu,now))
+        assertFalse(denied.consumeAdd(selected,selected.nodes.last(),now))
+    }
+    @Test fun freeOrUnknownOptionalSurchargeCannotUseThePlainItemPermit() {
+        for (price in listOf("0", "مجاني", "غير معروف")) {
+            val frame = optionalProduct(price)
+            val program = checkNotNull(RidanCartProgram.create(details(frame),selection,emptyMenu,now))
+            assertFalse(program.consumeAdd(frame,frame.nodes.last(),now))
+        }
+    }
+    @Test fun recordedPastryExtrasAndNutritionMetadataAllowOnlyUnselectedPaidExtras() {
+        val frame = optionalProduct().let { original -> original.copy(nodes =
+            listOf(node(20, text="الحقائق الغذائية", click=true, cls="android.widget.ImageView")) +
+                original.nodes.map { if(it.label == "يمكنك اضافة") it.copy(label="اضافات فطاير") else it }) }
+        val parsed = details(frame)
+        assertTrue(parsed.optionsComplete)
+        assertEquals(0, parsed.product.groups.single().minimum)
+        val permit = checkNotNull(RidanCartProgram.create(parsed,selection,emptyMenu,now))
+        assertTrue(permit.consumeAdd(frame,frame.nodes.last(),now))
+        val required = frame.copy(nodes=frame.nodes.flatMap {
+            if(it.label=="اضافات فطاير") listOf(it,node(21,text="مطلوب")) else listOf(it)
+        })
+        assertFalse(RidanCartProgram.supports(details(required),selection,now))
+        val unknown = frame.copy(nodes=frame.nodes.map { if(it.label=="اضافات فطاير") it.copy(label="خيارات غير معروفة") else it })
+        assertFalse(details(unknown).optionsComplete)
     }
     @Test fun existingCartAndUnknownContextAreNotReplaced() {
         assertNull(RidanCartProgram.create(details(),selection,emptyMenu.copy(nodes=emptyMenu.nodes+node(8,"FlutterMenu_goToCartButton")),now))
@@ -61,6 +131,17 @@ class RidanPreparationTest {
         assertTrue(result.lines.single().choices.isEmpty())
         assertFalse(result.complete)
         assertFalse(result.recognizedOrderReview)
+    }
+    @Test fun actualNoModificationsLabelIsNotAnAddedChoice() {
+        val cart=CatalogFrame(listOf(node(0,"FlutterCart_title","السلة\nمدور"),
+            node(1,"FlutterCart_cartItem","فطيرة جبن فيتا\nلايوجد تعديلات أو إضافات\nتعديل\n7\n§"),
+            node(2,"menuItemActionDualButtonValue","1",parent=1)),true)
+        val actual=BasketEvidenceReader.hungerStation(cart,true)
+        assertTrue(actual.complete)
+        assertTrue(actual.lines.single().choices.isEmpty())
+        assertEquals(700L,actual.lines.single().lineAmount)
+        val changed=cart.copy(nodes=cart.nodes.map { if(it.index==1)it.copy(label=it.label.replace("لايوجد تعديلات أو إضافات","شيبس")) else it })
+        assertEquals("شيبس",BasketEvidenceReader.hungerStation(changed,true).lines.single().choices.single().value)
     }
     @Test fun otherRestaurantAndMealUseOwnOneShotPermit() {
         val name="مدور"; val title="فطيرة شكشوكة بالجبن"
@@ -86,4 +167,15 @@ class RidanPreparationTest {
         assertFalse(program.consumeAdd(product.copy(nodes=product.nodes.map { if(it.id==changed.id)changed else it }),changed,now))
         assertTrue(program.consumeAdd(product,add,now))
     }
+    @Test fun fullRequestSeedUsesExistingPlainAddChecksAndRejectsShrunkenDraft() {
+        val line=mixed.items.last()
+        val first=RidanCartProgram.createForSeed(details(),selection,emptyMenu,mixed,line,now,now)!!
+        assertFalse(first.first.consumeAdd(product,add,now+1,mixed.copy(items=listOf(line))))
+        val next=RidanCartProgram.createForSeed(details(),selection,emptyMenu,mixed,line,now,now)!!
+        assertTrue(next.first.consumeAdd(product,add,now+1,mixed))
+        val actual=BasketEvidence(ProviderId.HUNGERSTATION,mixed.restaurant,listOf(BasketLineEvidence(line.name,emptyList(),1,3000)),3000,true)
+        assertTrue(next.second.acknowledge(mixed,actual,HungerStationCatalog.TESTED_VERSION,now+2))
+        assertFalse(next.first.consumeAdd(product,add,now+3,mixed))
+    }
+
 }

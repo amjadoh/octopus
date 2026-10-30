@@ -1,0 +1,56 @@
+{
+  "requestedAtLocal": "2026-10-26T09:25:29+03:00",
+  "authorization": "Human explicitly requests publication of latest local fixes as1.3.10 to try through in-app update; reconfirmed continue publishing1.3.10 and notify when ready.",
+  "version": "1.3.10",
+  "versionCode": 18,
+  "tag": "v1.3.10-alpha",
+  "scope": "preview_current_work",
+  "repositoryPrivateVerified": true,
+  "oldPublishedVersion": "1.3.9",
+  "oldVersionCode": 17,
+  "oldReleaseWillBePreserved": true,
+  "includedPriorLocalCommits": [
+    "af7bf66",
+    "757781e"
+  ],
+  "additionalFix": "ReleaseLinkResolver considers new lazy assets fragments and direct APK links in one numeric version ordering; direct APK preferred only for same version.",
+  "verification": {
+    "state": "Local normal assemble/unit/lint successful; final publication remains gated by GitHub CI and attached release validation summary.",
+    "unitTests": {
+      "tests": 439,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "lintErrors": 0,
+    "lintWarnings": 5,
+    "binary": {
+      "candidate": {
+        "package": "app.octopus.local",
+        "code": 18,
+        "name": "1.3.10-diagnostic"
+      },
+      "previousPublished": {
+        "package": "app.octopus.local",
+        "code": 17,
+        "name": "1.3.9-diagnostic"
+      },
+      "compatiblePackageVersionAndSigning": true,
+      "noDevelopmentReceiver": true,
+      "noDemoCatalog": true,
+      "sha256": "090bde41d6deb57526f4c840b9bf159acc97f545db36bc3c0553f2e7f78ae7d7",
+      "actualUpgradeInstalledOnPhone": false,
+      "privateGitHubLoginRequired": true
+    },
+    "newUpdaterCases": "Newer lazy1.3.10 fragment beats loaded1.3.9 APK; same-version direct APK preferred; numeric downgrade/equal-version rejection preserved.",
+    "localEmulatorUiTestsRun": false,
+    "ciEmulatorUiTestsRequired": true,
+    "realNewHonorJourneyVerified": false
+  },
+  "realCompleteJourneyVerified": false,
+  "newHonorTestingPerformed": false,
+  "phoneActions": 0,
+  "limits": "Unknown Fatera notes reading/Add, normal both-empty full new-request journey, foreign-cart replacement and address/branch equivalence remain unverified.",
+  "privacy": "No credentials or raw phone captures included; private signing key remains outside repository and in GitHub Secrets.",
+  "localVerificationCompletedAt": "2026-10-26T09:29:19+03:00"
+}

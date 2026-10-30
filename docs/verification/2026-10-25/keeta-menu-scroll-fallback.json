@@ -1,0 +1,29 @@
+{
+  "checkpointLocal": "2026-10-26 06:58 Asia/Riyadh",
+  "installedSha256": "06C324768394741444569360F11A9C32BF546009B32B64ABA7B751E0A0700019",
+  "tests": 423,
+  "lintErrors": 0,
+  "lintWarnings": 5,
+  "cause": "Structured ACTION_SCROLL_FORWARD returned false in actual mid-food-menu, not end of catalog. Local known-menu screenshot verified06:49.",
+  "implemented": "Only if structured scroll rejects and fresh frame has not changed: known complete menu/no editors/unique real Recycler/same foreground window, bounded upward stroke above actual footer/reserved margin. Require complete changed menu and unchanged observed quantity. No taps or payment targets.",
+  "deviceResult": "Reached actual Kudo nachos PDP13SAR with menu sides visible; first Add rejected by native closed-store modal. StageOPEN_BASELINE0Adds0rows at1792986917443. No new cart acknowledged or final total.",
+  "fixtureCleanup": "Closed exactly the visually checked store-closed OK modal, then Back from known food PDP. Manual fixture action, not automatic production recovery.",
+  "currentAttempt": {
+    "startedLocal": "2026-10-26 06:57:54 Riyadh",
+    "mode": "compare_menu",
+    "restaurant": "فطيرة",
+    "items": [
+      {
+        "name": "جبن فيتا",
+        "quantity": 3
+      },
+      {
+        "name": "زعتر",
+        "quantity": 3
+      }
+    ],
+    "nativeAvailability": "pending; public-menu CLOSE not accepted as native proof"
+  },
+  "normalApkInstalled": false,
+  "published": false
+}

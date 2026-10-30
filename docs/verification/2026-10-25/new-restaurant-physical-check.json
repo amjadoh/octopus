@@ -1,0 +1,16 @@
+{
+  "scope": "Actual application on the connected Honor; no release",
+  "localInstallSucceeded": true,
+  "accessibilityServiceConnected": true,
+  "publicRestaurantDirectoryLoaded": true,
+  "publicRestaurantCount": 27,
+  "selectedRestaurantIsLegacyTestRestaurant": false,
+  "persistedRequestedLineCount": 2,
+  "compareCommandResult": "RUNTIME_NOT_STARTED",
+  "reason": "Provider preparation paths accept only one plain item; multi-line cart execution is not implemented",
+  "requestedCartPreserved": true,
+  "providerBasketsModified": false,
+  "liveFinalTotalCount": 0,
+  "orderOrPaymentConfirmed": false,
+  "releasePublished": false
+}

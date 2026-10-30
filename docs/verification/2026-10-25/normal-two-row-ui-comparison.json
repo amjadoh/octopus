@@ -1,0 +1,84 @@
+{
+  "date": "2026-10-26",
+  "timezone": "Asia/Riyadh",
+  "apk": "1.3.8-diagnostic, normal APK without TEST_CATALOG receiver",
+  "apkSha256": "5C4FE0F02E896A51E9D774AA15A13E379BB49B1DB11F84CDFA07C70977CD3C1B",
+  "unitTestsPassed": 393,
+  "lint": {
+    "errors": 0,
+    "warnings": 5
+  },
+  "mainCompareCase": {
+    "request": {
+      "restaurant": "كودو",
+      "lines": [
+        {
+          "name": "بطاطس وسط",
+          "quantity": 3
+        },
+        {
+          "name": "جبنة الناتشوز",
+          "quantity": 1
+        }
+      ],
+      "additions": []
+    },
+    "startedBy": "Actual visible Compare button, normal APK; no protected device command",
+    "completedLocalMinute": "03:27",
+    "keetaTotalHalala": 4120,
+    "hungerStationTotalHalala": 4180,
+    "bothFreshVisible": true,
+    "source": "work/device-20261025/octopus-normal-two-row-totals.png",
+    "providerInterventionsAfterCompare": 0,
+    "basketStateAtStart": "Existing matching two-row carts; not a fresh empty-cart build"
+  },
+  "handoffs": [
+    {
+      "provider": "KEETA",
+      "completedLocalMinute": "03:28",
+      "source": "work/device-20261025/octopus-owned-handoff-keeta-message.png",
+      "actualProviderForegroundAfterJob": true,
+      "allRowsAndReviewRechecked": true,
+      "mutationAllowed": false
+    },
+    {
+      "provider": "HUNGERSTATION",
+      "completedLocalMinute": "03:30",
+      "source": "work/device-20261025/octopus-owned-handoff-hs-message.png",
+      "actualProviderForegroundAfterJob": true,
+      "allRowsAndReviewRechecked": true,
+      "mutationAllowed": false
+    }
+  ],
+  "quantityChangeCase": {
+    "status": "COMPLETE",
+    "requestedLines": [
+      {
+        "name": "بطاطس وسط",
+        "quantity": 3
+      },
+      {
+        "name": "جبنة الناتشوز",
+        "quantity": 2
+      }
+    ],
+    "startedBy": "Octopus quantity button, matching-cart consent checkbox, Compare button",
+    "completedLocalMinute": "03:34",
+    "keetaTotalHalala": 5459,
+    "hungerStationTotalHalala": 5539,
+    "bothFreshVisible": true,
+    "itemsSubtotalHalala": 5300,
+    "providerInterventionsAfterCompare": 0,
+    "source": "work/device-20261025/octopus-normal-two-row-quantity2-fresh.png",
+    "effect": "Both executors changed nachos from 1 to 2 under explicit matching-cart consent; fries remained x3. Complete rows reobserved before review admission. No protected device commands in this run."
+  },
+  "limits": [
+    "No address or branch equality proof; no confirmed cheapest ranking.",
+    "Exactly two distinct plain lines on existing completely known carts; empty/foreign/scrolling carts fail closed.",
+    "Fresh Keeta missing-row Add acknowledgement remains unverified.",
+    "No full size/options/notes support or arbitrary-restaurant journey proof.",
+    "Final details partial; no inferred discount or fabricated missing fees."
+  ],
+  "orderOrPaymentConfirmed": false,
+  "published": false
+}

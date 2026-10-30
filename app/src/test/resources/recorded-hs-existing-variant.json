@@ -1,0 +1,214 @@
+{
+  "complete": true,
+  "nodes": [
+    {
+      "index": 0,
+      "parent": "-1",
+      "id": "",
+      "label": "",
+      "className": "android.widget.FrameLayout",
+      "clickable": false,
+      "enabled": true,
+      "editable": false,
+      "scrollable": false
+    },
+    {
+      "index": 1,
+      "parent": 0,
+      "id": "",
+      "label": "",
+      "className": "android.widget.LinearLayout",
+      "clickable": false,
+      "enabled": true,
+      "editable": false,
+      "scrollable": false
+    },
+    {
+      "index": 2,
+      "parent": 1,
+      "id": "android:id/content",
+      "label": "",
+      "className": "android.widget.FrameLayout",
+      "clickable": false,
+      "enabled": true,
+      "editable": false,
+      "scrollable": false
+    },
+    {
+      "index": 3,
+      "parent": 2,
+      "id": "",
+      "label": "",
+      "className": "android.widget.FrameLayout",
+      "clickable": false,
+      "enabled": true,
+      "editable": false,
+      "scrollable": false
+    },
+    {
+      "index": 4,
+      "parent": 3,
+      "id": "",
+      "label": "",
+      "className": "android.widget.FrameLayout",
+      "clickable": false,
+      "enabled": true,
+      "editable": false,
+      "scrollable": false
+    },
+    {
+      "index": 5,
+      "parent": 4,
+      "id": "",
+      "label": "",
+      "className": "android.view.View",
+      "clickable": false,
+      "enabled": true,
+      "editable": false,
+      "scrollable": false
+    },
+    {
+      "index": 6,
+      "parent": 5,
+      "id": "",
+      "label": "",
+      "className": "android.view.View",
+      "clickable": false,
+      "enabled": true,
+      "editable": false,
+      "scrollable": false
+    },
+    {
+      "index": 7,
+      "parent": 6,
+      "id": "",
+      "label": "تمويه",
+      "className": "android.view.View",
+      "clickable": true,
+      "enabled": true,
+      "editable": false,
+      "scrollable": false
+    },
+    {
+      "index": 8,
+      "parent": 6,
+      "id": "",
+      "label": "",
+      "className": "android.view.View",
+      "clickable": false,
+      "enabled": true,
+      "editable": false,
+      "scrollable": false
+    },
+    {
+      "index": 9,
+      "parent": 8,
+      "id": "FlutterMenu_bottomSheetClose",
+      "label": "إعادة آخر تعديل",
+      "className": "android.widget.ImageView",
+      "clickable": true,
+      "enabled": true,
+      "editable": false,
+      "scrollable": false
+    },
+    {
+      "index": 10,
+      "parent": 9,
+      "id": "",
+      "label": "",
+      "className": "android.view.View",
+      "clickable": false,
+      "enabled": true,
+      "editable": false,
+      "scrollable": false
+    },
+    {
+      "index": 11,
+      "parent": 10,
+      "id": "",
+      "label": "",
+      "className": "android.view.View",
+      "clickable": false,
+      "enabled": true,
+      "editable": false,
+      "scrollable": false
+    },
+    {
+      "index": 12,
+      "parent": 11,
+      "id": "",
+      "label": "لديك تعديل على هذا الصنف:\nفطيرة جبن فيتا\nلايوجد تعديلات أو إضافات\nتعديل\n§\n7",
+      "className": "android.widget.ImageView",
+      "clickable": true,
+      "enabled": true,
+      "editable": false,
+      "scrollable": false
+    },
+    {
+      "index": 13,
+      "parent": 12,
+      "id": "menuItemActionDualButtonValue",
+      "label": "1",
+      "className": "android.view.View",
+      "clickable": false,
+      "enabled": true,
+      "editable": false,
+      "scrollable": false
+    },
+    {
+      "index": 14,
+      "parent": 13,
+      "id": "menuItemActionDualButtonSubtract",
+      "label": "",
+      "className": "android.widget.Button",
+      "clickable": false,
+      "enabled": true,
+      "editable": false,
+      "scrollable": false
+    },
+    {
+      "index": 15,
+      "parent": 14,
+      "id": "",
+      "label": "",
+      "className": "android.widget.ImageView",
+      "clickable": true,
+      "enabled": true,
+      "editable": false,
+      "scrollable": false
+    },
+    {
+      "index": 16,
+      "parent": 13,
+      "id": "menuItemActionDualButtonAdd",
+      "label": "",
+      "className": "android.widget.Button",
+      "clickable": false,
+      "enabled": true,
+      "editable": false,
+      "scrollable": false
+    },
+    {
+      "index": 17,
+      "parent": 16,
+      "id": "",
+      "label": "",
+      "className": "android.widget.ImageView",
+      "clickable": true,
+      "enabled": true,
+      "editable": false,
+      "scrollable": false
+    },
+    {
+      "index": 18,
+      "parent": 9,
+      "id": "",
+      "label": "صنف جديد للتعديل",
+      "className": "android.widget.ImageView",
+      "clickable": true,
+      "enabled": true,
+      "editable": false,
+      "scrollable": false
+    }
+  ]
+}

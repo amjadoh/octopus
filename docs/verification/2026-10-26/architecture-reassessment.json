@@ -1,0 +1,74 @@
+{
+  "date": "2026-10-26",
+  "status": "local_source_and_recorded_evidence_verified_not_a_new_live_journey",
+  "publishedBase": "eafa8e0625734046265d615f4c394c0d850bfdbb",
+  "publishedRelease": "1.3.11",
+  "humanRequest": "Continue improving and verify the app; then rethink the solution carefully.",
+  "rootFindings": [
+    {
+      "issue": "Catalog discovery is not cross-provider identity or a checkout quote.",
+      "evidence": "PublicCatalog.kt preserves public vendor/meal IDs, but AppGraph.addPublicMeal creates the canonical request from names only. Native restaurant search chooses a name candidate. Branch/address equivalence is not established.",
+      "nextContract": "Retain source vendor/meal/area references as selection provenance; separately observe and bind each provider's real branch, delivery context, product, size and modifiers. A source ID must never be treated as the other provider's ID or an accessibility selector. Ambiguous suggestions need explicit selection, never silent fuzzy substitution."
+    },
+    {
+      "issue": "UI product configurators are broader than actual native preparation support.",
+      "evidence": "PlainComparisonSupport, PreviewEvidence and plain native executors support only one or two plain lines. An empty-notes Keeta product layout remains unsupported without a recorded native structure.",
+      "nextContract": "Extend an observed product-layout reader and options executor together, with the same request and post-add whole-cart proof. Do not merely remove admission limits or infer the missing structure from screenshots."
+    },
+    {
+      "issue": "Cart management needs positive empty-state recovery as well as repeat protection.",
+      "evidence": "BasketMutationJournal preserves an unresolved native edit across app restart. Manual provider-cart deletion does not clear it. Missing menu footer alone cannot prove a previously seen basket is now empty.",
+      "nextContract": "Observe an actual provider-native empty-cart state, bind version/restaurant/time, consume reset evidence once and then clear only the corresponding pending ownership record. Native cart replacement requires observed contents and a bounded deletion-confirmation adapter. Local draft deletion must not erase native ambiguity."
+    },
+    {
+      "issue": "Single- and two-item menu reading had divergent routes and timeout behavior.",
+      "evidence": "Single-item HS reading searched only by scrolling; two-item reading already used guarded native in-menu search with a recorded 8.0.303 fixture.",
+      "implemented": "Reuse openHungerPlainProduct and scoped search close for one-item reads. Both one-item provider reads now use MenuReadTimeoutBoundary: nested local read timeout leaves that provider unavailable, while parent cancellation, whole-session deadline and safety interruptions still stop everything. New Android wiring is not phone-verified."
+    },
+    {
+      "issue": "Full comparison could start without checking the second adapter's capabilities.",
+      "implemented": "ComparisonPreflight checks request shape, consent, allowed providers, unique installation records and known versions before either provider opens. Legacy Keeta remains single-item only. Detailed failures are no longer hidden behind the UI's generic start error."
+    },
+    {
+      "issue": "Prepared basket records did not reject inconsistent row sums.",
+      "implemented": "Complete records now require every line amount and subtotal. All-known amounts must sum exactly with checked arithmetic; mismatches and overflow reject readiness. Subtotal remains items only, never substituted for final review total."
+    }
+  ],
+  "deliveryArchitecture": {
+    "catalog": "Public HTML/catalog cache updates independently without opening provider apps. Current JobScheduler request is every 30 minutes subject to Android scheduling; it does not promise immediate or continuous updates. Saved data must retain source and age.",
+    "comparison": "Only explicit Compare opens native apps sequentially. Observe complete current contents first, reconcile exact requested differences, dispatch each edit once, then require the matching complete post-edit basket before a review read.",
+    "result": "Separate menu item subtotal, provider review total and verified equivalent-context ranking. Do not infer missing fees/discounts or label the cheapest until branch/address/item/options equivalence is established.",
+    "resume": "After interruption, reobserve current state and durable pending edits; never replay an Add from the last screen position.",
+    "hiddenNativeReading": "AccessibilityService active-window access is not a hidden provider-data feed. Silent background work belongs to the public catalog source; native review reading needs visible provider navigation."
+  },
+  "completionCriteria": [
+    "Normal APK Compare from two positively empty baskets, all requested rows and quantities verified, fresh final review totals shown together.",
+    "Repeat Compare on unchanged request dispatches zero Adds and zero unnecessary quantity edits.",
+    "Quantity change updates only the requested difference; interruption/restart and manually emptied native cart recover without duplicates.",
+    "Changed restaurant and pre-existing foreign cart follow an explicit observed replacement flow.",
+    "Both provider handoffs revalidate full contents and fresh review, never confirm an order or payment.",
+    "Product options/layout coverage is tested across actual different restaurant schemas; closed/minimum-order/network conditions give specific recoverable outcomes.",
+    "Real delivery context and branch equivalence established before verified cheapest ranking."
+  ],
+  "localVerification": {
+    "unitTests": 465,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "normalApkAssemble": "passed",
+    "lintErrors": 0,
+    "lintWarnings": 5,
+    "localApkSha256": "876831761784ef25f42f5920878d95474ab23ab3a0e6c3c95582bb2775e6db65",
+    "newTests": "6 preflight cases and 3 basket-money consistency cases",
+    "existingEvidenceCoverage": "Recorded HS native menu-search fixture and existing nested timeout/cancellation/safety regression tests remain passing.",
+    "newEmulatorUiRun": false,
+    "newPhoneJourney": false,
+    "phoneActions": false,
+    "published": false,
+    "warning": "Default output APK is now an unreleased same-version local candidate; published 1.3.11 remains work/published-1-3-11.apk. Never overwrite or distribute this candidate as the published asset."
+  },
+  "primaryReferences": [
+    "https://developer.android.com/reference/android/accessibilityservice/AccessibilityService#getRootInActiveWindow()",
+    "https://developer.android.com/reference/android/app/job/JobInfo.Builder#setPeriodic(long)"
+  ]
+}

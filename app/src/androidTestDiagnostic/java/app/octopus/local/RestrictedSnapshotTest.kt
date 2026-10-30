@@ -35,4 +35,13 @@ class RestrictedSnapshotTest {
         assertTrue(result.sensitiveScreen)
         assertTrue(result.tokens.isEmpty())
     }
+    @Test fun readonlyPrivateFieldsCannotBecomePriceTokens() = withNode { node ->
+        node.text = "Total 36.00"
+        listOf("credit_card", "card_number", "address", "phone", "otp").forEach { name ->
+            node.viewIdResourceName = "com.example:id/$name"
+            assertTrue(name, SnapshotReader().read(node).tokens.isEmpty())
+        }
+        node.viewIdResourceName = "com.example:id/order_total"
+        assertTrue(SnapshotReader().read(node).tokens.any { it.amount == 3600L })
+    }
 }

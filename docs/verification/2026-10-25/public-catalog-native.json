@@ -1,0 +1,63 @@
+{
+  "date": "2026-10-25",
+  "published": false,
+  "phoneUsed": false,
+  "baseCommit": "3fa574455e858d21ffac622ab7e91d0c0e2fa242",
+  "implemented": [
+    "Public HungerStation restaurant refresh inside Octopus; exact primary button: تحديث قائمة المطاعم.",
+    "Saved city/district scope; no location permission or default district.",
+    "Room last-good page cache with original read timestamps, asynchronous foreground refresh and network-constrained periodic catalog job.",
+    "On-demand additional directory pages and restaurant menu; native public meal/quantity selection saves local order intent.",
+    "Public website identities and list prices never become native accessibility selectors or verified account totals.",
+    "Restaurant refresh preserves the selected menu and local draft. No provider movement before explicit Compare."
+  ],
+  "sourceVerification": {
+    "directPcHttp": "200, hungerstation.com, text/html; no block page",
+    "androidEmulatorLive": "Passed public directory/menu, native quantity-3 selection, refresh preserves draft; no provider app action.",
+    "testArea": "Riyadh / Narjis; public sample district, not the user address",
+    "source": "https://hungerstation.com/sa-ar/restaurants/regions/الرياض/النرجس"
+  },
+  "validation": {
+    "unitTests": {
+      "passed": 337,
+      "failures": 0,
+      "errors": 0
+    },
+    "lint": {
+      "errors": 0,
+      "warnings": 5
+    },
+    "emulatorRegression": {
+      "passed": 17,
+      "failed": 0,
+      "log": "work/public-catalog/ui-regression-final.txt"
+    },
+    "emulatorLivePublicWebsite": {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "log": "work/public-catalog/ui-live-public.txt"
+    },
+    "finalApkSmoke": {
+      "passed": 3,
+      "failed": 0,
+      "log": "work/public-catalog/ui-package-smoke.txt"
+    },
+    "apkBuild": "passed",
+    "target": "temporary read-only API 36 emulator"
+  },
+  "apk": {
+    "path": "app/build/outputs/apk/diagnostic/debug/app-diagnostic-debug.apk",
+    "sha256": "e0806da562fdff11c4b05d3498c3975b582f54a1fd0e868ae87f0d552ffd0da0",
+    "identity": "1.3.7-diagnostic / versionCode 15; unpublished local development build, not a new GitHub update"
+  },
+  "remaining": [
+    "Actual final totals and both prepared provider baskets were not verified together in this work.",
+    "Existing automatic preparation is still limited to one plain item without arbitrary modifier or multi-item support.",
+    "Public menus do not establish full modifier coverage, account offers, delivery availability, matching branch or exact address.",
+    "Saved HungerStation review evidence still lacks the current explicit ORDER_TOTAL; do not estimate it from partial fees."
+  ],
+  "prohibitedActionsPerformed": false,
+  "orderConfirmationOrPayment": false,
+  "gitPushOrRelease": false
+}

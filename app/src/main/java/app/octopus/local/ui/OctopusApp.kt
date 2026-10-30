@@ -37,6 +37,7 @@ import app.octopus.local.BuildConfig
 import app.octopus.local.R
 import app.octopus.local.automation.ReadOnlyServiceBridge
 import app.octopus.local.automation.LiveCatalogBridge
+import app.octopus.local.automation.TerraConnectionStore
 import app.octopus.local.data.*
 import app.octopus.local.diagnostics.DiagnosticExporter
 import app.octopus.local.domain.*
@@ -58,7 +59,7 @@ private val PaleGreen = OctopusPalette.Soft
 private val Amber = OctopusPalette.Amber
 private val PaleAmber = OctopusPalette.SoftAmber
 private val Red = OctopusPalette.Error
-private val Scheme = lightColorScheme(primary = Green, onPrimary = Color.White, secondary = Green,
+private val Scheme = lightColorScheme(primary = OctopusPalette.Coral, onPrimary = Ink, secondary = Green,
     background = Background, surface = Color.White, onSurface = Ink, onBackground = Ink,
     surfaceVariant = PaleGreen, outline = Line, outlineVariant = Line,
     primaryContainer = PaleGreen, onPrimaryContainer = Ink, secondaryContainer = PaleGreen, onSecondaryContainer = Green,
@@ -74,7 +75,7 @@ private enum class Page(val title: String, val icon: ImageVector) {
 @Composable
 fun OctopusTheme(content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-        MaterialTheme(colorScheme = Scheme, typography = Typography(), content = content)
+        MaterialTheme(colorScheme = Scheme, typography = mosabTypography(), content = content)
     }
 }
 
@@ -86,6 +87,10 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
     val session by graph.session.collectAsStateWithLifecycle()
     val connected by graph.serviceConnected.collectAsStateWithLifecycle()
     var page by rememberSaveable { mutableStateOf(Page.HOME) }
+    val catalogState by graph.catalog.collectAsStateWithLifecycle()
+    LaunchedEffect(catalogState.comparisonRunning) {
+        if (catalogState.comparisonRunning) page = Page.COMPARE
+    }
     var selected by rememberSaveable { mutableStateOf(ProviderId.HUNGERSTATION) }
     var disclosure by remember { mutableStateOf(false) }
     var exportConfirmation by remember { mutableStateOf(false) }
@@ -95,7 +100,10 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) graph.refreshInstallations() }
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) {
+            graph.refreshInstallations()
+            graph.refreshPublicRestaurants(force = false)
+        } }
         owner.lifecycle.addObserver(observer)
         onDispose { owner.lifecycle.removeObserver(observer) }
     }
@@ -112,19 +120,21 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
         }
     }
     OctopusTheme {
-        Scaffold(containerColor = Background,
+        Scaffold(containerColor = Background, contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
-                Column(Modifier.statusBarsPadding()) {
+                if (page != Page.HOME) {
+                Column(Modifier.background(Ink).statusBarsPadding()) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Image(painterResource(R.drawable.ic_octopus_selected), "شعار الأخطبوط", Modifier.size(36.dp))
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("الأخطبوط", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
-                            Text("طلبك واحد. خياراتك أوضح.", fontSize = 11.sp, color = Muted)
+                            Text("الأخطبوط", fontSize = 23.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                            Text("طلبك واحد. خياراتك أوضح.", fontSize = 11.sp, color = Color(0xFFB8CDD9))
                         }
-                        IconButton(onClick = { page = Page.SETTINGS }) { Icon(Icons.Outlined.Settings, "الإعدادات", tint = Ink) }
+                        IconButton(onClick = { page = Page.SETTINGS }) { Icon(Icons.Outlined.Settings, "الإعدادات", tint = Color.White) }
                     }
-                    HorizontalDivider(color = Line)
+                    HorizontalDivider(color = OctopusPalette.SeaMid)
+                }
                 }
             },
             bottomBar = {
@@ -133,8 +143,8 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
                         NavigationBarItem(selected = page == item, onClick = { page = item },
                             icon = { Icon(item.icon, null, Modifier.size(23.dp)) },
                             label = { Text(item.title, fontSize = 11.sp) },
-                            colors = NavigationBarItemDefaults.colors(indicatorColor = PaleGreen,
-                                selectedIconColor = Green, selectedTextColor = Green, unselectedIconColor = Muted, unselectedTextColor = Muted))
+                            colors = NavigationBarItemDefaults.colors(indicatorColor = OctopusPalette.CoralSoft,
+                                selectedIconColor = Ink, selectedTextColor = Ink, unselectedIconColor = Muted, unselectedTextColor = Muted))
                     }
                 }
             }
@@ -143,7 +153,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
                 when (page) {
                     Page.HOME, Page.COMPARE -> CatalogScreen(graph, comparisonOnly = page == Page.COMPARE,
                         onRestaurants = { page = Page.HOME }, onOpenComparison = { page = Page.COMPARE },
-                        onProviders = { page = Page.PROVIDERS },
+                        onProviders = { page = Page.PROVIDERS }, onSettings = { page = Page.SETTINGS },
                         onSetup = { if (!settings.consent) disclosure = true else openAccessibilitySettings() })
                     Page.PROVIDERS -> ProvidersScreen(installations, settings, onAllowed = { provider, allowed ->
                         ReadOnlyServiceBridge.stop()
@@ -174,7 +184,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
             text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("تستخدم النسخة التشخيصية خدمة الإتاحة لقراءة مؤشرات السعر الظاهرة في كيتا وهنقرستيشن أثناء اختبار تبدأه أنت فقط. قيد كيتا موثق في صفحة التطبيقات؛ موافقتك لا تعني موافقة المنصة.")
                 Text("تتنقل الخدمة لقراءة المطاعم والوجبات والعروض في اختبار تبدأه أنت. يمكن تجهيز الوجبة المختارة ذات البنية المدعومة بعد اختيارك الصريح؛ لا تُنشئ طلبًا نهائيًا ولا تنفذ دفعًا.")
-                Text("تُحفظ محليًا مبالغ مرشحة وحالات القراءة وإصدارات التطبيقات، ومعرّفات العناصر وتسميات وظيفية محددة أثناء الجلسة لتفسير فشل القراءة تلقائيًا. لا تُحفظ كلمات المرور أو رموز التحقق أو بيانات البطاقات أو نصوص الشاشة الخام أو صورها، ولا تُرسل البيانات إلى الإنترنت.")
+                Text("تُحفظ محليًا مبالغ مرشحة وحالات القراءة وإصدارات التطبيقات، ومعرّفات العناصر وتسميات وظيفية محددة أثناء الجلسة لتفسير فشل القراءة تلقائيًا. لا تُحفظ كلمات المرور أو رموز التحقق أو بيانات البطاقات أو نصوص الشاشة الخام أو صورها. إرسال نص الإعلان إلى مساعد تيرا يحتاج موافقة منفصلة من الإعدادات.")
                 Text("يمكنك الإيقاف فورًا من الزر الظاهر أثناء الاختبار، أو تعطيل الخدمة من إعدادات Android. تنتهي الجلسة خلال 90 ثانية كحد أقصى.")
             } },
             confirmButton = { TextButton(onClick = {
@@ -192,21 +202,11 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
             confirmButton = { TextButton(onClick = {
                 ReadOnlyServiceBridge.stop()
                 LiveCatalogBridge.stop()
-                graph.scope.launch { graph.recorder.clear(); graph.inspectionRecorder.clear(); graph.clearOrders(); graph.settingsStore.clear(); graph.catalog.value = app.octopus.local.providers.LiveCatalogState(); deleteConfirmation = false }
+                TerraConnectionStore(context).disconnect()
+                graph.scope.launch { graph.recorder.clear(); graph.inspectionRecorder.clear(); graph.clearOrders(); graph.clearCatalog(); graph.settingsStore.clear(); graph.catalog.value = app.octopus.local.providers.LiveCatalogState(); deleteConfirmation = false }
             }) { Text("حذف البيانات", color = Red) } },
             dismissButton = { TextButton(onClick = { deleteConfirmation = false }) { Text("إلغاء") } })
-        if (updateDialog) AlertDialog(onDismissRequest = { updateDialog = false },
-            title = { Text("تحديث التطبيق") },
-            text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("الإصدار الحالي: ${BuildConfig.VERSION_NAME}")
-                Text("تُعرض الإصدارات على GitHub. المستودع خاص؛ افتح الصفحة في المتصفح المسجل بحسابك ثم حمّل أحدث APK وأكمل تأكيد التثبيت من Android.")
-                Text("لم يُفحص توفر إصدار أحدث تلقائيًا. لا يطلب الأخطبوط حساب GitHub أو كلمة المرور داخله، ولا يثبت تحديثًا صامتًا.")
-            } },
-            confirmButton = { TextButton(onClick = {
-                updateDialog = false
-                runCatching { openUpdatePage() }.onFailure { errorMessage = "تعذر فتح صفحة التحديث. افتح github.com/amjadoh/octopus/releases في متصفحك." }
-            }) { Text("فتح صفحة التحديث") } },
-            dismissButton = { TextButton(onClick = { updateDialog = false }) { Text("إلغاء") } })
+        if (updateDialog) PrivateUpdateDialog(onDismiss = { updateDialog = false })
         errorMessage?.let { message -> AlertDialog(onDismissRequest = { errorMessage = null },
             title = { Text("الأخطبوط") }, text = { Text(message) },
             confirmButton = { TextButton(onClick = { errorMessage = null }) { Text("حسنًا") } }) }
@@ -410,11 +410,11 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
 
 @Composable private fun SettingsScreen(settings: UserSettings, connected: Boolean, onSetup: () -> Unit, onExport: () -> Unit, onDelete: () -> Unit, onUpdate: () -> Unit, onDiagnostics: () -> Unit, onHistory: () -> Unit) {
     LazyColumn(contentPadding = PaddingValues(21.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        item { PageIntro("الإعدادات والخصوصية", "التحكم لك. بيانات الاختبار تبقى على الجهاز.") }
+        item { PageIntro("الإعدادات والخصوصية", "التحكم لك. راجع إعدادات القراءة والمساعد قبل بدء المقارنة.") }
         item { Panel {
             SectionTitle("تحديث التطبيق")
             InfoRow("الإصدار الحالي", BuildConfig.VERSION_NAME)
-            Text("افتح أحدث الإصدارات من حسابك على GitHub، ثم أكمل التثبيت بإذن Android.", fontSize = 13.sp, color = Muted)
+            Text("يتحقق الأخطبوط من التحديث وينزّله ويفحصه تلقائيًا، ثم يعرض تأكيد التثبيت في Android. سجّل دخول GitHub عند الحاجة للوصول إلى الإصدار الخاص.", fontSize = 13.sp, color = Muted)
             PrimaryButton("تحديث التطبيق", onClick = onUpdate)
         } }
         item { Panel {
@@ -426,8 +426,12 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
             OutlinedButton(onClick = onSetup, Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text("إعداد خدمة القراءة") }
         } }
         item { Panel {
+            val context = LocalContext.current
+            TerraControls(remember(context) { TerraConnectionStore(context) })
+        } }
+        item { Panel {
             SectionTitle("بياناتك المحلية")
-            Text("نحفظ حالات القراءة والمبالغ المرشحة وإصدارات التطبيقات وسجلًا منقحًا للعناصر أثناء الجلسة التي تبدأها، لتفسير التعطل دون فحص منفصل. لا نصوص خام أو صور شاشة أو بيانات دخول أو خادم خارجي.", fontSize = 13.sp, lineHeight = 22.sp, color = Muted)
+            Text("نحفظ حالات القراءة والمبالغ المرشحة وإصدارات التطبيقات وسجلًا منقحًا للعناصر أثناء الجلسة التي تبدأها. عند تفعيل اتصال تيرا للاختبار، تُرسل نصوص نافذة الإعلان العامة وأزرار إغلاقها إلى خدمة OpenAI عبر بوابة الربط. لا تُرسل صورة الشاشة أو خلفية الحساب أو بيانات الدخول. يبقى مفتاح OpenAI خارج الجوال.", fontSize = 13.sp, lineHeight = 22.sp, color = Muted)
             OutlinedButton(onClick = onExport, Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text("تصدير السجل بعد مراجعته") }
             TextButton(onClick = onDelete) { Icon(Icons.Outlined.DeleteOutline, null, tint = Red); Spacer(Modifier.width(7.dp)); Text("حذف جميع بيانات الأخطبوط", color = Red) }
         } }
@@ -438,6 +442,42 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
         } }
         item { Note("النسخة ${BuildConfig.VERSION_NAME} • المقارنة الكاملة بالرسوم والعروض وتجهيز كيتا قيد الاستكمال. لا تأكيد طلب أو دفع.", Icons.Outlined.Science) }
     }
+}
+@Composable internal fun TerraControls(store: TerraConnectionStore) {
+    var configured by remember { mutableStateOf(store.isConfigured()) }
+    var enabled by remember { mutableStateOf(store.activeConnection() != null) }
+    var consent by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf(false) }
+    SectionTitle("مساعد تيرا")
+    InfoRow("الحالة", if (enabled) "مفعّل" else "متوقف")
+    Text("يساعد في إغلاق إعلان يعترض المقارنة عندما يكون زر إغلاقه معروفًا. لا يختار الوجبات أو يغيّر السلة أو يؤكد الطلب.", fontSize = 13.sp, lineHeight = 22.sp, color = Muted)
+    if (configured) {
+        OutlinedButton(onClick = {
+            if (enabled) {
+                LiveCatalogBridge.stop()
+                error = runCatching { store.setEnabled(false) }.isFailure
+                enabled = store.activeConnection() != null
+            } else consent = true
+        }, modifier = Modifier.fillMaxWidth()) { Text(if (enabled) "إيقاف مساعد تيرا" else "تفعيل مساعد تيرا") }
+        TextButton(onClick = {
+            LiveCatalogBridge.stop()
+            store.disconnect()
+            configured = false
+            enabled = false
+        }) { Text("قطع الربط وحذف رمز الجهاز") }
+    } else {
+        Text("لم يُجهّز الربط لهذا الجهاز بعد. تستطيع استخدام المقارنة دون المساعد.", fontSize = 13.sp, color = Muted)
+    }
+    if (error) Text("تعذر حفظ الإعداد. أعد المحاولة.", color = Red, fontSize = 13.sp)
+    if (consent) AlertDialog(onDismissRequest = { consent = false },
+        title = { Text("تفعيل مساعد تيرا؟") },
+        text = { Text("أثناء مقارنة تبدأها أنت، تُرسل نصوص الإعلان العامة وأزرار إغلاقه فقط إلى OpenAI عبر خدمة الأخطبوط على Google Cloud. لا تُرسل صورة الشاشة أو خلفية الحساب أو العنوان أو بيانات الدخول. يمكنك إيقاف المشاركة أو قطع الربط من هنا. يبقى مفتاح OpenAI خارج الجوال.") },
+        confirmButton = { TextButton(onClick = {
+            error = runCatching { store.setEnabled(true) }.isFailure
+            enabled = store.activeConnection() != null
+            consent = false
+        }) { Text("أوافق وأفعّل المساعد") } },
+        dismissButton = { TextButton(onClick = { consent = false }) { Text("ليس الآن") } })
 }
 @Composable private fun InfoRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

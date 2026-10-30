@@ -1,0 +1,268 @@
+{
+  "date": "2026-10-27",
+  "timezone": "Asia/Riyadh",
+  "status": "verified-current-single-item-compare-repeat-and-handoffs",
+  "request": {
+    "restaurant": "كودو",
+    "item": "بطاطس وسط",
+    "quantity": 3,
+    "modifiers": []
+  },
+  "versions": {
+    "keeta": "3.13.301",
+    "hungerstation": "8.0.303",
+    "octopus": "1.3.12-diagnostic",
+    "versionCode": 20
+  },
+  "publication": {
+    "performed": false,
+    "normalCandidateOnly": true,
+    "sourceSavedLocalCommit": "0a6a31d",
+    "pushed": false
+  },
+  "firstNormalUiRun": {
+    "startedAt": "2026-10-27T11:55:59.9838194+03:00",
+    "observedCompletedBy": "2026-10-27T12:00:00+03:00",
+    "trigger": "Actual normal APK Compare button",
+    "apkSha256": "8EE26D0F5342F0BCBE6EC1EDE0CC8B22ACEC4D543336D0583608B84C3EB4C972",
+    "initialCarts": {
+      "keeta": "Existing matching fries x3, 27 SAR",
+      "hungerstation": "Visually checked empty basket"
+    },
+    "result": {
+      "keetaFinalHalala": 4581,
+      "hungerstationFinalHalala": 3750,
+      "bothUiStatuses": "TOTAL_READ",
+      "providerInterventionAfterCompare": false
+    },
+    "limits": "First retained total screenshot was taken after the 120-second freshness window. UI totals are from this run because Compare clears old finalTotals; this is not millisecond capture-time proof.",
+    "screenshot": "work/device-20261027/normal-301-first-totals.png"
+  },
+  "firstRepeat": {
+    "startedAtFile": "work/device-20261027/normal-301-repeat-start.txt",
+    "completedAround": "2026-10-27T12:03:00+03:00",
+    "result": "Keeta fresh total 45.81 SAR. HungerStation menu product details rejected before preparation; no new paired result.",
+    "hungerstationUiError": "لم يكتمل التحقق من الوجبة في هنقرستيشن؛ لا توجد مقارنة مؤكدة.",
+    "physicalHungerstationCartAfterRun": "Fries x3 only, 27 SAR, visually verified at 12:06",
+    "screenshot": "work/device-20261027/hs-repeat-physical-cart-three.png",
+    "laterReadOnlyFixtures": [
+      "work/device-20261027/hs-repeat-search-three.json",
+      "work/device-20261027/hs-repeat-fries-pdp.json"
+    ],
+    "laterFixtureCaveat": "These later frames pass the product reader and do not reproduce the intermittent failure. An initial failed probe returned an old product file; it was not used and was overwritten only after a successful fresh capture."
+  },
+  "currentCandidate": {
+    "apkSha256": "FFD2C54E60116F66EAF04153C9E543351A902709DB7E8845F11D515791EC4ECB",
+    "installedAt": "2026-10-27T12:17:00+03:00",
+    "unitTests": 518,
+    "failures": 0,
+    "errors": 0,
+    "lintErrors": 0,
+    "buildLog": "work/hs-repeat-reading-build-20261027.txt",
+    "changes": [
+      "Product stability includes enabled, clickable, entered-text and complete state; no acceptance guard relaxed.",
+      "Separate fixed product rejection causes and debug-only numeric/boolean local checkpoint; no provider or user text recorded."
+    ],
+    "actualUiRunStartedFile": "work/device-20261027/normal-301-stability-start.txt",
+    "actualUiRunResult": "Stopped before Keeta preparation: ScreenChangedBeforeAction while entering the Keeta search flow. No new paired total.",
+    "hungerstationProductCheckpoint": {
+      "enteredTextCount": 0,
+      "optionsComplete": true,
+      "capturedAt": 1793092720280,
+      "addButtonCount": 1,
+      "titleCount": 1,
+      "available": true,
+      "optionsEndObserved": true,
+      "pricePresent": true,
+      "addEnabled": true,
+      "nodeCount": 48,
+      "frameComplete": true
+    },
+    "keetaStop": "Actual UI fixed message: تغيرت الشاشة؛ أوقفت الإجراء بدل النقر على عنصر قديم. Later read-only captures of the Keeta global search are stable, and do not prove the original transient cause."
+  },
+  "newCandidate": {
+    "apkSha256": "2AA58B6145B113E928AAFA42F805407D5B09BF1E1F7441FBDE1035FB66E0E384",
+    "installedAround": "2026-10-27T12:33:00+03:00",
+    "normalApkWithoutTestCatalogReceiver": true,
+    "unitTests": 525,
+    "failures": 0,
+    "errors": 0,
+    "lintErrors": 0,
+    "buildResult": "BUILD SUCCESSFUL",
+    "buildDurationReported": "Approximately 3 minutes",
+    "buildLog": "work/keeta-search-replan-build-20261027.txt",
+    "changes": [
+      "Bounded Keeta read-only search replanning after a pre-dispatch screen change; no basket-mutation retry authority."
+    ],
+    "verificationSource": "Parent agent's completed build, installation and actual UI start observations.",
+    "actualUiRunStartedAround": "2026-10-27T12:34:00+03:00",
+    "actualUiRunStartedFile": "work/device-20261027/normal-301-replan-start.txt",
+    "trigger": "Actual normal APK Compare button",
+    "initialCarts": {
+      "keeta": "Existing matching Kudo medium fries x3",
+      "hungerstation": "Existing matching Kudo medium fries x3"
+    },
+    "actualUiRunCompletedAround": "2026-10-27T12:36:00+03:00",
+    "actualUiRunResult": "Keeta search and matching cart verification succeeded with final 45.81 SAR. HungerStation matching cart x3 / items 27 SAR was verified, but its final total was unavailable. No completed paired result.",
+    "result": {
+      "keetaQuantity": 3,
+      "keetaItemSubtotalHalala": 2700,
+      "keetaFinalHalala": 4581,
+      "hungerstationQuantity": 3,
+      "hungerstationItemSubtotalHalala": 2700,
+      "hungerstationFinalHalala": null,
+      "pairedComparisonComplete": false,
+      "providerInterventionAfterCompareBeforeRunEnded": false
+    },
+    "hungerstationUpsellObservation": {
+      "provenance": "Parent agent's visible-screen observation after the actual run.",
+      "visibleHeading": "لا تفوت الفرصة!\nفرصتك لإضافة المزيد لطلبك",
+      "olderHeadingAcceptedByCurrentGuard": "عادةً ما يضيف الأشخاص هذه العناصر",
+      "structuredCaptureStatus": "A read-only instrumentation probe is being built to capture the observed variant. No final fix or successful review is established yet."
+    },
+    "afterRunManualVerification": {
+      "around": "2026-10-27T12:38:00+03:00",
+      "action": "Parent manually reopened the HungerStation cart after the automatic run had ended.",
+      "result": "Fries x3 only, item subtotal 27 SAR",
+      "screenshot": "work/device-20261027/hs-replan-after-cart-three.png"
+    },
+    "publicationPerformed": false
+  },
+  "finalCandidate": {
+    "apkSha256": "D298843441C6C404E0AB2839603C6DB321607DCCB7624DAFE08F2B86BB3733D3",
+    "installedAround": "2026-10-27T12:50:00+03:00",
+    "versionName": "1.3.12-diagnostic",
+    "versionCode": 20,
+    "normalApkWithoutTestCatalogReceiver": true,
+    "unitTests": 528,
+    "failures": 0,
+    "errors": 0,
+    "lintErrors": 0,
+    "buildResult": "BUILD SUCCESSFUL",
+    "buildDurationReported": "1 minute 35 seconds",
+    "buildLog": "work/recommendations-normal-build-20261027.txt",
+    "verificationSource": "Parent agent's completed build and installation observations.",
+    "recommendationsEvidence": {
+      "report": "docs/verification/2026-10-27/hs-recommendations-variants.json",
+      "actualStructuredCapture": "Older heading, 75 nodes; work/device-20261027/hs-recommendations-old.json",
+      "newHeadingEvidence": "Visible screen/screenshot only; the unit variant is synthetic, not an actual structured capture of the new heading.",
+      "manualReviewTotalHalala": 3750,
+      "manualTotalIsNotAutomatedComparison": true,
+      "liveFixVerification": "pending"
+    },
+    "actualUiRunStarted": false,
+    "actualUiRunResult": "not-started",
+    "pauseObservedAround": "2026-10-27T12:52:00+03:00",
+    "pauseReason": "The phone screen slept during an ongoing user call. No Compare run began on this candidate.",
+    "resumeCondition": "The human was asked to leave Octopus visible and confirm after the call ends. No further phone actions until then.",
+    "publicationPerformed": false
+  },
+  "limits": [
+    "One plain item on Keeta 3.13.301; multiple items, modifiers, notes and scrolling carts not broadened.",
+    "Address and branch equivalence not established; no confirmed cheapest ranking.",
+    "Automatic foreign-cart replacement and positive empty recovery remain separate unsupported paths."
+  ],
+  "noOrderPaymentCodSubscriptionOrPointsConfirmed": true,
+  "offlineReviewFollowup": {
+    "apkSha256": "FFBBCDF1032943A9C6D95383A5BC8F023322D04AF7AD36C6ADA7B3706B57910F",
+    "installed": true,
+    "installedAround": "2026-10-27T13:00:00+03:00",
+    "normalApkWithoutTestCatalogReceiver": true,
+    "actualUiRunStarted": true,
+    "change": "Independent review found a legacy-version scope regression: single-item quantity adjustment now requires owned plain-cart capability, preserving the old rejection of Keeta 3.12.501. Current 3.13.301 and 3.13.203 remain admitted.",
+    "unitTests": 528,
+    "failures": 0,
+    "errors": 0,
+    "lintErrors": 0,
+    "buildResult": "BUILD SUCCESSFUL",
+    "buildDuration": "37s",
+    "buildLog": "work/quantity-admission-build-20261027.txt",
+    "initialPause": "Installation was initially deferred during the user's call. The call ended and the human authorized resuming before this candidate was installed.",
+    "normalUiComparison": {
+      "startedAt": "2026-10-27T13:02:27.4475633+03:00",
+      "startedAtFile": "work/device-20261027/normal-301-final-start.txt",
+      "observedCompletedAround": "2026-10-27T13:04:00+03:00",
+      "trigger": "Actual normal APK Compare button",
+      "initialCarts": "Both provider carts already held the matching Kudo medium fries x3, no options. The Keeta menu showed x3 / 27 SAR.",
+      "result": {
+        "keetaFinalHalala": 4581,
+        "hungerstationFinalHalala": 3750,
+        "bothUiStatuses": "TOTAL_READ",
+        "bothCartsMatchedRequestedThreePlainFries": true,
+        "providerInterventionAfterCompare": false
+      },
+      "screenshot": "work/device-20261027/normal-301-final-pair.png",
+      "screenshotWithin120SecondFreshnessWindow": true,
+      "hungerstationRecommendations": {
+        "actualHeadingVariant": "older heading",
+        "dispatched": true,
+        "statsTimestamp": 1793095447990,
+        "newHeadingStructuredVariantVerified": false
+      },
+      "scope": "Successful same-run normal UI pair on existing matching single-item baskets. This does not prove a both-initially-empty build or the new upsell heading's actual structure."
+    },
+    "repeatRun": {
+      "startedAt": "2026-10-27T13:05:24.5535054+03:00",
+      "startedAtFile": "work/device-20261027/normal-301-final-repeat-start.txt",
+      "observedCompletedAround": "2026-10-27T13:07:00+03:00",
+      "actualUiRunResult": "completed",
+      "result": {
+        "keetaFinalHalala": 4581,
+        "hungerstationFinalHalala": 3750,
+        "bothUiStatuses": "TOTAL_READ",
+        "bothCartQuantities": 3,
+        "bothCartItemSubtotalsHalala": 2700,
+        "matchingEvidenceBasis": "Both source validators admitted the full matching plain-item cart; an actual Keeta menu screenshot during this run also showed x3 / 27 SAR.",
+        "providerInterventionAfterCompare": false
+      },
+      "screenshot": "work/device-20261027/normal-301-final-repeat-pair.png",
+      "screenshotWithin120SecondFreshnessWindow": true,
+      "hungerstationRecommendations": {
+        "actualHeadingVariant": "older heading",
+        "dispatched": true,
+        "statsTimestamp": 1793095638494,
+        "newHeadingStructuredVariantVerified": false
+      }
+    },
+    "handoffs": {
+      "keeta": {
+        "startedAt": "2026-10-27T13:08:28.4740488+03:00",
+        "startedAtFile": "work/device-20261027/normal-301-keeta-handoff-start.txt",
+        "observedCompletedAround": "2026-10-27T13:09:00+03:00",
+        "trigger": "Actual Octopus Keeta handoff button",
+        "result": "completed-to-review",
+        "quantity": 3,
+        "itemSubtotalHalala": 2700,
+        "finalTotalHalala": 4581,
+        "providerInterventionAfterButtonBeforeCompletion": false,
+        "blockingOverlay": false,
+        "privateScreenshot": "work/device-20261027/keeta-final-handoff-private.png",
+        "screenshotIgnoredAndNotForCommit": true
+      },
+      "hungerstation": {
+        "startedAt": "2026-10-27T13:09:57.9138524+03:00",
+        "startedAtFile": "work/device-20261027/normal-301-hs-handoff-start.txt",
+        "observedCompletedAround": "2026-10-27T13:10:00+03:00",
+        "trigger": "Actual Octopus HungerStation handoff button, after manually returning to Octopus only after the completed Keeta handoff",
+        "result": "completed-to-review",
+        "fullCartVerifiedByHandler": true,
+        "itemSubtotalHalala": 2700,
+        "finalTotalHalala": 3750,
+        "cartMutations": false,
+        "privateScreenshot": "work/device-20261027/hs-final-handoff-private.png",
+        "screenshotIgnoredAndNotForCommit": true
+      }
+    },
+    "afterHandoffs": {
+      "returnedToOctopusAt": "2026-10-27T13:11:11+03:00",
+      "returnMethod": "Manual return after the handoff had completed",
+      "leftVisible": "Octopus comparison screen",
+      "screenshot": "work/device-20261027/normal-301-after-handoffs.png",
+      "keetaQuoteExpired120SecondWindow": true,
+      "hungerstationQuoteFreshAtCheckpoint": true,
+      "pairedQuoteFreshAtCheckpoint": false,
+      "lastFreshPairedEvidence": "The completed 13:07 repeat and work/device-20261027/normal-301-final-repeat-pair.png; do not label the after-handoff view as a fresh pair."
+    },
+    "publicationPerformed": false
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "checkpointLocal": "2026-10-26 06:20 Asia/Riyadh",
+  "scope": "New read-only native in-restaurant food search, NOT basket preparation/comparison",
+  "installedApk": "1.3.8-device-tools",
+  "installedSha256": "764AA40D13ABF2A6E268E1DB278AAB129634B40361C64D3F07CA55DC72B7907E",
+  "currentBuildSha256": "72446B7F3E936A36B6EE0A1DC5DA9DDEF8ED6F2648BF282E56EED515267D9D91",
+  "currentBuildInstalled": false,
+  "tests": {
+    "tests": 420,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lintErrors": 0,
+  "lintWarnings": 5,
+  "currentDraft": {
+    "restaurant": "براون كوفي",
+    "items": [
+      {
+        "name": "بلو لاقون",
+        "quantity": 1
+      },
+      {
+        "name": "انجلش كيك",
+        "quantity": 1
+      }
+    ],
+    "additions": []
+  },
+  "physicalCarts": "Historical Kudo unchanged: Keeta fries3/nachos2; HS fries3 only. Not current draft and not a fresh pair.",
+  "liveProof": {
+    "recordedAt": 1792983985742,
+    "restaurant": "براون كوفي",
+    "query": "بلو لاقون",
+    "source": "DUMP-protected inspect_hs_menu_search, current matched native menu; not main UI Compare",
+    "complete": true,
+    "nodeCount": 20,
+    "queryEnteredVia": "AccessibilityNodeInfo.ACTION_SET_TEXT; Arabic ADB keyboard injection failed and was not retried",
+    "resultCount": 1,
+    "resultTitle": "بلو لاقون",
+    "listingPriceHalala": 2000,
+    "resultNodeIndex": 15,
+    "resultClass": "android.view.View",
+    "nestedAddNodeIndex": 17,
+    "nestedAddId": "menuItemActionSingleButtonAdd",
+    "cartEdits": 0,
+    "finalTotal": null,
+    "confirmationOrPayment": false
+  },
+  "guard": "HungerMenuSearchSession binds complete native source restaurant menu, FULL cart fingerprint, exact query from requested lines, tested8.0.303, expiry and one consumed action. Shared SafetyGuard requires enabled consent, active operation and actual foreground provider. Exposes OPEN/TYPE/CLOSE only; no product-open/Add/payment action yet.",
+  "fixture": "app/src/test/resources/recorded-hs/hs-8.0.303-in-menu-search-blue-redacted.json",
+  "pureCandidateReader": "New post-probe source version identifies the unique food row from the20-node result and excludes Add child, with actual-frame regression test. This latest pure addition is built but not reinstalled/live claimed.",
+  "wiredIntoMainCompare": false,
+  "cleanup": "At06:19, manually closed only our own Blue Lagoon search via actual menuSearchCloseButton after checking exact query and same foreground window. Test-fixture cleanup, not an automatic journey. Phone expected on native Brown menu; recapture before acting.",
+  "normalApk": "Earlier normal415-test build hash4A01B32F24CE1F36DB75B41DE7108999BF852AE6DF26753A37898317BC3820DB was never installed. Its default output path has since been overwritten by device-tools builds. Rebuild normal deliberately before normal UI verification; do not claim the earlier APK still exists at that path.",
+  "published": false,
+  "next": "Read docs/development/in-menu-search-runtime-status.md. Integrate typed unique result opening, full PDP read, known PDP return and search Close; then use same lifecycle for HS seed/missing Add with complete MENU-to-CART acknowledgement. Never assume adding from search returns directly to MENU; never repeat an uncertain Add. No fabricated receipts or incomplete rows."
+}

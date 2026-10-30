@@ -1,0 +1,37 @@
+{
+  "date": "2026-10-25",
+  "device": "Honor MBH-N49 / Android16",
+  "providers": {
+    "hungerstation": "8.0.303",
+    "keeta": "3.13.203"
+  },
+  "request": {
+    "item": "فطيرة جبن فيتا",
+    "additions": [],
+    "restaurant": "مدور",
+    "quantity": 3
+  },
+  "deviceVerified": {
+    "hungerstationBasketQuantity3": false,
+    "keetaBasketNoAdditions": true,
+    "hungerstationFinalTotal": false,
+    "keetaBasketQuantity": 3,
+    "matchingAddressAndBranch": false,
+    "keetaReviewTotalHalala": 3063,
+    "twoProviderComparison": false
+  },
+  "implementedNotLiveVerified": [
+    "HungerStation PDP absolute quantity before single add",
+    "Request-bound adjustment of an observed plain existing variant",
+    "Observed full-menu quantity control with matching subtotal",
+    "Precise provider offline error detection"
+  ],
+  "privacy": {
+    "signingKeysCommitted": false,
+    "credentialsCommitted": false,
+    "rawScreenExportsCommitted": false
+  },
+  "ordersSubmitted": 0,
+  "payments": 0,
+  "releaseScope": "preview_current_work"
+}
