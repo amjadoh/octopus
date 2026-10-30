@@ -278,18 +278,41 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private fun compareNativeBasket() {
         if (!importingBasket || !graph.catalog.value.manualCaptureActive || nativeCompareStarting) return
         nativeCompareStarting = true
-        val token = generation
+        (overlay as? LinearLayout)?.getChildAt(0)?.let { button ->
+            (button as? Button)?.text = "جارٍ فحص السلة…"
+            button.isEnabled = false
+        }
+        var token = generation
         val polling = manualJob
         manualJob = graph.scope.launch(start = CoroutineStart.LAZY) {
             polling?.cancelAndJoin()
             if (generation != token) return@launch
             try {
                 val root = service.rootInActiveWindow ?: error("افتح سلة هنقرستيشن أولًا.")
-                val source = try {
+                var source = try {
                     requireProviderWindow(root)
                     capture(root)
                 } finally { @Suppress("DEPRECATION") root.recycle() }
                 graph.refreshInstallations()
+                val sourceVersion = graph.installations.value.singleOrNull { it.provider == ProviderId.HUNGERSTATION }?.version
+                if (nativeCartImport.evidence(source, sourceVersion, System.currentTimeMillis()) == null &&
+                    sourceVersion == HungerStationCatalog.TESTED_VERSION && source.complete &&
+                    HungerStationCatalog.screen(source) == CatalogScreen.CART &&
+                    source.nodes.none { it.enteredText || it.omittedText }) {
+                    // Reacquire MENU -> CART proof through read-only navigation. No imported request
+                    // or cart mutation is admitted from the initial, possibly incomplete viewport.
+                    manualJob = null
+                    endManualCatalog()
+                    var refreshed: CatalogFrame? = null
+                    check(begin(returnOnSuccess = false, operation = CatalogOperation.COMPARE_MENU) {
+                        refreshed = refreshNativeBasketProof(source)
+                    }) { graph.catalog.value.error ?: "تعذر بدء التحقق من سلة هنقرستيشن." }
+                    token = generation
+                    val refreshJob = job
+                    refreshJob?.join()
+                    if (generation != token || refreshJob?.isCancelled == true) return@launch
+                    source = refreshed ?: error(graph.catalog.value.error ?: "لم تكتمل إعادة قراءة سلة هنقرستيشن.")
+                }
                 val nativeEvidence = nativeCartImport.evidence(source,
                     graph.installations.value.singleOrNull { it.provider == ProviderId.HUNGERSTATION }?.version,
                     System.currentTimeMillis())
@@ -310,7 +333,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 }
                 val imported = nativeCartImport.read(source,
                     graph.installations.value.singleOrNull { it.provider == ProviderId.HUNGERSTATION }?.version,
-                    System.currentTimeMillis()) ?: error("تعذرت قراءة سلة كاملة مدعومة. افتح قائمة المطعم ثم السلة واضغط قارن خلال ٣٠ ثانية. الخيارات والإضافات غير مدعومة بعد.")
+                    System.currentTimeMillis()) ?: error(nativeCartImport.failure(source,
+                        graph.installations.value.singleOrNull { it.provider == ProviderId.HUNGERSTATION }?.version,
+                        System.currentTimeMillis()) ?: "خيارات هذه السلة لم تُثبت بالكامل؛ لم يبدأ نقلها.")
                 val desired = imported.first
                 ComparisonPreflight.failure(desired, graph.settings.value.catalogConsent,
                     graph.settings.value.allowed, graph.installations.value)?.let { error(it) }
@@ -326,12 +351,39 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 if (generation == token) {
                     manualJob = null
                     endManualCatalog()
-                    graph.catalog.value = graph.catalog.value.copy(error = failure.message)
+                    graph.catalog.value = graph.catalog.value.copy(error = failure.message
+                        ?: "تعذر بدء المقارنة من سلة هنقرستيشن؛ لم يبدأ نقل السلة.")
                     returnToApp()
                 }
+            } finally {
+                nativeCompareStarting = false
             }
         }
         manualJob?.start()
+    }
+
+    /** Reopen only a known cart back control and bind fresh footer proof to unchanged rows. */
+    private suspend fun refreshNativeBasketProof(source: CatalogFrame): CatalogFrame {
+        val original = BasketEvidenceReader.hungerStation(source, false)
+        val restaurant = original.restaurant?.takeIf { it.isNotBlank() }
+            ?: error("لم يُقرأ اسم المطعم من سلة هنقرستيشن.")
+        check(original.lines.isNotEmpty()) { "لم تُقرأ أصناف سلة هنقرستيشن." }
+        phase = "تحديث قراءة عداد السلة من قائمة المطعم"
+        val back = CatalogCommands.backTarget(source)
+            ?: error("لم أتعرف على زر الرجوع من سلة هنقرستيشن؛ لم أعدلها.")
+        act(source, CatalogAction.RETURN_TO_CATALOG, { it == back })
+        val menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
+        val version = graph.installations.value.singleOrNull { it.provider == ProviderId.HUNGERSTATION }?.version
+        val proof = HungerStationCompleteCartProof.fromMenu(menu, restaurant, version, System.currentTimeMillis())
+            ?: error("لم تثبت قراءة عداد السلة ومبلغها من قائمة المطعم؛ لم أعدلها.")
+        nativeCartImport.observe(menu, System.currentTimeMillis())
+        act(menu, CatalogAction.OPEN_BASKET, { it == proof.command.node }, basketCommand = proof.command)
+        val cart = await { HungerStationCatalog.screen(it) == CatalogScreen.CART }
+        val verified = proof.finish(cart, version, System.currentTimeMillis())
+            ?: error("لم تتطابق السلة كاملة مع عداد قائمة المطعم؛ لم أبدأ نقلها.")
+        check(verified.restaurant == original.restaurant && verified.lines == original.lines &&
+            verified.subtotal == original.subtotal) { "تغيرت السلة أثناء إعادة قراءتها؛ أعد المقارنة." }
+        return cart
     }
 
     private fun startImportedComparison(desired: CanonicalCart, source: CatalogFrame, evidence: BasketEvidence) {
