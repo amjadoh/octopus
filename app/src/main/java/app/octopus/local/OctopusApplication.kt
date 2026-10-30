@@ -149,8 +149,16 @@ class AppGraph(private val app: Application, publicClient: PublicCatalogClient =
         if (selected !is SelectionResult.Accepted) return@withLock DraftChange.Rejected("خيارات الوجبة ناقصة أو غير متاحة في القائمة المحفوظة.")
         commitDraft(DraftEditor.add(draft.value, details.restaurant, selected.item, replaceRestaurant))
     }
-    suspend fun importNativeCart(cart: CanonicalCart): DraftChange = draftLock.withLock {
-        if (!draftReady.value || catalog.value.busy || catalog.value.comparisonRunning)
+    suspend fun importNativeCart(cart: CanonicalCart,
+        configured: app.octopus.local.safety.ConfiguredBasketVerification? = null,
+        expectedPreviousFingerprint: String? = null): DraftChange = draftLock.withLock {
+        // The configured flow first reads the source schema inside its own active session.
+        // Only that fresh source proof may commit, and only if the prior draft is unchanged.
+        val verifiedImport = configured != null && configured.raw.provider == ProviderId.HUNGERSTATION &&
+            catalog.value.busy && catalog.value.comparisonRunning && !session.value.active &&
+            draft.value?.fingerprint == expectedPreviousFingerprint &&
+            configured.matches(cart, configured.frame, HungerStationCatalog.TESTED_VERSION, System.currentTimeMillis())
+        if (!draftReady.value || ((catalog.value.busy || catalog.value.comparisonRunning) && !verifiedImport))
             return@withLock DraftChange.Rejected("انتظر انتهاء العملية الحالية.")
         // Preserve the prior local order before replacing the active comparison request.
         draft.value?.takeIf { it.fingerprint != cart.fingerprint }?.let { previous ->

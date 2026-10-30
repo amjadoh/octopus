@@ -8,6 +8,10 @@ object KeetaRestaurantName {
     fun matches(expected: String, displayed: String): Boolean {
         if (expected.isBlank() || displayed.length !in 1..300) return false
         if (IdentityText.clean(expected) == IdentityText.clean(displayed)) return true
+        // Exact campaign heading observed in the native menu, 2026-10-30.
+        // Chain recognition only; never proof of delivery address or branch.
+        if (IdentityText.clean(expected) == "كنتاكي" &&
+            IdentityText.clean(displayed) == IdentityText.clean("كنتاكي - مخلل كل شي 🥒")) return true
         // Exact campaign title observed on the actual Herfy menu on 2026-10-26.
         // This identifies the chain name only; it does not establish branch/address equality.
         if (IdentityText.clean(expected)=="هرفي" &&

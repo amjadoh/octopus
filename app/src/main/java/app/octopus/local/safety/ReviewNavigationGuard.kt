@@ -48,12 +48,15 @@ object ReviewNavigationGuard {
     fun target(provider: ProviderId, frame: CatalogFrame, cart: CanonicalCart, version: String,
         admission:PreparedReviewAdmission?=null,now:Long=System.currentTimeMillis()): CatalogNode? {
         val multi=cart.items.size>1
-        if (!frame.complete || (if(multi) admission?.validFor(provider,cart,version,now)!=true else !PreviewEvidence.supports(cart))) return null
+        val configured = admission?.configured
+        val guarded = multi || configured != null
+        if (configured != null && !configured.matches(cart,frame,version,now)) return null
+        if (!frame.complete || (if(guarded) admission?.validFor(provider,cart,version,now)!=true else !PreviewEvidence.supports(cart))) return null
         if (provider == ProviderId.HUNGERSTATION) {
             if (version != HungerStationCatalog.TESTED_VERSION || HungerStationCatalog.screen(frame) != CatalogScreen.CART) return null
             val basket = BasketEvidenceReader.hungerStation(frame, false)
-            if(multi) {
-                if(frame!=admission!!.sourceFrame || BasketEvidenceReader.hungerStation(frame,true)!=admission.record.evidence)return null
+            if(guarded) {
+                if(frame!=admission!!.sourceFrame || BasketEvidenceReader.hungerStation(frame,true)!=(configured?.raw ?: admission.record.evidence))return null
             } else if (basket.restaurant != cart.restaurant || basket.lines.size != 1 || basket.lines.single().let {
                 it.name != cart.items.single().name || it.quantity != cart.items.single().quantity || it.choices.isNotEmpty()
             }) return null
@@ -71,14 +74,15 @@ object ReviewNavigationGuard {
         }
         val profile=KeetaVersionProfile.resolve(version) ?: return null
         if (!profile.allowsReview(multi)) return null
-        val menu = KeetaMenuReader(cart.restaurant, cart.items.first().name, version)
+        val menu = KeetaMenuReader(cart.restaurant, cart.items.first().name, version,
+            if (configured != null) cart.items.single().options.map { it.value }.toSet() else emptySet())
         val expectedQuantity=if(multi)cart.items.sumOf {it.quantity} else cart.items.single().quantity
         if (profile.allowsDirectDrawerReview && !multi) {
             // Actual 3.13.301 drawer footer opens review without leaving the restaurant.
             // Bind every row and amount to the fresh prepared record, not just a menu count.
             val proof=admission ?: return null
             if(!proof.validFor(provider,cart,version,now) || frame!=proof.sourceFrame ||
-                KeetaBasketReader(menu).evidence(frame)!=proof.record.evidence)return null
+                KeetaBasketReader(menu).evidence(frame)!=(configured?.raw ?: proof.record.evidence))return null
         } else if (!menu.menu(frame) || KeetaBasketReader(menu).menuQuantity(frame) != expectedQuantity) return null
         val label = frame.nodes.singleOrNull { it.label == "إتمام الدفع" && it.enabled } ?: return null
         var current = label
