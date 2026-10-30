@@ -109,7 +109,6 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
                 onQuery = { query = it.take(100) }, enabled = !state.busy,
                 onSearch = { showRestaurants(false) }, onBrowse = { browse() }, onProviders = onProviders,
                 onCart = onOpenComparison, onSettings = onSettings, allowed = settings.allowed.size,
-                areaTitle = publicState.area?.title ?: "حدد موقع المطاعم", onArea = { areaDialog = true },
                 browseEnabled = !state.busy && !state.manualCaptureActive && !publicState.refreshing,
                 browseLabel = "تحديث قائمة المطاعم")
         }
@@ -159,14 +158,6 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
         } else if (state.menu != null) {
         item {
             MosabJourneyHero(state.menu!!.restaurant.name, "اختر وجباتك وخصص طلبك على مزاجك.", 2)
-        }
-        item {
-            OutlinedButton(onClick = { areaDialog = true }, enabled = !state.busy && !state.manualCaptureActive,
-                modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
-                Icon(Icons.Outlined.LocationOn, null, Modifier.size(18.dp), tint = OctopusPalette.Petrol)
-                Text(publicState.area?.title ?: "حدد منطقة المطاعم", Modifier.weight(1f).padding(horizontal = 8.dp), fontSize = 12.sp)
-                Text("تغيير الموقع", fontSize = 12.sp)
-            }
         }
         item {
             Button(onClick = { browse() }, enabled = !state.busy && !publicState.refreshing, shape = RoundedCornerShape(18.dp),
@@ -495,7 +486,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
 @Composable
 private fun MosabHomeHeader(query: String, onQuery: (String) -> Unit, enabled: Boolean,
     onSearch: () -> Unit, onBrowse: () -> Unit, onProviders: () -> Unit, onCart: () -> Unit, onSettings: () -> Unit, allowed: Int,
-    areaTitle: String, onArea: () -> Unit, browseEnabled: Boolean, browseLabel: String) {
+    browseEnabled: Boolean, browseLabel: String) {
     Column(Modifier.fillMaxWidth().statusBarsPadding(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Image(painterResource(R.drawable.ic_octopus_selected), "الأخطبوط", Modifier.size(38.dp))
@@ -505,16 +496,6 @@ private fun MosabHomeHeader(query: String, onQuery: (String) -> Unit, enabled: B
             }
             IconButton(onClick = onSettings) { Icon(Icons.Outlined.Settings, "الإعدادات", tint = OctopusPalette.Petrol) }
             IconButton(onClick = onCart) { Icon(Icons.Outlined.ShoppingBag, "طلبك", tint = OctopusPalette.Petrol) }
-        }
-        Surface(onClick = onArea, enabled = enabled, color = OctopusPalette.Soft, shape = RoundedCornerShape(14.dp)) {
-            Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.LocationOn, null, tint = OctopusPalette.Petrol)
-                Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
-                    Text("منطقة عرض المطاعم", fontSize = 11.sp, color = OctopusPalette.Muted)
-                    Text(areaTitle, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                }
-                Text("تغيير", color = OctopusPalette.Petrol, fontSize = 12.sp)
-            }
         }
         OutlinedTextField(value = query, onValueChange = onQuery, enabled = enabled,
             modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(16.dp),

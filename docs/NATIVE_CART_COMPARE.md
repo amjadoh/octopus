@@ -6,6 +6,7 @@ Branch: `feature/native-cart-compare`. Legacy checkpoint: `checkpoint-before-car
 
 1. Home → «ابدأ من هنقرستيشن». Existing accessibility setup, provider allowlist and catalog consent apply.
 2. User chooses the delivery address, restaurant and meals in the native HungerStation app. Browsing remains passive.
+   The saved Octopus restaurant-area display is hidden on home and menu screens. Native basket import does not read that saved area or change either provider's delivery address. Legacy catalog refresh remains separate.
 3. From the cart, the floating «قارن» button imports the visible basket only after a recent same-session restaurant menu footer accounts for all row quantities and line amounts. If needed, return to the restaurant menu and reopen the cart; the footer proof expires after 30 seconds.
 4. Preserve the previous active local order under `before-native-import-<fingerprint>` before saving the imported request. Existing history is not deleted.
 5. Verify the source cart has not changed and read its actual order-review total without rebuilding its contents. Then run the existing guarded Keeta preparation/review adapter.
@@ -37,3 +38,4 @@ The user authorized replacing native baskets with a test basket and made the pho
 - Target filling and successful automatic return remain **unverified**. `nativeCartImportVerifiedOnPhone` remains false; this is not release acceptance.
 - Screenshots, diagnostic state and device APK backup remain in private sibling `native-cart-phone-20261030/`; no addresses or payment details are included here.
 - GitHub Actions run 41024347766 for commit `1c6211d` completed successfully: diagnostic build/unit/lint/UI checks and ai-gateway checks. No main merge or release was performed.
+- Follow-up UI change: saved-area controls removed from home and menu at the user's request. Diagnostic build and lint passed; installed over the phone test build and visually confirmed the home location field is absent. The provider rejection remains independent of this display change. Automatic return to Octopus after that rejection was observed; successful target-cart completion remains unverified.
