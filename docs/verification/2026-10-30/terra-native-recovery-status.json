@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-30",
+  "scope": "native_cart_home_and_bounded_terra_recovery",
+  "local": {
+    "unitTestsPassed": 592,
+    "unitTestFailures": 0,
+    "androidUiTestsPassed": 52,
+    "androidUiTestFailures": 0,
+    "gatewayTestsPassed": 5,
+    "lintPassed": true,
+    "diagnosticApkBuildPassed": true,
+    "androidTestApkBuildPassed": true,
+    "recordedSourceSchemaReplayComplete": true,
+    "recordedConfiguredMealAdmissionPassed": true,
+    "privateCapturesKeptOutsideRepository": true
+  },
+  "changes": [
+    "Home contains native HungerStation start and Compare actions, progress, errors and request-bound fresh totals; legacy restaurant catalog entry and automatic refresh removed.",
+    "Compare from Octopus reacquires the observed source basket and fresh menu-footer proof before importing it.",
+    "Prefer the native Add items cart control to return to the source restaurant menu. A known Home landing uses exact restaurant search and unchanged-cart verification.",
+    "Source edit-sheet reader supports observed plain required radio rows, overlapping clipped rows, optional limits up to 24 and positive native scroll-end metadata.",
+    "Terra is consulted after stalled screen reading or a source Home landing, with at most three distinct proposals per native session and no cart mutation replay."
+  ],
+  "terra": {
+    "fixedMetadataOnly": true,
+    "basketAddressOrImageSent": false,
+    "syntheticCloudContinuationVerified": true,
+    "syntheticCloudConfidence": 0.84,
+    "androidGenericRecoveryVerifiedOnPhone": false,
+    "arbitraryScreenNavigationImplemented": false
+  },
+  "physical": {
+    "latestAttemptStoppedAtSourceSchemaBeforeFix": true,
+    "phoneControlStoppedAtUserRequest": true,
+    "latestParserFixInstalledOnPhone": false,
+    "fullConfiguredComparisonAfterFixVerified": false,
+    "repeatWithoutDuplicateAfterFixVerified": false,
+    "ordinaryApkAcceptanceVerified": false
+  },
+  "limitations": [
+    "Configured transfer remains one meal, quantity one, with required single-choice selections and no selected optional additions.",
+    "A matching Keeta basket is revalidated without another Add; a different nonempty basket is rejected, not automatically replaced.",
+    "Local source replay, emulator UI and synthetic cloud approval do not prove a complete live provider comparison."
+  ],
+  "releaseReady": false,
+  "newVersionPublished": false,
+  "privacy": "No actual basket details, private captures, account data, tokens or signing material included."
+}

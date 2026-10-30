@@ -21,11 +21,15 @@ class HungerStationProductReadSession(private val maxPages: Int = 30) {
         val reader = HungerStationProductReader(restaurant, item)
         var previous: CatalogFrame? = null
         var last: CatalogFrame? = null
+        var startedAtTop = false
         for (page in 0 until maxPages) {
             currentCoroutineContext().ensureActive()
             val current = frame()
             currentCoroutineContext().ensureActive()
             reader.observe(current)
+            if (page == 0) startedAtTop = current.nodes.any { it.scrollable && it.className == "android.widget.ScrollView" &&
+                it.scrollBackward == false && it.scrollForward == true }
+            if (startedAtTop && page > 0) reader.observeEditingEnd(current)
             last = current
             if (reader.optionsEndObserved || current == previous || page == maxPages - 1) break
             previous = current

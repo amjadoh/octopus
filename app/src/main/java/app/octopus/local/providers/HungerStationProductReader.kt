@@ -12,6 +12,7 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
     private var bottomSeen = false
     private var unsupported = false
     private var enabled = false
+    private val clippedRequired = mutableSetOf<String>()
 
     fun observe(frame: CatalogFrame) {
         if (!frame.complete) unsupported = true
@@ -35,7 +36,8 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
             val optionalLimit = nodes.getOrNull(i + 1)?.takeIf { !it.clickable }?.label?.let(::clean)
             // Observed optional sections on HS 8.0.303. The imported cart must separately
             // prove that none of these multi-select additions was selected.
-            val optionalMaximum = optionalLimit?.let { Regex("ما يصل إلى ([1-9]) خيارات").matchEntire(it)?.groupValues?.get(1)?.toInt() }
+            val optionalMaximum = optionalLimit?.let { Regex("ما يصل إلى ([1-9][0-9]?) (?:خيار|خيارات)").matchEntire(it)?.groupValues?.get(1)?.toInt() }
+                ?.takeIf { it <= 24 }
             if (!node.clickable && text in setOf("الاختيار من الاضافات", "اضافة") && optionalMaximum != null) {
                 if (!headersInFrame.add(text)) unsupported = true
                 group = groups.getOrPut(text) { Group(text, 0, optionalMaximum) }
@@ -63,8 +65,15 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
                 if (text.length > 100 || text.contains('\n')) { unsupported = true; return }
                 if (!headersInFrame.add(text)) unsupported = true
                 group = groups.getOrPut(text) { Group(text) }
+                clippedRequired.remove(text)
                 if (group.minimum != 1) unsupported = true
                 i += 3; continue
+            }
+            if (!node.clickable && clean(nodes.getOrNull(i+1)?.label.orEmpty()) == "مطلوب" &&
+                (i+2 == nodes.size || nodes.getOrNull(i+2)?.id == "flutterAddButton")) {
+                clippedRequired += text
+                group = null
+                i += 2; continue
             }
             // A scroll can clip the heading while leaving its limit and an overlapping
             // already-read choice. Restore only the uniquely proven single-choice group.
@@ -82,8 +91,25 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
                     (text == "الحقائق الغذائية" && node.className == "android.widget.ImageView"))) { i++; continue }
             if (node.clickable && node.id != "flutterAddButton" && node.id != "pdpCloseButton" && node.id != "pdpZoomButton") {
                 val value = text.lineSequence().first().trim()
+                val resumingGroup = group == null
+                if (group == null) group = groups.values.singleOrNull { value in it.choices }
+                val knownClippedChoice = resumingGroup && group?.minimum == 1 && group?.maximum == 1 &&
+                    group?.choices?.get(value)?.available == node.enabled && !text.contains('\n') &&
+                    node.className == "android.view.View" && node.id.isEmpty() &&
+                    frame.nodes.singleOrNull { it.index == node.parent }?.className == "android.widget.ScrollView" &&
+                    frame.nodes.singleOrNull { it.id == "flutterAddButton" }?.label?.lineSequence()?.first()?.trim() == "تحديث"
+                // Existing-cart edit sheets omit calorie/price suffixes on required radio rows.
+                // Accept only the observed direct ScrollView row with its sole blank control child.
+                val editingChoice = !text.contains('\n') && group?.minimum == 1 && group?.maximum == 1 &&
+                    frame.nodes.singleOrNull { it.id == "flutterAddButton" }?.label?.lineSequence()?.first()?.trim() == "تحديث" &&
+                    node.className == "android.view.View" && node.id.isEmpty() &&
+                    frame.nodes.singleOrNull { it.index == node.parent }?.className == "android.widget.ScrollView" &&
+                    frame.nodes.filter { it.parent == node.index }.singleOrNull()?.let {
+                        it.className == "android.view.View" && it.label.isBlank() && it.clickable && it.enabled && !it.editable && !it.omittedText
+                    } == true
                 // Recorded choice rows are merged names with order-count/price suffixes; recommendation rows are excluded above.
                 val choiceShape = text.contains('\n') && (text.contains("طلب") || text.contains('§') || text.contains("سعرة")) ||
+                    editingChoice || knownClippedChoice ||
                     (group?.title == "اختر العنصر" && !text.contains('\n') && text.startsWith(item.name + " - ")) ||
                     (text in setOf("بدون سلطة", "بدون صلصة", "بدون مخلل حار", "بدون مخلل", "بدون بطاطس", "بدون صلصة ثوم") &&
                         node.className in setOf("android.view.View", "android.widget.ImageView"))
@@ -108,7 +134,7 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
     fun finish(atMillis: Long): ConfiguredProduct {
         require(titleSeen) { "اسم الوجبة داخل خياراتها لم يطابق اختيارك." }
         // Completeness follows the observed option grammar and end marker, never a restaurant name.
-        val complete = bottomSeen && !unsupported && groups.values.all { it.choices.size >= it.maximum }
+        val complete = bottomSeen && !unsupported && clippedRequired.isEmpty() && groups.values.all { it.choices.size >= it.maximum }
         val options = groups.values.filter { it.choices.size >= it.maximum }.map { MenuChoiceGroup(it.title, it.title, it.minimum, it.maximum, it.choices.values.toList()) }
         val fingerprint = MessageDigest.getInstance("SHA-256").digest(bodies.joinToString().toByteArray()).joinToString("") { "%02x".format(it) }
         return ConfiguredProduct(restaurant.name, MenuProduct(item.selector, item.name, null, enabled, item.listedPrice, options),
@@ -116,5 +142,12 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
             options.singleOrNull { it.title == "اختر الحجم" }?.id)
     }
     val optionsEndObserved: Boolean get() = bottomSeen
+    /** Only a known editing footer and positive native end-of-scroll metadata prove this alternate end. */
+    fun observeEditingEnd(frame: CatalogFrame) {
+        if (frame.complete && frame.nodes.none { it.enteredText } &&
+            frame.nodes.singleOrNull { it.id == "flutterAddButton" }?.label?.lineSequence()?.first()?.trim() == "تحديث" &&
+            frame.nodes.singleOrNull { it.scrollable && it.className == "android.widget.ScrollView" }
+                ?.let { it.scrollForward == false && it.scrollBackward == true } == true) bottomSeen = true
+    }
     private fun clean(value: String) = value.replace(Regex("[\\u200e\\u200f\\u061c\\u202a-\\u202e\\u2066-\\u2069]"), "").trim()
 }
