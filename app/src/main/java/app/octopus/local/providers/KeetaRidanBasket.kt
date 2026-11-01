@@ -4,9 +4,19 @@ import app.octopus.local.domain.ProviderId
 import app.octopus.local.pricing.MoneyParser
 
 /** Honor 3.12.501 cart drawer only. No checkout or clear-cart selector. */
-open class KeetaBasketReader(private val catalog: KeetaMenuReader, private val requestedTitles: Set<String> = setOf(catalog.title)) {
-    init { require(requestedTitles.isNotEmpty() && catalog.title in requestedTitles && requestedTitles.all { it.isNotBlank() }) }
+open class KeetaBasketReader(private val catalog: KeetaMenuReader, private val requestedTitles: Set<String> = setOf(catalog.title),
+    /** Configured requests with several meals: the exact choices each named row must show. */
+    private val choicesByTitle: Map<String, Set<String>> = emptyMap()) {
+    init { require(requestedTitles.isNotEmpty() && catalog.title in requestedTitles && requestedTitles.all { it.isNotBlank() } &&
+        (choicesByTitle.isEmpty() || (choicesByTitle.keys == requestedTitles &&
+            choicesByTitle.values.flatten().toSet() == catalog.requestedChoices))) }
     companion object {
+        /** Drawer reader for a configured request; every meal row is bound to its own required choices. */
+        fun configured(cart: app.octopus.local.domain.CanonicalCart, version: String, current: String = cart.items.first().name): KeetaBasketReader {
+            val byTitle = cart.items.associate { item -> item.name to item.options.map { it.value }.toSet() }
+            val menu = KeetaMenuReader(cart.restaurant, current, version, byTitle.values.flatten().toSet(), byTitle.keys - current)
+            return KeetaBasketReader(menu, byTitle.keys, if (byTitle.size > 1) byTitle else emptyMap())
+        }
         fun requestedTitleCandidate(raw: String, requested: Set<String>): String? =
             raw.replace(Regex("[\\u200e\\u200f\\u061c\\u202a-\\u202e\\u2066-\\u2069]"), "").trim()
                 .takeIf {it in requested}
@@ -213,7 +223,8 @@ open class KeetaBasketReader(private val catalog: KeetaMenuReader, private val r
                 !it.label.matches(Regex("خصم [0-9٠-٩]{1,2}%")) }
                 .flatMap { catalog.configuredChoices(it.label) ?: return null }
             if (choices.map { it.value }.distinct().size != choices.size) return null
-            if (catalog.requestedChoices.isNotEmpty() && choices.map { it.value }.toSet() != catalog.requestedChoices) return null
+            val wanted = if (choicesByTitle.isEmpty()) catalog.requestedChoices else choicesByTitle.getValue(name)
+            if (catalog.requestedChoices.isNotEmpty() && choices.map { it.value }.toSet() != wanted) return null
             BasketLineEvidence(name, choices, count, amount)
         }
         val subtotal = runCatching { lines.fold(0L) { total, line -> Math.addExact(total,line.lineAmount!!) } }.getOrNull() ?: return null

@@ -48,17 +48,20 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private var keetaContext: KeetaMenuReader? = null
     private val keetaMenu get() = checkNotNull(keetaContext) { "لا يوجد طلب محدد لقراءة كيتا." }
     private var keetaBasketTitles: Set<String> = emptySet()
-    private val keetaBasket get() = KeetaBasketReader(keetaMenu, keetaBasketTitles)
+    private var keetaChoicesByTitle: Map<String, Set<String>> = emptyMap()
+    private val keetaBasket get() = KeetaBasketReader(keetaMenu, keetaBasketTitles, keetaChoicesByTitle)
     private fun installedKeetaProfile() = KeetaVersionProfile.resolve(
         graph.installations.value.singleOrNull { it.provider == ProviderId.KEETA }?.version)
     private fun bindKeetaRequest(cart: CanonicalCart, line: CanonicalItem = cart.items.single(), meal: SingleChoiceMeal? = null) {
         val profile = checkNotNull(installedKeetaProfile()) { "إصدار كيتا غير مدعوم في مسار القراءة الحالي." }
-        check(profile.allowsReading()) { "إصدار كيتا غير مدعوم في مسار القراءة الحالي." }
+        check(profile.allowsReading(multipleItems = meal != null && cart.items.size > 1)) { "إصدار كيتا غير مدعوم في مسار القراءة الحالي." }
         require(if (meal == null) PlainMenuReadPlan.create(cart, ProviderId.KEETA, profile.version)?.lines?.contains(line) == true
-            else meal.cart == cart && cart.items.single() == line && profile.version == "3.13.301")
+            else meal.cart == cart && line in cart.items && profile.version == "3.13.301")
         requestFingerprint = cart.fingerprint
         keetaBasketTitles = cart.items.map { it.name }.toSet()
-        keetaContext = KeetaMenuReader(cart.restaurant, line.name, profile.version, meal?.values ?: emptySet())
+        keetaChoicesByTitle = if (meal != null && cart.items.size > 1) meal.valuesByTitle else emptyMap()
+        keetaContext = KeetaMenuReader(cart.restaurant, line.name, profile.version, meal?.values ?: emptySet(),
+            if (meal != null) keetaBasketTitles - line.name else emptySet())
     }
     private var job: Job? = null
     private var comparisonJob: Job? = null
@@ -364,13 +367,19 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     graph.installations.value.singleOrNull { it.provider == ProviderId.HUNGERSTATION }?.version,
                     System.currentTimeMillis())
                 if (nativeEvidence?.lines?.any { it.choices.isNotEmpty() } == true) {
-                    check(nativeEvidence.lines.size == 1 && nativeEvidence.lines.single().quantity == 1) {
-                        "نقل الخيارات يدعم حاليًا وجبة واحدة بكمية واحدة؛ احتُفظ بالسلة كاملة."
+                    check(nativeEvidence.lines.all { it.choices.isNotEmpty() }) {
+                        "نقل الخيارات يدعم حاليًا وجبات بخيارات فقط؛ سلة فيها صنف بدون خيارات مع وجبة بخيارات لم تُنقل. احتُفظ بالسلة كاملة."
                     }
-                    val line = nativeEvidence.lines.single()
+                    check(nativeEvidence.lines.size <= SingleChoiceMeal.MAX_MEALS && nativeEvidence.lines.all { it.quantity == 1 }) {
+                        "نقل الخيارات يدعم حتى ${SingleChoiceMeal.MAX_MEALS} وجبات، كل وجبة بكمية واحدة؛ احتُفظ بالسلة كاملة."
+                    }
+                    check(nativeEvidence.lines.map { it.name }.distinct().size == nativeEvidence.lines.size) {
+                        "في السلة وجبتان بنفس الاسم؛ نقلهما غير مدعوم حاليًا. احتُفظ بالسلة كاملة."
+                    }
                     val probe = CanonicalCart(checkNotNull(nativeEvidence.restaurant), null,
-                        listOf(CanonicalItem(line.name, null, emptyList(), 1)))
-                    ComparisonPreflight.failure(probe, graph.settings.value.catalogConsent,
+                        nativeEvidence.lines.map { CanonicalItem(it.name, null, emptyList(), 1) })
+                    // Preflight covers consent, installs and versions; the meal shape is proven by SingleChoiceMeal.
+                    ComparisonPreflight.failure(probe.copy(items = probe.items.take(1)), graph.settings.value.catalogConsent,
                         graph.settings.value.allowed, graph.installations.value)?.let { error(it) }
                     check(installedKeetaProfile()?.version == "3.13.301") { "إصدار كيتا يحتاج تحققًا لمسار الخيارات." }
                     manualJob = null
@@ -534,22 +543,29 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     val currentSource = try { requireProviderWindow(root); capture(root) }
                         finally { @Suppress("DEPRECATION") root.recycle() }
                     check(BasketEvidenceReader.hungerStation(currentSource, true) == original) { "تغيرت سلة هنقرستيشن قبل قراءة الخيارات." }
-                    val edit = HungerStationCartProductCommand.create(currentSource, original, System.currentTimeMillis())
-                        ?: error("لم أثبت عنصر الوجبة لقراءة خياراتها؛ لم أغير السلة.")
-                    act(currentSource, CatalogAction.OPEN_PRODUCT, { it == edit.target }, cartProductCommand = edit)
-                    val productFrame = await { HungerStationCatalog.screen(it) == CatalogScreen.PRODUCT }
-                    val rowName = probe.items.single().name
-                    val heading = productFrame.nodes.filter { !it.clickable &&
-                        (it.label == rowName || rowName.startsWith(it.label + " - ")) && it.label.isNotBlank()
-                    }.map { it.label }.distinct().singleOrNull()
-                        ?: error("لم يتطابق اسم الوجبة مع صفحة خياراتها.")
-                    val read = readHungerProduct(LiveRestaurant(probe.restaurant, null, probe.restaurant),
-                        LiveMenuItem(heading, null, "cart-product"))
-                    val verified = SingleChoiceMeal.create(original, read.details, System.currentTimeMillis())
-                        ?: error("لم تثبت جميع اختيارات الوجبة وكمياتها من قائمة المطعم؛ لم أغير السلة.")
-                    act(read.lastFrame, CatalogAction.RETURN_TO_CATALOG, { it.id == "pdpCloseButton" })
-                    val unchanged = await { HungerStationCatalog.screen(it) == CatalogScreen.CART }
-                    check(BasketEvidenceReader.hungerStation(unchanged, true) == original) { "تغيرت السلة أثناء قراءة الخيارات." }
+                    // Open each meal's edit page once, read its schema, close it, and prove the cart unchanged.
+                    val schemas = linkedMapOf<String, ConfiguredProduct>()
+                    var unchanged = currentSource
+                    for ((index, line) in probe.items.withIndex()) {
+                        if (probe.items.size > 1) phase = "قراءة خيارات الوجبة ${index + 1} من ${probe.items.size} دون تغيير سلة هنقرستيشن"
+                        val edit = HungerStationCartProductCommand.create(unchanged, original, line.name, System.currentTimeMillis())
+                            ?: error("لم أثبت عنصر الوجبة «${line.name}» لقراءة خياراتها؛ لم أغير السلة.")
+                        act(unchanged, CatalogAction.OPEN_PRODUCT, { it == edit.target }, cartProductCommand = edit)
+                        val productFrame = await { HungerStationCatalog.screen(it) == CatalogScreen.PRODUCT }
+                        val rowName = line.name
+                        val heading = productFrame.nodes.filter { !it.clickable &&
+                            (it.label == rowName || rowName.startsWith(it.label + " - ")) && it.label.isNotBlank()
+                        }.map { it.label }.distinct().singleOrNull()
+                            ?: error("لم يتطابق اسم الوجبة مع صفحة خياراتها.")
+                        val read = readHungerProduct(LiveRestaurant(probe.restaurant, null, probe.restaurant),
+                            LiveMenuItem(heading, null, "cart-product"))
+                        schemas[rowName] = read.details
+                        act(read.lastFrame, CatalogAction.RETURN_TO_CATALOG, { it.id == "pdpCloseButton" })
+                        unchanged = await { HungerStationCatalog.screen(it) == CatalogScreen.CART }
+                        check(BasketEvidenceReader.hungerStation(unchanged, true) == original) { "تغيرت السلة أثناء قراءة الخيارات." }
+                    }
+                    val verified = SingleChoiceMeal.create(original, schemas, System.currentTimeMillis())
+                        ?: error("لم تثبت جميع اختيارات الوجبات وكمياتها من قائمة المطعم؛ لم أغير السلة.")
                     val returned = leaveCompleteHungerBasket(unchanged, original)
                     val (cartFrame, raw) = readCompleteHungerBasket(returned, probe)
                     check(raw == original) { "تغيرت سلة هنقرستيشن أثناء قراءة الخيارات؛ أعد المقارنة." }
@@ -618,7 +634,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private suspend fun prepareConfiguredKeeta(meal: SingleChoiceMeal) {
         val desired = meal.cart
         check(graph.draft.value?.fingerprint == desired.fingerprint) { "تغير طلبك؛ أعد المقارنة." }
-        bindKeetaRequest(desired, meal = meal)
+        bindKeetaRequest(desired, desired.items.first(), meal)
         provider = ProviderId.KEETA
         forgetPrepared(provider)
         phase = "فتح الوجبة المطابقة في كيتا"
@@ -641,6 +657,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             val observed = keetaBasket.evidence(frame)
                 ?: error("تعذرت قراءة سلة كيتا السابقة كاملة؛ لم أضف فوقها.")
             // Preliminary identity only. Review admission still needs fresh Keeta group acknowledgement below.
+            // A cart holding only some of the meals is never completed: that would need a partial-add proof.
             check(meal.resolve(observed, System.currentTimeMillis()) != null) {
                 "سلة كيتا السابقة تختلف عن طلبك؛ لم أضف فوقها أو أكرر الوجبة."
             }
@@ -655,67 +672,96 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             requireFirstBasketAdd(desired)
             null
         }
-        openKeetaPreviewProduct(frame)
-        frame = awaitKeetaProduct()
-        val selection = KeetaMealChoices(desired)
-        var complete = false
-        for (attempt in 0 until 60) {
-            checkSession()
-            when (val step = selection.next(frame, keetaMenu)) {
-                KeetaMealChoices.Step.Blocked -> {
-                    if (BuildConfig.VERSION_NAME.endsWith("-device-tools")) runCatching {
-                        service.filesDir.resolve("keeta-choice-stop-frame.json")
-                            .writeText(com.google.gson.Gson().toJson(frame))
-                    }
-                    error("خيارات كيتا غير مطابقة أو غير مكتملة؛ لم أضف الوجبة.")
-                }
-                KeetaMealChoices.Step.Ready -> { complete = true; break }
-                is KeetaMealChoices.Step.Select -> {
-                    phase = "اختيار مكونات الوجبة المطابقة في كيتا"
-                    keetaBasketAction { current -> step.target.takeIf { current == frame && selection.consume(step, current, keetaMenu) } }
-                    delay(350)
-                }
-                KeetaMealChoices.Step.Scroll, KeetaMealChoices.Step.VerifyPrevious -> {
-                    val backward = step == KeetaMealChoices.Step.VerifyPrevious
-                    val body = keetaMenu.configuredProductBody(frame)?.takeIf { it.scrollable }
-                        ?: error("تعذرت متابعة قراءة خيارات كيتا؛ لم أضف.")
-                    scrollKeetaProductPart(frame, body, backward)
-                    delay(350)
-                    val after = service.rootInActiveWindow ?: error("اختفت خيارات كيتا.")
-                    val current = try { requireProviderWindow(after); capture(after) } finally { @Suppress("DEPRECATION") after.recycle() }
-                    if (current == frame) {
-                        check(!backward) { "لم أتمكن من التحقق من الاختيار الأخير؛ لم أضف." }
-                        selection.endObserved()
-                    }
-                }
+        val selections = mutableListOf<KeetaMealChoices>()
+        var proof: app.octopus.local.safety.ConfiguredBasketVerification? = null
+        for ((index, item) in desired.items.withIndex()) {
+            val counter = if (desired.items.size > 1) " (${index + 1} من ${desired.items.size})" else ""
+            if (index > 0) {
+                // Screen labels are kept per requested meal; re-read the menu under the next meal's context.
+                bindKeetaRequest(desired, item, meal)
+                frame = await { keetaMenu.menu(it) }
             }
-            val root = service.rootInActiveWindow ?: error("اختفت خيارات كيتا.")
-            frame = try { requireProviderWindow(root); capture(root) } finally { @Suppress("DEPRECATION") root.recycle() }
-        }
-        check(complete && selection.ready) { "لم تكتمل مطابقة كل الخيارات؛ لم أضف الوجبة." }
-        if (existing == null) {
-            phase = "إضافة الوجبة مرة واحدة والتحقق من سلة كيتا"
+            phase = "فتح الوجبة المطابقة في كيتا$counter"
+            openKeetaPreviewProduct(frame)
+            frame = awaitKeetaProduct()
+            val selection = KeetaMealChoices(desired, item)
+            var complete = false
+            for (attempt in 0 until 60) {
+                checkSession()
+                when (val step = selection.next(frame, keetaMenu)) {
+                    KeetaMealChoices.Step.Blocked -> {
+                        if (BuildConfig.VERSION_NAME.endsWith("-device-tools")) runCatching {
+                            service.filesDir.resolve("keeta-choice-stop-frame.json")
+                                .writeText(com.google.gson.Gson().toJson(frame))
+                        }
+                        error("خيارات كيتا غير مطابقة أو غير مكتملة؛ لم أضف الوجبة.")
+                    }
+                    KeetaMealChoices.Step.Ready -> { complete = true; break }
+                    is KeetaMealChoices.Step.Select -> {
+                        phase = "اختيار مكونات الوجبة المطابقة في كيتا$counter"
+                        keetaBasketAction { current -> step.target.takeIf { current == frame && selection.consume(step, current, keetaMenu) } }
+                        delay(350)
+                    }
+                    KeetaMealChoices.Step.Scroll, KeetaMealChoices.Step.VerifyPrevious -> {
+                        val backward = step == KeetaMealChoices.Step.VerifyPrevious
+                        val body = keetaMenu.configuredProductBody(frame)?.takeIf { it.scrollable }
+                            ?: error("تعذرت متابعة قراءة خيارات كيتا؛ لم أضف.")
+                        scrollKeetaProductPart(frame, body, backward)
+                        delay(350)
+                        val after = service.rootInActiveWindow ?: error("اختفت خيارات كيتا.")
+                        val current = try { requireProviderWindow(after); capture(after) } finally { @Suppress("DEPRECATION") after.recycle() }
+                        if (current == frame) {
+                            check(!backward) { "لم أتمكن من التحقق من الاختيار الأخير؛ لم أضف." }
+                            selection.endObserved()
+                        }
+                    }
+                }
+                val root = service.rootInActiveWindow ?: error("اختفت خيارات كيتا.")
+                frame = try { requireProviderWindow(root); capture(root) } finally { @Suppress("DEPRECATION") root.recycle() }
+            }
+            check(complete && selection.ready) { "لم تكتمل مطابقة كل الخيارات؛ لم أضف الوجبة." }
+            selections += selection
+            if (existing != null) {
+                phase = "التحقق من السلة المطابقة في كيتا دون تكرار الإضافة$counter"
+                closeKeetaReadSheet(frame)
+                frame = await { keetaMenu.menu(it) && keetaBasket.footerBag(it) != null }
+                continue
+            }
+            phase = "إضافة الوجبة مرة واحدة والتحقق من سلة كيتا$counter"
             var dispatched = false
             keetaBasketAction(cartMutation = true) { current -> selection.addTarget(current, keetaMenu)?.takeIf {
                 if (dispatched) false else { dispatched = true; true }
             } }
-        } else {
-            phase = "التحقق من السلة المطابقة في كيتا دون تكرار الإضافة"
-            closeKeetaReadSheet(frame)
+            frame = await { keetaMenu.menu(it) && keetaBasket.footerBag(it) != null }
+            keetaBasketAction { keetaBasket.footerBag(it) }
+            frame = await { keetaMenu.basketDrawer(it) }
+            // The cart must hold exactly the meals added so far before the next one is opened.
+            val added = meal.prefix(index + 1)
+            val step = app.octopus.local.safety.ConfiguredBasketVerification.target(added, selections, keetaMenu.VERSION, frame, System.currentTimeMillis())
+                ?: error("لم تتطابق سلة كيتا كاملة بعد إضافة الوجبة${counter}؛ لم أكرر الإضافة ولم أعتمد سعرًا.")
+            check(withContext(Dispatchers.IO) {
+                graph.basketMutationJournal.observeConfigured(added.cart, step, frame, keetaMenu.VERSION, System.currentTimeMillis())
+            }) { "تعذر تثبيت نتيجة سلة كيتا؛ لم أكرر الإضافة." }
+            if (index < desired.items.lastIndex) {
+                closeKeetaReadSheet(frame, added)
+                frame = await { keetaMenu.menu(it) }
+            } else proof = step
         }
-        frame = await { keetaMenu.menu(it) && keetaBasket.footerBag(it) != null }
-        keetaBasketAction { keetaBasket.footerBag(it) }
-        frame = await { keetaMenu.basketDrawer(it) }
-        if (existing != null) check(keetaBasket.evidence(frame) == existing) {
-            "تغيرت سلة كيتا أثناء التحقق من الخيارات؛ لم أكرر الإضافة ولم أعتمد إجماليًا."
+        if (existing != null) {
+            keetaBasketAction { keetaBasket.footerBag(it) }
+            frame = await { keetaMenu.basketDrawer(it) }
+            check(keetaBasket.evidence(frame) == existing) {
+                "تغيرت سلة كيتا أثناء التحقق من الخيارات؛ لم أكرر الإضافة ولم أعتمد إجماليًا."
+            }
+            proof = app.octopus.local.safety.ConfiguredBasketVerification.target(meal, selections, keetaMenu.VERSION, frame, System.currentTimeMillis())
+                ?: error("لم تتطابق سلة كيتا كاملة؛ لم أكرر الإضافة ولم أعتمد سعرًا.")
+            check(withContext(Dispatchers.IO) {
+                graph.basketMutationJournal.observeConfigured(desired, proof!!, frame, keetaMenu.VERSION, System.currentTimeMillis())
+            }) { "تعذر تثبيت نتيجة سلة كيتا؛ لم أكرر الإضافة." }
         }
-        val proof = app.octopus.local.safety.ConfiguredBasketVerification.target(meal, selection, keetaMenu, frame, System.currentTimeMillis())
-            ?: error("لم تتطابق سلة كيتا كاملة بعد الإضافة؛ لم أكرر الإضافة ولم أعتمد سعرًا.")
-        check(withContext(Dispatchers.IO) {
-            graph.basketMutationJournal.observeConfigured(desired, proof, frame, keetaMenu.VERSION, System.currentTimeMillis())
-        }) { "تعذر تثبيت نتيجة سلة كيتا؛ لم أكرر الإضافة." }
-        rememberPrepared(desired, proof.resolved, keetaMenu.VERSION)
-        readFinalTotal(desired, frame, proof)
+        val verified = checkNotNull(proof)
+        rememberPrepared(desired, verified.resolved, keetaMenu.VERSION)
+        readFinalTotal(desired, frame, verified)
     }
 
     fun compareAndPrepare(): Boolean {
@@ -1218,6 +1264,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 val item = cart.items.single()
                 keetaContext = KeetaMenuReader(cart.restaurant, item.name, profile.version, item.options.map { it.value }.toSet())
                 keetaBasketTitles = setOf(item.name)
+                keetaChoicesByTitle = emptyMap()
                 val observed = await { keetaMenu.basketDrawer(it) }
                 service.filesDir.resolve("keeta-configured-drawer-frame.json")
                     .writeText(com.google.gson.Gson().toJson(observed))
@@ -2209,7 +2256,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     val evidence = keetaBasket.evidence(frame) ?: error("لم تثبت سلة كاملة للخروج منها.")
                     @Suppress("DEPRECATION")
                     val version = service.packageManager.getPackageInfo(provider.packageName, 0).versionName
-                    val command = (if (meal != null) KeetaOwnedDrawerReturn.createConfigured(frame, evidence, meal, version, System.currentTimeMillis())
+                    val command = (if (meal != null) KeetaOwnedDrawerReturn.createConfigured(frame, evidence, meal, version, System.currentTimeMillis(), desired)
                         else KeetaOwnedDrawerReturn.create(frame, evidence, desired, version, System.currentTimeMillis()))
                         ?: error("تعذر تحديد إغلاق معاينة السلة.")
                     verifyActiveFrame(frame, root.windowId)
@@ -2507,7 +2554,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         @Suppress("DEPRECATION")
         val observedVersion=service.packageManager.getPackageInfo(provider.packageName,0).versionName
         check(observedVersion==version) {"تغير إصدار المنصة؛ لم أفتح مراجعة السلة."}
-        val directDrawer=provider==ProviderId.KEETA && desired.items.size==1 &&
+        val directDrawer=provider==ProviderId.KEETA && (desired.items.size==1 || configured != null) &&
             KeetaVersionProfile.resolve(version)?.allowsDirectDrawerReview==true
         val admission=if(desired.items.size>1 || directDrawer || configured != null) app.octopus.local.safety.PreparedReviewAdmission.create(provider,desired,saved,
             verifiedSource ?: error("لم تُربط السلة بشاشتها المتحققة."),version,System.currentTimeMillis(),configured)
