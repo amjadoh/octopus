@@ -102,7 +102,7 @@ class KeetaOptionalPlainSession private constructor(
         }
         /** Recognition permits reading/closing only; it never grants Add authority. */
         fun readBody(frame: CatalogFrame, restaurant: String, title: String): CatalogNode? {
-            if (!frame.complete || frame.nodes.count { it.label == restaurant } != 1 ||
+            if (!frame.complete || frame.nodes.count { it.label == restaurant || '\n' !in it.label && KeetaRestaurantName.matches(restaurant, it.label) } != 1 ||
                 frame.nodes.count { it.label == "إضافة إلى السلة" } != 1) return null
             return frame.nodes.filter { it.className == "android.widget.ScrollView" }.singleOrNull {
                 modal(frame,it,title) != null

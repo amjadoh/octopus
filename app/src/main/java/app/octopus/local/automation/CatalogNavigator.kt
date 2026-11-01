@@ -235,7 +235,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             nativeCartImport.observe(frame, System.currentTimeMillis())
             if (HungerStationCatalog.screen(frame) == CatalogScreen.CART) {
                 BasketEvidenceReader.hungerStation(frame, true).takeIf { it.complete && it.restaurant != null && it.lines.isNotEmpty() }
-                    ?.let { latestNativeCart = it }
+                    ?.let { latestNativeCart = it; rememberNativeCart(it) }
             }
             return
         }
@@ -285,13 +285,29 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
 
     fun compareCapturedNativeBasket(): Boolean {
         if (nativeCompareStarting || job?.isActive == true || comparisonJob?.isActive == true || graph.session.value.active) return false
-        val source = latestNativeCart ?: run {
-            graph.catalog.value = graph.catalog.value.copy(error = "ابدأ في هنقرستيشن وأضف وجبتك وافتح السلة أولًا، ثم ارجع واضغط قارن.")
-            return false
+        // The last read cart survives a service restart; reopening it still proves the cart is unchanged.
+        val source = latestNativeCart ?: rememberedNativeCart() ?: run {
+            if (!beginManualCatalog(compareBasket = true)) {
+                graph.catalog.value = graph.catalog.value.copy(error = "ابدأ في هنقرستيشن وأضف وجبتك وافتح السلة أولًا، ثم ارجع واضغط قارن.")
+                return false
+            }
+            graph.catalog.value = graph.catalog.value.copy(message = "افتح سلتك في هنقرستيشن ثم اضغط «قارن» العائم.")
+            return true
         }
         compareNativeBasket(source)
         return true
     }
+
+    private val nativeCartFile get() = service.filesDir.resolve("last-native-cart.json")
+
+    private fun rememberNativeCart(cart: BasketEvidence) {
+        runCatching { nativeCartFile.writeText(com.google.gson.Gson().toJson(cart)) }
+    }
+
+    private fun rememberedNativeCart(): BasketEvidence? = runCatching {
+        com.google.gson.Gson().fromJson(nativeCartFile.readText(), BasketEvidence::class.java)
+            .takeIf { it.provider == ProviderId.HUNGERSTATION && it.complete && it.restaurant != null && it.lines.isNotEmpty() }
+    }.getOrNull()
 
     /** Explicit Compare tap ends passive reading; source basket is never rebuilt or edited. */
     private fun compareNativeBasket(resume: BasketEvidence? = null) {
@@ -407,8 +423,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 navigateToRestaurant(LiveRestaurant(restaurant, null, restaurant))
                 frame = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
             }
-            val proof = HungerStationCompleteCartProof.fromMenu(frame, restaurant, HungerStationCatalog.TESTED_VERSION, System.currentTimeMillis())
+            val (settled, proof) = awaitMenuCartProof(frame, restaurant, HungerStationCatalog.TESTED_VERSION)
                 ?: error("لم يتطابق عداد قائمة المطعم مع السلة؛ لم أنقلها.")
+            frame = settled
             nativeCartImport.observe(frame, System.currentTimeMillis())
             act(frame, CatalogAction.OPEN_BASKET, { it == proof.command.node }, basketCommand = proof.command)
             frame = await { HungerStationCatalog.screen(it) == CatalogScreen.CART }
@@ -418,6 +435,16 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         }
         check(BasketEvidenceReader.hungerStation(frame, true) == original) { "تغيرت السلة منذ قراءتها؛ أعد البدء من هنقرستيشن." }
         return frame
+    }
+
+    /** HungerStation draws the menu cart bar after the menu settles; wait for its count before proving the cart. */
+    private suspend fun awaitMenuCartProof(menu: CatalogFrame, restaurant: String, version: String?): Pair<CatalogFrame, HungerStationCompleteCartProof>? {
+        HungerStationCompleteCartProof.fromMenu(menu, restaurant, version, System.currentTimeMillis())?.let { return menu to it }
+        val settled = try {
+            await { HungerStationCatalog.screen(it) == CatalogScreen.MENU &&
+                HungerStationCompleteCartProof.fromMenu(it, restaurant, version, System.currentTimeMillis()) != null }
+        } catch (_: TimeoutCancellationException) { return null }
+        return HungerStationCompleteCartProof.fromMenu(settled, restaurant, version, System.currentTimeMillis())?.let { settled to it }
     }
 
     /** Reopen only a known cart back control and bind fresh footer proof to unchanged rows. */
@@ -437,8 +464,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
         }
         val version = graph.installations.value.singleOrNull { it.provider == ProviderId.HUNGERSTATION }?.version
-        val proof = HungerStationCompleteCartProof.fromMenu(menu, restaurant, version, System.currentTimeMillis())
+        val (settled, proof) = awaitMenuCartProof(menu, restaurant, version)
             ?: error("لم تثبت قراءة عداد السلة ومبلغها من قائمة المطعم؛ لم أعدلها.")
+        menu = settled
         nativeCartImport.observe(menu, System.currentTimeMillis())
         act(menu, CatalogAction.OPEN_BASKET, { it == proof.command.node }, basketCommand = proof.command)
         val cart = await { HungerStationCatalog.screen(it) == CatalogScreen.CART }
@@ -620,6 +648,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             frame = await { keetaMenu.menu(it) }
             observed
         } else {
+            // The search lands at the menu top; the emptiness proof needs the requested row on screen.
+            // Read-only scroll to it, as the plain path does, before deciding.
+            if (keetaMenu.menu(frame) && keetaMenu.productTarget(frame) == null) frame = openKeetaPreviewProduct(frame, open = false)
             check(keetaBasket.emptyMenu(frame)) { "لم أثبت أن سلة كيتا فارغة؛ لم أكرر الإضافة." }
             requireFirstBasketAdd(desired)
             null
@@ -1062,9 +1093,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             "قيمة السلة أقل من الحد الأدنى للمطعم في هنقرستيشن؛ زد الكمية أو عدّل طلبك ثم أعد المقارنة."
         }
         val version=graph.installations.value.singleOrNull {it.provider==ProviderId.HUNGERSTATION}?.version
-        val proof=HungerStationCompleteCartProof.fromMenu(menu,desired.restaurant,version,System.currentTimeMillis())
+        val (settled,proof)=awaitMenuCartProof(menu,desired.restaurant,version)
             ?: error("تعذر إثبات عداد السلة ومبلغها من القائمة؛ لم أعدلها.")
-        act(menu,CatalogAction.OPEN_BASKET,{it==proof.command.node},basketCommand=proof.command)
+        act(settled,CatalogAction.OPEN_BASKET,{it==proof.command.node},basketCommand=proof.command)
         val frame=await {HungerStationCatalog.screen(it)==CatalogScreen.CART}
         val evidence=proof.finish(frame,version,System.currentTimeMillis())
         if(evidence==null && BuildConfig.VERSION_NAME.endsWith("-device-tools")) {
@@ -2267,12 +2298,15 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         return true
     }
 
-    private suspend fun openKeetaPreviewProduct(previous: CatalogFrame) {
+    /** With [open] false, stops on the first frame showing the matching row and returns it unopened. */
+    private suspend fun openKeetaPreviewProduct(previous: CatalogFrame, open: Boolean = true): CatalogFrame {
         var frame = previous
         var previousBody: List<CatalogNode>? = null
+        // A menu left scrolled past the row (or below it) is scanned forward to the end, then once backward.
+        var backward = false
         // Kudo's observed side dishes begin beyond the first 20 menu viewports.
         // The finite scan still stops on an unchanged/end/unknown screen and never adds items.
-        repeat(80) {
+        repeat(160) {
             currentCoroutineContext().ensureActive(); checkSession()
             val root = service.rootInActiveWindow ?: throw UserInterrupted("اختفت قائمة كيتا؛ توقفت المقارنة.")
             var rejectedScroll=false
@@ -2284,8 +2318,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 check(fresh.complete) { "قراءة القائمة غير مكتملة؛ لم أفتح وجبة مختلفة." }
                 val target = keetaMenu.productTarget(fresh)
                 if (target != null) {
-                    check(performKeetaReadAction(root, target, AccessibilityNodeInfo.ACTION_CLICK))
-                    return
+                    if (open) check(performKeetaReadAction(root, target, AccessibilityNodeInfo.ACTION_CLICK))
+                    return fresh
                 }
                 check(fresh.nodes.none { it.id == "com.sankuai.sailor.afooddelivery:id/product_name" && it.label == keetaMenu.title }) {
                     "الصنف المطابق ظاهر لكن عنصر فتحه غير مدعوم؛ لم أنقر عنصرًا آخر."
@@ -2293,7 +2327,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 check(keetaMenu.menu(fresh) && fresh.nodes != previousBody) { "الوجبة المطابقة غير ظاهرة في قائمة كيتا." }
                 previousBody = fresh.nodes
                 val list = fresh.nodes.single { it.scrollable && it.className == "androidx.recyclerview.widget.RecyclerView" }
-                rejectedScroll=!performKeetaReadAction(root, list, AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+                rejectedScroll=!performKeetaReadAction(root, list,
+                    if (backward) AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD else AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
             } finally { @Suppress("DEPRECATION") root.recycle() }
             if(rejectedScroll) {
                 // A provider can return false after a real scroll. Observe before considering fallback.
@@ -2301,9 +2336,24 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 val checkRoot=service.rootInActiveWindow ?: throw UserInterrupted("اختفت قائمة الطعام؛ توقفت.")
                 val current=try {requireProviderWindow(checkRoot);capture(checkRoot)} finally {checkRoot.recycle()}
                 check(keetaMenu.menu(current)) {"تغيرت شاشة القائمة؛ لم أنفذ إيماءة."}
-                if(current==frame)scrollKeetaMenuGesture(frame)
+                if (current == frame) {
+                    // The list end rejects forward scrolling and the gesture cannot move it either: reverse once, never loop.
+                    check(!backward) { "الوجبة المطابقة غير ظاهرة في قائمة كيتا." }
+                    val moved = try { scrollKeetaMenuGesture(frame) }
+                        catch (_: TimeoutCancellationException) { currentCoroutineContext().ensureActive(); checkSession(); false }
+                    if (!moved) { backward = true; previousBody = null; return@repeat }
+                }
             }
-            frame = await { keetaMenu.menu(it) && it.nodes != previousBody }
+            frame = try { await { keetaMenu.menu(it) && it.nodes != previousBody } }
+            catch (timeout: TimeoutCancellationException) {
+                // Some builds accept a scroll at the list end without moving; an unchanged menu is that end.
+                currentCoroutineContext().ensureActive(); checkSession()
+                val endRoot = service.rootInActiveWindow ?: throw timeout
+                val end = try { requireProviderWindow(endRoot); capture(endRoot) } finally { @Suppress("DEPRECATION") endRoot.recycle() }
+                if (backward || !keetaMenu.menu(end) || end.nodes != previousBody) throw timeout
+                backward = true; previousBody = null
+                end
+            }
         }
         error("لم أجد الوجبة المطابقة ضمن مهلة التصفح؛ لم أستبدلها.")
     }
@@ -2812,7 +2862,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         try { requireProviderWindow(current) } finally { @Suppress("DEPRECATION") current.recycle() }
         lastStats.put("terraRecoveryRequested",true).put("terraRecoveryReason",reason.name)
             .put("terraRecoveryApproved", approved ?: JSONObject.NULL)
-        check(approved != false) { "تعذر على تيرا تأكيد خطوة الاستعادة؛ توقفت المقارنة دون تكرار الإضافة." }
+        // Terra is an optional emergency aid: it never authorizes an action, so its refusal is advisory.
+        // The native wait keeps its own timeout and every guard still decides; a denial alone must not end a comparison.
+        graph.catalog.value = graph.catalog.value.copy(message = phase)
     }
 
     private suspend fun await(predicate: (CatalogFrame) -> Boolean): CatalogFrame = withTimeout(15_000) {

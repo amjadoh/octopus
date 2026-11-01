@@ -1,0 +1,24 @@
+{
+  "date": "2026-11-01",
+  "device": "Honor MBH-N49, Octopus 1.3.19-diagnostic (code 27) local build, stable signing 842ebe50…",
+  "providers": { "hungerstation": "8.0.303", "keeta": "3.13.301" },
+  "result": {
+    "liveComparisonCompleted": true,
+    "runs": ["16:50 (fresh Keeta cart)", "16:57 (repeat on matching Keeta cart, quantity stayed 1)"],
+    "restaurant": "كنتاكي",
+    "cart": "1 x وجبة تويستر - وسط (تويستر ساندويتش - عادي، بطاطا حجم وسط، بيبسي)",
+    "hungerstationTotal": "36.40 SAR",
+    "keetaTotal": "49.26 SAR",
+    "noOrderOrPayment": true
+  },
+  "fixes": [
+    "Returning to the HungerStation menu waits for the cart bar count before proving the cart (it renders after the menu)",
+    "Home screen keeps the last result for the same order and labels it with its read time instead of hiding it after two minutes"
+  ],
+  "observed": [
+    "Keeta 35 SAR on KFC is the free-delivery threshold, not a minimum order",
+    "Emptying the Keeta cart by hand still requires the 'أفرغت سلة كيتا' confirmation before the next run",
+    "A HungerStation promo sheet can cover the cart on first open"
+  ],
+  "unitTests": { "passed": 595, "failed": 0 }
+}
