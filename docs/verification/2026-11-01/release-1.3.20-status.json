@@ -1,0 +1,37 @@
+{
+  "date": "2026-11-01",
+  "scope": "live_native_comparison_with_configured_meal",
+  "local": {
+    "unitTestsPassed": 595,
+    "unitTestFailures": 0,
+    "androidUiTestFailures": 0,
+    "androidUiTestsRunInCi": true,
+    "diagnosticApkBuildPassed": true,
+    "privateCapturesKeptOutsideRepository": true
+  },
+  "changes": [
+    "HungerStation edit-sheet reader keeps repeated required headings as separate groups and treats any heading with an explicit limit as optional.",
+    "Keeta header matching accepts campaign suffixes through KeetaRestaurantName.",
+    "Configured Keeta path scrolls to the requested row before proving an empty cart and reverses once at the list end.",
+    "Keeta meal choices key repeated headings by first row, strip BOM and bidi marks, and accept a preselected single-row required group.",
+    "A Terra refusal is advisory and no longer ends a comparison.",
+    "Returning to the HungerStation menu waits for the cart bar count before proving the cart.",
+    "Home keeps the last result for the same order with its read time instead of hiding it after two minutes."
+  ],
+  "physical": {
+    "device": "Honor MBH-N49, HungerStation 8.0.303, Keeta 3.13.301",
+    "build": "local diagnostic build of the same source, stable preview signing",
+    "plainCartComparisonVerified": "overnight-plain-comparison.json",
+    "configuredMealComparisonVerified": "configured-meal-comparison.json",
+    "repeatWithoutDuplicateVerified": true,
+    "ciReleaseApkVerifiedOnPhone": false,
+    "noOrderOrPayment": true
+  },
+  "limitations": [
+    "Configured transfer remains one meal, quantity one, with required single-choice selections.",
+    "Verified on KFC only; other restaurants and optional additions are not proven.",
+    "A Keeta cart emptied by hand needs the in-app emptied-cart confirmation before the next run."
+  ],
+  "releaseReady": false,
+  "privacy": "No account data, addresses, tokens, private captures or signing material included."
+}

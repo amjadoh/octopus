@@ -69,6 +69,8 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
     }
     fun hasOptionalPlainProof(frame: CatalogFrame): Boolean = optionalPlainFrame == frame &&
         System.currentTimeMillis() - optionalPlainAt in 0..120_000
+    /** Menu headers carry the same observed campaign decorations as search results ("كنتاكي - مخلل كل شي🥒"). */
+    fun isRestaurant(label: String): Boolean = label == restaurant || ('\n' !in label && KeetaRestaurantName.matches(restaurant, label))
     val profile = requireNotNull(KeetaVersionProfile.resolve(VERSION)) { "Unsupported Keeta version" }
     init { require(restaurant.isNotBlank() && title.isNotBlank() && restaurant.length <= 200 && title.length <= 300)
         require(profile.allowsReading()) }
@@ -138,7 +140,7 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
         KeetaSearchAction.SUBMIT_QUERY -> searchSubmit(frame)
     }
     fun menu(frame: CatalogFrame): Boolean = frame.complete && !basketDrawer(frame) && !KeetaPromotionEvidence.couponSheet(frame) && !KeetaPromotionEvidence.terms(frame) &&
-        frame.nodes.none { it.label in setOf("طلب خاص", "إضافة إلى السلة") } && frame.nodes.count { it.label == restaurant } == 1 &&
+        frame.nodes.none { it.label in setOf("طلب خاص", "إضافة إلى السلة") } && frame.nodes.count { isRestaurant(it.label) } == 1 &&
         !(frame.hasId("titlebar") && frame.hasId("flash_list_view")) &&
         frame.nodes.count { it.scrollable && it.className == "androidx.recyclerview.widget.RecyclerView" } == 1
 
@@ -154,7 +156,7 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
     }
 
     fun basketDrawer(frame: CatalogFrame): Boolean = frame.complete &&
-        frame.nodes.any { it.label == restaurant } && frame.nodes.count { it.label == "الأصناف المضافة" } == 1 &&
+        frame.nodes.any { isRestaurant(it.label) } && frame.nodes.count { it.label == "الأصناف المضافة" } == 1 &&
         frame.nodes.count { it.label == "تفريغ السلة" } == 1 && frame.nodes.any { it.label == "إتمام الدفع" }
 
     private fun ancestors(frame: CatalogFrame, node: CatalogNode): List<CatalogNode> {
@@ -184,7 +186,7 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
     }
     fun product(frame: CatalogFrame): Boolean {
         if (profile.usesCurrentLayout) return currentReadOnlyProductBody(frame) != null
-        if (!frame.complete || frame.nodes.none { it.label == restaurant } ||
+        if (!frame.complete || frame.nodes.none { isRestaurant(it.label) } ||
             frame.nodes.count { it.label == "إضافة إلى السلة" } != 1) return false
         val notes = frame.nodes.singleOrNull { it.label == "طلب خاص" } ?: return false
         val body = ancestors(frame, notes).firstOrNull { it.className == "android.widget.ScrollView" } ?: return false
@@ -204,7 +206,7 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
     private fun currentReadOnlyProductBody(frame: CatalogFrame): CatalogNode? {
         KeetaOptionalPlainSession.readBody(frame,restaurant,title)?.let { return it }
         KeetaSingleSkuProduct.body(frame,restaurant,title)?.let {return it}
-        if (!frame.complete || frame.nodes.count { it.label == restaurant } != 1 ||
+        if (!frame.complete || frame.nodes.count { isRestaurant(it.label) } != 1 ||
             frame.nodes.count { it.label == "إضافة إلى السلة" } != 1) return null
         return frame.nodes.filter { it.className == "android.widget.ScrollView" }.singleOrNull { body ->
             val content = frame.descendants(body.index)
@@ -231,7 +233,7 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
     private fun currentPlainProductBody(frame: CatalogFrame): CatalogNode? {
         if (hasOptionalPlainProof(frame)) return KeetaOptionalPlainSession.readBody(frame,restaurant,title)
         KeetaSingleSkuProduct.body(frame,restaurant,title)?.let {return it}
-        if (!frame.complete || frame.nodes.count { it.label == restaurant } != 1 ||
+        if (!frame.complete || frame.nodes.count { isRestaurant(it.label) } != 1 ||
             frame.nodes.count { it.label == "إضافة إلى السلة" } != 1) return null
         val candidates = frame.nodes.filter { it.className == "android.widget.ScrollView" && !it.scrollable }
         return candidates.singleOrNull { body ->
@@ -278,7 +280,7 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
 
     fun productTarget(frame: CatalogFrame): CatalogNode? {
         if (!frame.complete || basketDrawer(frame) || frame.nodes.any { it.label in setOf("طلب خاص", "إضافة إلى السلة") } ||
-            frame.nodes.none { it.label == restaurant } ||
+            frame.nodes.none { isRestaurant(it.label) } ||
             (frame.nodes.none { it.label in setOf("الاصناف الرئيسية", "الأصناف الرئيسية") } &&
                 frame.nodes.count { it.scrollable && it.className == "androidx.recyclerview.widget.RecyclerView" } != 1)) return null
         val titleNode = frame.nodes.singleOrNull { it.label == title } ?: return null

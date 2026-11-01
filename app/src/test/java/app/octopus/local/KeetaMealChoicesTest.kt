@@ -115,7 +115,7 @@ class KeetaMealChoicesTest {
     private val cart = CanonicalCart("مطعم تجريبي", null, listOf(CanonicalItem("وجبة تجريبية", null,
         listOf(CartOption("الجانب", "جانب أ"), CartOption("المشروب", "مشروب ب")), 1)))
     private val reader = KeetaMenuReader(cart.restaurant, cart.items.single().name, "3.13.301", setOf("جانب أ", "مشروب ب"))
-    private fun frame(done: Set<String> = emptySet(), quantity: String = "1", unknownGroup: Boolean = false, nestedRadio: Boolean = false): CatalogFrame {
+    private fun frame(done: Set<String> = emptySet(), quantity: String = "1", unknownGroup: Boolean = false, nestedRadio: Boolean = false, extraRow: Boolean = false): CatalogFrame {
         val nodes = mutableListOf<CatalogNode>()
         fun node(parent: Int, label: String = "", click: Boolean = false, cls: String = "android.view.ViewGroup", scroll: Boolean = false): Int {
             val i = nodes.size
@@ -142,6 +142,7 @@ class KeetaMealChoicesTest {
                 node(labelBox, value, cls="android.widget.TextView")
                 node(nameHandler, click=true) // radio; nameHandler opens modifiers
             } else node(row, value, cls="android.widget.TextView")
+            if (extraRow) node(node(rows, click=true), "$value آخر", cls="android.widget.TextView")
         }
         node(modal) // close slot
         val footer = node(modal)
@@ -191,8 +192,13 @@ class KeetaMealChoicesTest {
         assertNull(session.addTarget(f,reader))
         assertEquals(KeetaMealChoices.Step.Blocked,KeetaMealChoices(cart).next(frame(unknownGroup=true),reader))
         assertEquals(KeetaMealChoices.Step.Blocked,KeetaMealChoices(cart).next(f.copy(complete=false),reader))
-        // A preselected group saying Done does not prove a maximum of one.
-        assertEquals(KeetaMealChoices.Step.Blocked,KeetaMealChoices(cart).next(frame(setOf("جانب أ", "مشروب ب")),reader))
+        // A preselected group saying Done does not prove which of several rows is selected.
+        assertEquals(KeetaMealChoices.Step.Blocked,KeetaMealChoices(cart).next(frame(setOf("جانب أ", "مشروب ب"), extraRow=true),reader))
+        // With one row (Keeta 3.13.301 KFC "شطيرة"), that row is the only possible selection.
+        val preselected=KeetaMealChoices(cart)
+        assertNotEquals(KeetaMealChoices.Step.Blocked,preselected.next(frame(setOf("جانب أ", "مشروب ب")),reader))
+        preselected.endObserved()
+        assertEquals(KeetaMealChoices.Step.Ready,preselected.next(frame(setOf("جانب أ", "مشروب ب")),reader))
     }
     @Test fun choiceLabelsAreExactAndUnknownOrDuplicateSummaryTextIsNotRetained() {
         assertEquals("جانب أ",reader.functionalLabel("جانب أ\uFEFF "))

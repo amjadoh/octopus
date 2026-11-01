@@ -5,7 +5,8 @@ import java.security.MessageDigest
 
 /** Parses observed required/single-choice and optional-add/single-choice PDP sections. */
 class HungerStationProductReader(private val restaurant: LiveRestaurant, private val item: LiveMenuItem) {
-    private data class Group(val title: String, val minimum: Int = 1, val maximum: Int = 1, val choices: LinkedHashMap<String, MenuChoice> = linkedMapOf())
+    private data class Group(val title: String, val minimum: Int = 1, val maximum: Int = 1, val choices: LinkedHashMap<String, MenuChoice> = linkedMapOf(), val id: String = title)
+    // Keyed by occurrence: HS 8.0.303 KFC sandwiches repeat a required heading ("شطيرة") for two groups.
     private val groups = linkedMapOf<String, Group>()
     private val bodies = mutableListOf<String>()
     private var titleSeen = false
@@ -25,7 +26,22 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
         enabled = frame.nodes.singleOrNull { it.id == "flutterAddButton" }?.enabled == true
         bodies += nodes.joinToString("|") { it.id + clean(it.label) }
         var group: Group? = null
-        val headersInFrame = mutableSetOf<String>()
+        // A heading binds to a group only through its first visible choice; a repeated title with
+        // an unseen first choice is a new group, while a re-scrolled heading resumes its own group.
+        var pending: Group? = null
+        val groupsInFrame = mutableSetOf<String>()
+        fun resolve(header: Group, value: String): Group {
+            val same = groups.values.filter { it.title == header.title }
+            val known = same.filter { value in it.choices }
+            val resolved = when (known.size) {
+                0 -> header.copy(id = if (same.isEmpty()) header.title else header.title + "#" + (same.size + 1)).also { groups[it.id] = it }
+                1 -> known.single()
+                else -> { unsupported = true; known.first() }
+            }
+            if (resolved.minimum != header.minimum || resolved.maximum != header.maximum || !groupsInFrame.add(resolved.id)) unsupported = true
+            return resolved
+        }
+        fun open(header: Group) { pending = header; group = null }
         var i = 0
         while (i < nodes.size) {
             val node = nodes[i]
@@ -38,46 +54,39 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
             // prove that none of these multi-select additions was selected.
             val optionalMaximum = optionalLimit?.let { Regex("ما يصل إلى ([1-9][0-9]?) (?:خيار|خيارات)").matchEntire(it)?.groupValues?.get(1)?.toInt() }
                 ?.takeIf { it <= 24 }
-            if (!node.clickable && text in setOf("الاختيار من الاضافات", "اضافة") && optionalMaximum != null) {
-                if (!headersInFrame.add(text)) unsupported = true
-                group = groups.getOrPut(text) { Group(text, 0, optionalMaximum) }
-                if (group.minimum != 0 || group.maximum != optionalMaximum) unsupported = true
+            // The explicit upper-limit line, without a "مطلوب" marker, is what makes a heading optional
+            // (ALBAIK "اضافة", KFC "اختر التوابل التي تفضلها" / "إضافة على"); the title itself is not trusted.
+            if (!node.clickable && optionalMaximum != null && text.isNotBlank() && text.length <= 100 && !text.contains('\n')) {
+                open(Group(text, 0, optionalMaximum))
                 i += 2; continue
             }
             if (!node.clickable && text.matches(Regex("اختر من اضافات-(مبرده| من غير صوص|صوص|بطاطس) إلى .{1,100}")) &&
                 optionalLimit in setOf("اختيار واحد", "ما يصل إلى خيارين")) {
-                val maximum = if(optionalLimit == "ما يصل إلى خيارين") 2 else 1
-                if(!headersInFrame.add(text)) unsupported=true
-                group=groups.getOrPut(text) {Group(text,0,maximum)}
-                if(group.minimum!=0 || group.maximum!=maximum) unsupported=true
+                open(Group(text, 0, if(optionalLimit == "ما يصل إلى خيارين") 2 else 1))
                 i+=2;continue
             }
             // Honor / HS 8.0.303, Madwar feta product: an unchecked optional checkbox,
             // headed by these two exact labels. Do not infer optionality for other grammars.
             if (text in setOf("يمكنك اضافة", "اضافات فطاير") && !node.clickable && i + 1 < nodes.size &&
                 clean(nodes[i + 1].label) == "اختيار واحد" && !nodes[i + 1].clickable) {
-                if (!headersInFrame.add(text)) unsupported = true
-                group = groups.getOrPut(text) { Group(text, 0) }
-                if (group.minimum != 0) unsupported = true
+                open(Group(text, 0))
                 i += 2; continue
             }
             if (i + 2 < nodes.size && clean(nodes[i+1].label) == "مطلوب" && clean(nodes[i+2].label) == "اختيار واحد" && !node.clickable) {
                 if (text.length > 100 || text.contains('\n')) { unsupported = true; return }
-                if (!headersInFrame.add(text)) unsupported = true
-                group = groups.getOrPut(text) { Group(text) }
+                open(Group(text))
                 clippedRequired.remove(text)
-                if (group.minimum != 1) unsupported = true
                 i += 3; continue
             }
             if (!node.clickable && clean(nodes.getOrNull(i+1)?.label.orEmpty()) == "مطلوب" &&
                 (i+2 == nodes.size || nodes.getOrNull(i+2)?.id == "flutterAddButton")) {
                 clippedRequired += text
-                group = null
+                group = null; pending = null
                 i += 2; continue
             }
             // A scroll can clip the heading while leaving its limit and an overlapping
             // already-read choice. Restore only the uniquely proven single-choice group.
-            if (group == null && !node.clickable && text == "اختيار واحد") {
+            if (group == null && pending == null && !node.clickable && text == "اختيار واحد") {
                 val overlap = nodes.getOrNull(i + 1)?.takeIf { it.clickable }?.label?.let(::clean)?.lineSequence()?.first()
                 val known = groups.values.singleOrNull { it.maximum == 1 && overlap in it.choices }
                 if (known != null) { group = known; i++; continue }
@@ -91,7 +100,8 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
                     (text == "الحقائق الغذائية" && node.className == "android.widget.ImageView"))) { i++; continue }
             if (node.clickable && node.id != "flutterAddButton" && node.id != "pdpCloseButton" && node.id != "pdpZoomButton") {
                 val value = text.lineSequence().first().trim()
-                val resumingGroup = group == null
+                val resumingGroup = group == null && pending == null
+                pending?.let { header -> group = resolve(header, value); pending = null }
                 if (group == null) group = groups.values.singleOrNull { value in it.choices }
                 val knownClippedChoice = resumingGroup && group?.minimum == 1 && group?.maximum == 1 &&
                     group?.choices?.get(value)?.available == node.enabled && !text.contains('\n') &&
@@ -135,7 +145,7 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
         require(titleSeen) { "اسم الوجبة داخل خياراتها لم يطابق اختيارك." }
         // Completeness follows the observed option grammar and end marker, never a restaurant name.
         val complete = bottomSeen && !unsupported && clippedRequired.isEmpty() && groups.values.all { it.choices.size >= it.maximum }
-        val options = groups.values.filter { it.choices.size >= it.maximum }.map { MenuChoiceGroup(it.title, it.title, it.minimum, it.maximum, it.choices.values.toList()) }
+        val options = groups.values.filter { it.choices.size >= it.maximum }.map { MenuChoiceGroup(it.id, it.title, it.minimum, it.maximum, it.choices.values.toList()) }
         val fingerprint = MessageDigest.getInstance("SHA-256").digest(bodies.joinToString().toByteArray()).joinToString("") { "%02x".format(it) }
         return ConfiguredProduct(restaurant.name, MenuProduct(item.selector, item.name, null, enabled, item.listedPrice, options),
             CatalogProvenance(ProviderId.HUNGERSTATION, HungerStationCatalog.TESTED_VERSION, atMillis, fingerprint), complete,
