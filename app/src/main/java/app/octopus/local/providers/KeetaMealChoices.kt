@@ -22,7 +22,7 @@ class KeetaMealChoices(val cart: CanonicalCart) {
             values.size in 1..12 && values.size == item.options.size && item.options.all { it.quantity == 1 })
     }
 
-    data class Group(val key: String, val value: String?, val done: Boolean, val target: CatalogNode?)
+    data class Group(val key: String, val value: String?, val done: Boolean, val target: CatalogNode?, val rows: Int = 0)
     sealed interface Step {
         data class Select(val value: String, val target: CatalogNode) : Step
         data object Scroll : Step
@@ -37,7 +37,11 @@ class KeetaMealChoices(val cart: CanonicalCart) {
         val groups = groups(frame) ?: return Step.Blocked.also { failed = true }
         for (group in groups) {
             if (!group.done) singleChoiceSeen += group.key
-            else if (group.key !in singleChoiceSeen) return Step.Blocked.also { failed = true }
+            else if (group.key !in singleChoiceSeen) {
+                // Keeta preselects a required group with one row; that row is then the only possible selection.
+                if (group.rows != 1 || group.value == null) return Step.Blocked.also { failed = true }
+                singleChoiceSeen += group.key; completed += group.value
+            }
             val previous = requiredGroups[group.key]
             if (previous != null && group.value != null && previous != group.value) return Step.Blocked.also { failed = true }
             requiredGroups[group.key] = group.value ?: previous
@@ -93,13 +97,15 @@ class KeetaMealChoices(val cart: CanonicalCart) {
     private fun groups(frame: CatalogFrame): List<Group>? {
         fun children(n: CatalogNode) = frame.nodes.filter { it.parent == n.index }
         val results = mutableListOf<Group>()
+        val titleOnly = mutableSetOf<String>()
         val markers = frame.nodes.filter { it.label == "مطلوب" }
         if (frame.nodes.any { it.label == "اختياري" }) return null
         for (marker in markers) {
             var parent = marker
             var found: Group? = null
+            titleOnly.clear()
             repeat(6) {
-                if (found == null) {
+                if (found == null && titleOnly.isEmpty()) {
                     parent = frame.nodes.singleOrNull { it.index == parent.parent } ?: return null
                     val parts = children(parent)
                     if (parts.size in 1..2) {
@@ -112,15 +118,20 @@ class KeetaMealChoices(val cart: CanonicalCart) {
                             if (status.size != 1) return null
                             val matches = rows.mapNotNull { row ->
                                 val body = frame.descendants(row.index)
-                                val named = body.filter { it.label in values }
-                                if (named.size == 1) row to named.single().label else null
+                                val named = body.filter { clean(it.label) in values }
+                                if (named.size == 1) row to clean(named.single().label) else null
                             }
                             if (matches.size > 1) return null
-                            val key = header.filter { it.className == "android.widget.TextView" && it.label.isNotBlank() &&
+                            val title = header.filter { it.className == "android.widget.TextView" && it.label.isNotBlank() &&
                                 it.label !in setOf("مطلوب", "اختر 1", "اختر ١", "تم") }.singleOrNull()?.label ?: return null
+                            // Keeta 3.13.301 KFC repeats a heading ("شطيرة") for two groups; the first row names the group.
+                            val firstRow = rows.firstOrNull()?.let { row -> frame.descendants(row.index)
+                                .firstOrNull { it.className == "android.widget.TextView" && clean(it.label).isNotEmpty() }?.label?.let(::clean) }
+                            if (firstRow == null) { titleOnly += title; return@repeat }
+                            val key = "$title|$firstRow"
                             val matched = matches.singleOrNull()
                             if (matched == null) {
-                                found = Group(key, null, status.single().label == "تم", null)
+                                found = Group(key, null, status.single().label == "تم", null, rows.size)
                                 return@repeat
                             }
                             val (row, value) = matched
@@ -128,23 +139,26 @@ class KeetaMealChoices(val cart: CanonicalCart) {
                             // smallest clickable ancestor containing the exact requested label.
                             val namedHandler = frame.descendants(row.index).filter { n ->
                                 n.clickable && n.enabled && !n.editable &&
-                                    frame.descendants(n.index).any { it.label == value }
+                                    frame.descendants(n.index).any { clean(it.label) == value }
                             }.minByOrNull { frame.descendants(it.index).size } ?: return null
                             // The label can open nested modifiers. The adjacent empty handler
                             // is the radio control; never dispatch the label handler in that layout.
                             val parts = children(namedHandler)
                             val target = if (namedHandler != row) {
-                                if (parts.size != 2 || frame.descendants(parts[0].index).none { it.label == value }) return null
+                                if (parts.size != 2 || frame.descendants(parts[0].index).none { clean(it.label) == value }) return null
                                 parts[1].takeIf { it.clickable && it.enabled && !it.editable &&
                                     it.className == "android.view.ViewGroup" &&
                                     frame.descendants(it.index).all { child -> child.label.isBlank() && !child.omittedText } } ?: return null
                             } else namedHandler
-                            found = Group(key, value, status.single().label == "تم", target)
+                            found = Group(key, value, status.single().label == "تم", target, rows.size)
                         }
                     }
                 }
             }
-            if (found == null) {
+            if (found == null && titleOnly.isNotEmpty()) {
+                // Heading and limit are visible but its rows are clipped: wait for them, never add.
+                incompleteHeaders += titleOnly.last(); titleOnly.clear()
+            } else if (found == null) {
                 // A viewport may end at the required badge, before its limit or rows.
                 // Remember the heading until its complete group is observed; never add on it.
                 var ancestor = marker
@@ -160,7 +174,7 @@ class KeetaMealChoices(val cart: CanonicalCart) {
                 }
                 incompleteHeaders += clippedKey ?: return null
             } else {
-                incompleteHeaders -= found!!.key
+                incompleteHeaders -= found!!.key.substringBefore('|')
                 results += found!!
             }
         }
@@ -168,6 +182,9 @@ class KeetaMealChoices(val cart: CanonicalCart) {
             results.mapNotNull { it.value }.let { it.distinct().size != it.size }) return null
         return results
     }
+
+    // Keeta row labels can carry a zero-width BOM and trailing space ("زنجر ساندويتش" + U+FEFF + " ").
+    private fun clean(text: String) = text.replace(Regex("[\\uFEFF\\u200B-\\u200F\\u061C\\u202A-\\u202E\\u2066-\\u2069]"), "").trim()
 
     companion object {
         /** Restore only a product radio-group heading, never arbitrary account/menu text. */

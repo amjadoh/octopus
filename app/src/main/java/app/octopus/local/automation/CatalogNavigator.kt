@@ -620,6 +620,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             frame = await { keetaMenu.menu(it) }
             observed
         } else {
+            // The search lands at the menu top; the emptiness proof needs the requested row on screen.
+            // Read-only scroll to it, as the plain path does, before deciding.
+            if (keetaMenu.menu(frame) && keetaMenu.productTarget(frame) == null) frame = openKeetaPreviewProduct(frame, open = false)
             check(keetaBasket.emptyMenu(frame)) { "لم أثبت أن سلة كيتا فارغة؛ لم أكرر الإضافة." }
             requireFirstBasketAdd(desired)
             null
@@ -2267,12 +2270,15 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         return true
     }
 
-    private suspend fun openKeetaPreviewProduct(previous: CatalogFrame) {
+    /** With [open] false, stops on the first frame showing the matching row and returns it unopened. */
+    private suspend fun openKeetaPreviewProduct(previous: CatalogFrame, open: Boolean = true): CatalogFrame {
         var frame = previous
         var previousBody: List<CatalogNode>? = null
+        // A menu left scrolled past the row (or below it) is scanned forward to the end, then once backward.
+        var backward = false
         // Kudo's observed side dishes begin beyond the first 20 menu viewports.
         // The finite scan still stops on an unchanged/end/unknown screen and never adds items.
-        repeat(80) {
+        repeat(160) {
             currentCoroutineContext().ensureActive(); checkSession()
             val root = service.rootInActiveWindow ?: throw UserInterrupted("اختفت قائمة كيتا؛ توقفت المقارنة.")
             var rejectedScroll=false
@@ -2284,8 +2290,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 check(fresh.complete) { "قراءة القائمة غير مكتملة؛ لم أفتح وجبة مختلفة." }
                 val target = keetaMenu.productTarget(fresh)
                 if (target != null) {
-                    check(performKeetaReadAction(root, target, AccessibilityNodeInfo.ACTION_CLICK))
-                    return
+                    if (open) check(performKeetaReadAction(root, target, AccessibilityNodeInfo.ACTION_CLICK))
+                    return fresh
                 }
                 check(fresh.nodes.none { it.id == "com.sankuai.sailor.afooddelivery:id/product_name" && it.label == keetaMenu.title }) {
                     "الصنف المطابق ظاهر لكن عنصر فتحه غير مدعوم؛ لم أنقر عنصرًا آخر."
@@ -2293,7 +2299,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 check(keetaMenu.menu(fresh) && fresh.nodes != previousBody) { "الوجبة المطابقة غير ظاهرة في قائمة كيتا." }
                 previousBody = fresh.nodes
                 val list = fresh.nodes.single { it.scrollable && it.className == "androidx.recyclerview.widget.RecyclerView" }
-                rejectedScroll=!performKeetaReadAction(root, list, AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+                rejectedScroll=!performKeetaReadAction(root, list,
+                    if (backward) AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD else AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
             } finally { @Suppress("DEPRECATION") root.recycle() }
             if(rejectedScroll) {
                 // A provider can return false after a real scroll. Observe before considering fallback.
@@ -2301,9 +2308,24 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 val checkRoot=service.rootInActiveWindow ?: throw UserInterrupted("اختفت قائمة الطعام؛ توقفت.")
                 val current=try {requireProviderWindow(checkRoot);capture(checkRoot)} finally {checkRoot.recycle()}
                 check(keetaMenu.menu(current)) {"تغيرت شاشة القائمة؛ لم أنفذ إيماءة."}
-                if(current==frame)scrollKeetaMenuGesture(frame)
+                if (current == frame) {
+                    // The list end rejects forward scrolling and the gesture cannot move it either: reverse once, never loop.
+                    check(!backward) { "الوجبة المطابقة غير ظاهرة في قائمة كيتا." }
+                    val moved = try { scrollKeetaMenuGesture(frame) }
+                        catch (_: TimeoutCancellationException) { currentCoroutineContext().ensureActive(); checkSession(); false }
+                    if (!moved) { backward = true; previousBody = null; return@repeat }
+                }
             }
-            frame = await { keetaMenu.menu(it) && it.nodes != previousBody }
+            frame = try { await { keetaMenu.menu(it) && it.nodes != previousBody } }
+            catch (timeout: TimeoutCancellationException) {
+                // Some builds accept a scroll at the list end without moving; an unchanged menu is that end.
+                currentCoroutineContext().ensureActive(); checkSession()
+                val endRoot = service.rootInActiveWindow ?: throw timeout
+                val end = try { requireProviderWindow(endRoot); capture(endRoot) } finally { @Suppress("DEPRECATION") endRoot.recycle() }
+                if (backward || !keetaMenu.menu(end) || end.nodes != previousBody) throw timeout
+                backward = true; previousBody = null
+                end
+            }
         }
         error("لم أجد الوجبة المطابقة ضمن مهلة التصفح؛ لم أستبدلها.")
     }
@@ -2812,7 +2834,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         try { requireProviderWindow(current) } finally { @Suppress("DEPRECATION") current.recycle() }
         lastStats.put("terraRecoveryRequested",true).put("terraRecoveryReason",reason.name)
             .put("terraRecoveryApproved", approved ?: JSONObject.NULL)
-        check(approved != false) { "تعذر على تيرا تأكيد خطوة الاستعادة؛ توقفت المقارنة دون تكرار الإضافة." }
+        // Terra is an optional emergency aid: it never authorizes an action, so its refusal is advisory.
+        // The native wait keeps its own timeout and every guard still decides; a denial alone must not end a comparison.
+        graph.catalog.value = graph.catalog.value.copy(message = phase)
     }
 
     private suspend fun await(predicate: (CatalogFrame) -> Boolean): CatalogFrame = withTimeout(15_000) {
