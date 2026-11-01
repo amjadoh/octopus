@@ -1,0 +1,35 @@
+{
+  "date": "2026-11-01",
+  "scope": "live_native_comparison_with_multiple_configured_meals",
+  "local": {
+    "unitTestsPassed": 599,
+    "unitTestFailures": 0,
+    "androidUiTestFailures": 0,
+    "androidUiTestsRunInCi": true,
+    "diagnosticApkBuildPassed": true,
+    "lintErrors": 0,
+    "privateCapturesKeptOutsideRepository": true
+  },
+  "changes": [
+    "A HungerStation cart may hold up to four meals with options, each with a different name and quantity one.",
+    "Each meal's options are read from its own HungerStation edit page in order, and the cart is proven unchanged after each page closes.",
+    "Keeta adds the meals one at a time and, after each add, verifies the cart holds exactly the meals added so far; the journal settles each add before the next.",
+    "Review of several configured meals in Keeta goes through the verified cart drawer, like a single meal.",
+    "The Octopus start hint names the new limit."
+  ],
+  "physical": {
+    "device": "none for this change",
+    "build": "not run on a phone",
+    "multipleConfiguredMealsVerified": false,
+    "ciReleaseApkVerifiedOnPhone": false,
+    "noOrderOrPayment": true
+  },
+  "limitations": [
+    "Not yet run on a phone; this release is for the user's own phone trial.",
+    "Not supported: a plain item in the same cart as a meal with options, two meals with the same name, quantity above one, a Keeta cart that already holds only some of the meals, and optional additions.",
+    "If the Keeta cart drawer scrolls with three or four meals, the comparison stops with a message; this has not been tried.",
+    "Verified on KFC only in earlier releases; other restaurants are not proven."
+  ],
+  "releaseReady": false,
+  "privacy": "No account data, addresses, tokens, private captures or signing material included."
+}
