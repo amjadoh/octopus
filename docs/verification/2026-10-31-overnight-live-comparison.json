@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-01",
+  "device": "Honor MBH-N49, Octopus 1.3.19-diagnostic (code 27) local build, stable signing 842ebe50…",
+  "providers": { "hungerstation": "8.0.303", "keeta": "3.13.301" },
+  "result": {
+    "liveComparisonCompleted": true,
+    "runs": ["02:18", "02:29 (repeat, no duplicate Keeta add)", "02:38 (final code)"],
+    "restaurant": "كنتاكي",
+    "cart": "4 x بيبسي (plain, no options)",
+    "hungerstationTotal": "42.70 SAR",
+    "keetaTotal": "37.08 SAR",
+    "keetaReviewObserved": "4 x بيبسي, 36.00 items, 37.08 total; no order or payment confirmed"
+  },
+  "fixes": [
+    "HS product reader: repeated required heading (شطيرة) is two groups; any heading with an explicit 'ما يصل إلى N' limit is optional",
+    "Keeta menu header with campaign suffix reuses KeetaRestaurantName.matches",
+    "Configured Keeta path scrolls to the requested row before proving an empty cart; reverses once at list end",
+    "Keeta meal choices: repeated heading keyed by first row, BOM-cleaned labels, preselected single-row required group accepted",
+    "Terra refusal is advisory and no longer ends a comparison"
+  ],
+  "notVerifiedLive": [
+    "Configured meal (KFC Zinger, two required groups) end to end: Keeta minimum order 35 SAR blocked a single 26 SAR sandwich; option selection reached and was replayed offline only"
+  ],
+  "unitTests": { "passed": 595, "failed": 0 }
+}
