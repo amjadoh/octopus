@@ -59,7 +59,9 @@ object PreviewEvidence {
 enum class KeetaSearchAction { OPEN_SEARCH, EDIT_QUERY, ENTER_QUERY, SUBMIT_QUERY }
 
 open class KeetaMenuReader(val restaurant: String, val title: String, val VERSION: String = "3.12.501",
-    val requestedChoices: Set<String> = emptySet()) {
+    val requestedChoices: Set<String> = emptySet(),
+    /** Other meal names of the same configured request; a drawer row may prefix its choices with one. */
+    val otherMealTitles: Set<String> = emptySet()) {
     private var optionalPlainFrame: CatalogFrame? = null
     private var optionalPlainAt = 0L
     fun acceptOptionalPlain(frame: CatalogFrame, proof: KeetaOptionalPlainSession, now: Long): Boolean {
@@ -87,7 +89,8 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
     fun configuredChoices(text: String): List<BasketChoiceEvidence>? {
         if (requestedChoices.isEmpty()) return null
         val displayed = text.split(',', '،').map(String::trim)
-        val parts = if (displayed.firstOrNull() == title && displayed.size > 1) displayed.drop(1) else displayed
+        val parts = if ((displayed.firstOrNull() == title || displayed.firstOrNull() in otherMealTitles) && displayed.size > 1)
+            displayed.drop(1) else displayed
         if (parts.isEmpty() || parts.distinct().size != parts.size || parts.any { it !in requestedChoices }) return null
         return parts.map { BasketChoiceEvidence(it, null) }
     }
