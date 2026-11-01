@@ -84,8 +84,10 @@ import java.math.BigDecimal
         }
         val request = cart
         val currentTime = maxOf(now, System.currentTimeMillis())
-        val hunger = request?.let { state.finalTotals[ProviderId.HUNGERSTATION]?.takeIf { total -> total.fresh(it, currentTime) } }
-        val keeta = request?.let { state.finalTotals[ProviderId.KEETA]?.takeIf { total -> total.fresh(it, currentTime) } }
+        // Keep the last result for this exact order on screen; freshness only changes its label.
+        val hunger = request?.let { state.finalTotals[ProviderId.HUNGERSTATION]?.takeIf { total -> total.cartFingerprint == it.fingerprint } }
+        val keeta = request?.let { state.finalTotals[ProviderId.KEETA]?.takeIf { total -> total.cartFingerprint == it.fingerprint } }
+        val stale = request != null && listOfNotNull(hunger, keeta).any { !it.fresh(request, currentTime) }
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp),
             colors = CardDefaults.cardColors(containerColor = OctopusPalette.Soft)) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -101,6 +103,12 @@ import java.math.BigDecimal
                         else -> "السعر متساوٍ"
                     }, fontSize = 23.sp, fontWeight = FontWeight.Bold, color = OctopusPalette.Petrol)
                     Text("راجع تطابق عنوان التوصيل والفرع في التطبيقين.", color = OctopusPalette.Muted, fontSize = 12.sp)
+                }
+                if (stale) {
+                    val readAt = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT)
+                        .format(java.util.Date(listOfNotNull(hunger, keeta).minOf { it.capturedAt }))
+                    Text("نتيجة مقارنة الساعة $readAt؛ قد تتغير الأسعار، أعد المقارنة قبل الطلب.",
+                        color = OctopusPalette.Muted, fontSize = 12.sp)
                 }
             }
         }

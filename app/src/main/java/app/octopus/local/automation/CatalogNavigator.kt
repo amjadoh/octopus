@@ -407,8 +407,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 navigateToRestaurant(LiveRestaurant(restaurant, null, restaurant))
                 frame = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
             }
-            val proof = HungerStationCompleteCartProof.fromMenu(frame, restaurant, HungerStationCatalog.TESTED_VERSION, System.currentTimeMillis())
+            val (settled, proof) = awaitMenuCartProof(frame, restaurant, HungerStationCatalog.TESTED_VERSION)
                 ?: error("لم يتطابق عداد قائمة المطعم مع السلة؛ لم أنقلها.")
+            frame = settled
             nativeCartImport.observe(frame, System.currentTimeMillis())
             act(frame, CatalogAction.OPEN_BASKET, { it == proof.command.node }, basketCommand = proof.command)
             frame = await { HungerStationCatalog.screen(it) == CatalogScreen.CART }
@@ -418,6 +419,16 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         }
         check(BasketEvidenceReader.hungerStation(frame, true) == original) { "تغيرت السلة منذ قراءتها؛ أعد البدء من هنقرستيشن." }
         return frame
+    }
+
+    /** HungerStation draws the menu cart bar after the menu settles; wait for its count before proving the cart. */
+    private suspend fun awaitMenuCartProof(menu: CatalogFrame, restaurant: String, version: String?): Pair<CatalogFrame, HungerStationCompleteCartProof>? {
+        HungerStationCompleteCartProof.fromMenu(menu, restaurant, version, System.currentTimeMillis())?.let { return menu to it }
+        val settled = try {
+            await { HungerStationCatalog.screen(it) == CatalogScreen.MENU &&
+                HungerStationCompleteCartProof.fromMenu(it, restaurant, version, System.currentTimeMillis()) != null }
+        } catch (_: TimeoutCancellationException) { return null }
+        return HungerStationCompleteCartProof.fromMenu(settled, restaurant, version, System.currentTimeMillis())?.let { settled to it }
     }
 
     /** Reopen only a known cart back control and bind fresh footer proof to unchanged rows. */
@@ -437,8 +448,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             menu = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
         }
         val version = graph.installations.value.singleOrNull { it.provider == ProviderId.HUNGERSTATION }?.version
-        val proof = HungerStationCompleteCartProof.fromMenu(menu, restaurant, version, System.currentTimeMillis())
+        val (settled, proof) = awaitMenuCartProof(menu, restaurant, version)
             ?: error("لم تثبت قراءة عداد السلة ومبلغها من قائمة المطعم؛ لم أعدلها.")
+        menu = settled
         nativeCartImport.observe(menu, System.currentTimeMillis())
         act(menu, CatalogAction.OPEN_BASKET, { it == proof.command.node }, basketCommand = proof.command)
         val cart = await { HungerStationCatalog.screen(it) == CatalogScreen.CART }
@@ -1065,9 +1077,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             "قيمة السلة أقل من الحد الأدنى للمطعم في هنقرستيشن؛ زد الكمية أو عدّل طلبك ثم أعد المقارنة."
         }
         val version=graph.installations.value.singleOrNull {it.provider==ProviderId.HUNGERSTATION}?.version
-        val proof=HungerStationCompleteCartProof.fromMenu(menu,desired.restaurant,version,System.currentTimeMillis())
+        val (settled,proof)=awaitMenuCartProof(menu,desired.restaurant,version)
             ?: error("تعذر إثبات عداد السلة ومبلغها من القائمة؛ لم أعدلها.")
-        act(menu,CatalogAction.OPEN_BASKET,{it==proof.command.node},basketCommand=proof.command)
+        act(settled,CatalogAction.OPEN_BASKET,{it==proof.command.node},basketCommand=proof.command)
         val frame=await {HungerStationCatalog.screen(it)==CatalogScreen.CART}
         val evidence=proof.finish(frame,version,System.currentTimeMillis())
         if(evidence==null && BuildConfig.VERSION_NAME.endsWith("-device-tools")) {
