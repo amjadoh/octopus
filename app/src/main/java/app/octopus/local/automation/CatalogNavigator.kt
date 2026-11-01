@@ -235,7 +235,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             nativeCartImport.observe(frame, System.currentTimeMillis())
             if (HungerStationCatalog.screen(frame) == CatalogScreen.CART) {
                 BasketEvidenceReader.hungerStation(frame, true).takeIf { it.complete && it.restaurant != null && it.lines.isNotEmpty() }
-                    ?.let { latestNativeCart = it }
+                    ?.let { latestNativeCart = it; rememberNativeCart(it) }
             }
             return
         }
@@ -285,13 +285,29 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
 
     fun compareCapturedNativeBasket(): Boolean {
         if (nativeCompareStarting || job?.isActive == true || comparisonJob?.isActive == true || graph.session.value.active) return false
-        val source = latestNativeCart ?: run {
-            graph.catalog.value = graph.catalog.value.copy(error = "ابدأ في هنقرستيشن وأضف وجبتك وافتح السلة أولًا، ثم ارجع واضغط قارن.")
-            return false
+        // The last read cart survives a service restart; reopening it still proves the cart is unchanged.
+        val source = latestNativeCart ?: rememberedNativeCart() ?: run {
+            if (!beginManualCatalog(compareBasket = true)) {
+                graph.catalog.value = graph.catalog.value.copy(error = "ابدأ في هنقرستيشن وأضف وجبتك وافتح السلة أولًا، ثم ارجع واضغط قارن.")
+                return false
+            }
+            graph.catalog.value = graph.catalog.value.copy(message = "افتح سلتك في هنقرستيشن ثم اضغط «قارن» العائم.")
+            return true
         }
         compareNativeBasket(source)
         return true
     }
+
+    private val nativeCartFile get() = service.filesDir.resolve("last-native-cart.json")
+
+    private fun rememberNativeCart(cart: BasketEvidence) {
+        runCatching { nativeCartFile.writeText(com.google.gson.Gson().toJson(cart)) }
+    }
+
+    private fun rememberedNativeCart(): BasketEvidence? = runCatching {
+        com.google.gson.Gson().fromJson(nativeCartFile.readText(), BasketEvidence::class.java)
+            .takeIf { it.provider == ProviderId.HUNGERSTATION && it.complete && it.restaurant != null && it.lines.isNotEmpty() }
+    }.getOrNull()
 
     /** Explicit Compare tap ends passive reading; source basket is never rebuilt or edited. */
     private fun compareNativeBasket(resume: BasketEvidence? = null) {
