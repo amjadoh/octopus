@@ -15,7 +15,7 @@ class HungerStationCartProductCommand private constructor(
 
     companion object {
         fun create(frame: CatalogFrame, source: BasketEvidence, now: Long): HungerStationCartProductCommand? =
-            create(frame, source, source.lines.singleOrNull()?.name ?: return null, now)
+            source.lines.singleOrNull()?.let { create(frame, source, it.name, now) }
 
         /** Several meals: open only the row whose first line is exactly [name]. */
         fun create(frame: CatalogFrame, source: BasketEvidence, name: String, now: Long): HungerStationCartProductCommand? {
