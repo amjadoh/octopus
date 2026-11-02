@@ -2,8 +2,9 @@ package app.octopus.local.providers
 
 import app.octopus.local.pricing.MoneyParser
 
-/** Observed 3.13.203 single-SKU food modal. No choice, note or payment action is authorized.
- * A sole SKU with the exact product name is plain only when its price agrees with the Add footer.
+/** Observed 3.13.203 single-SKU food modal, and the 3.13.301 form of it that adds an empty
+ * special-request section. No choice, note or payment action is authorized. A sole SKU with the
+ * exact product name is plain only when its price agrees with the Add footer.
  */
 object KeetaSingleSkuProduct {
     private fun children(f:CatalogFrame,n:CatalogNode)=f.nodes.filter {it.parent==n.index}
@@ -21,16 +22,34 @@ object KeetaSingleSkuProduct {
         }
         return null
     }
+    const val NOTES_HINT = "سنشارك طلبك الخاص مع المتجر. لا يمكن إلغاء الطلب أو استرداد المبلغ إذا تعذّر تنفيذ طلبك الخاص."
+
+    /** The 3.13.301 special-request section: its heading, one empty note field and the 0/70 counter. */
+    private fun emptyNotes(f:CatalogFrame,section:CatalogNode):Boolean {
+        val body=f.descendants(section.index)
+        val editors=body.filter {it.editable}
+        val labelled=body.filter {it.label.isNotEmpty()}
+        return body.size<=12 && editors.size==1 && editors[0].className=="android.widget.EditText" &&
+            !editors[0].enteredText && editors[0].label in setOf("",NOTES_HINT) &&
+            body.none {it.omittedText || it.scrollable || (it.clickable && !it.editable)} &&
+            labelled.count {it.label=="طلب خاص"}==1 && labelled.count {it.label=="0/70"}==1 &&
+            labelled.all {it.label=="طلب خاص" || it.label=="0/70" || it.editable}
+    }
+
     fun body(f:CatalogFrame,restaurant:String,title:String):CatalogNode? {
-        if(!f.complete || restaurant.isBlank() || title.isBlank() || f.nodes.any {it.editable} ||
-            f.nodes.count {it.label==restaurant}!=1)return null
+        if(!f.complete || restaurant.isBlank() || title.isBlank() || f.nodes.count {it.editable}>1 ||
+            f.nodes.any {it.editable && it.enteredText} || f.nodes.count {it.label==restaurant}!=1)return null
         val add=f.nodes.singleOrNull {it.label=="إضافة إلى السلة" && it.enabled} ?: return null
         val (total,count)=footer(f,title,add) ?: return null
         return f.nodes.filter {it.className=="android.widget.ScrollView" && !it.scrollable}.singleOrNull {scroll ->
             val content=f.descendants(scroll.index)
             val container=children(f,scroll).singleOrNull() ?: return@singleOrNull false
             val sections=children(f,container)
-            if(sections.size!=2 || content.any {it.editable || it.scrollable})return@singleOrNull false
+            val notes=sections.getOrNull(2)
+            if(sections.size !in 2..3 || (notes!=null && !emptyNotes(f,notes)) ||
+                f.nodes.any {it.editable && (notes==null || f.descendants(notes.index).none {n->n.index==it.index})} ||
+                content.any {it.scrollable})return@singleOrNull false
+            val noteNodes=notes?.let {f.descendants(it.index).map {n->n.index}.toSet()}.orEmpty()
             val heading=f.descendants(sections[0].index).singleOrNull {it.label==title && !it.clickable}
                 ?: return@singleOrNull false
             val titleGroup=f.nodes.singleOrNull {it.index==heading.parent} ?: return@singleOrNull false
@@ -51,7 +70,7 @@ object KeetaSingleSkuProduct {
                     it.label!=title && it.index!=price.index
                 })return@singleOrNull false
             if(content.any {it.omittedText && it.index!=description.last().index} ||
-                content.filter {it.label.isNotEmpty()}.any {it.label!=title && it.index!=price.index &&
+                content.filter {it.label.isNotEmpty() && it.index !in noteNodes}.any {it.label!=title && it.index!=price.index &&
                     it.index!=description.last().index})return@singleOrNull false
             runCatching {Math.multiplyExact(unit,count.toLong())==total}.getOrDefault(false)
         }
