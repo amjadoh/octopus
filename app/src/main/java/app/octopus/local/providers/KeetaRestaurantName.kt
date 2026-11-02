@@ -5,9 +5,35 @@ import app.octopus.local.domain.IdentityText
 /** The observed delivery-promotion suffix is display copy, not a branch or a verified fee. */
 object KeetaRestaurantName {
     private val observedSuffix = Regex("\\s*\\(\\s*توصيل مجاني[\\s\\p{So}\\p{Sk}\\uFE0F\\u200D]*\\)\\s*$")
+    private val separators = listOf(" - ", " | ", ": ")
+    // A suffix is dropped only when it reads as a promotion; a district or branch name stays for Terra to judge.
+    private val promotion = Regex("عرض|عروض|خصم|كوبون|قسيم|توصيل|مجان|جديد|وفر|%|٪|offer|deal|free|new", RegexOption.IGNORE_CASE)
+    private val emoji = Regex("[\\p{So}\\p{Sk}]")
+    private val branchWords = Regex("فرع|branch|الفرع", RegexOption.IGNORE_CASE)
+    private val approved = java.util.Collections.synchronizedSet(mutableSetOf<Pair<String, String>>())
+
+    /** Terra confirmed, for this app run only, that [displayed] names the same chain as [expected]. */
+    fun approve(expected: String, displayed: String) {
+        if (expected.isNotBlank() && displayed.length in 1..120 && '\n' !in displayed)
+            approved += KeetaNameText.loose(expected) to KeetaNameText.loose(displayed)
+    }
+
+    /** Writing differences, or the chain name followed by a promotion title. A branch name is never stripped. */
+    private fun looseMatch(expected: String, displayed: String): Boolean {
+        val want = KeetaNameText.loose(expected)
+        val shown = KeetaNameText.loose(displayed)
+        if (want.isEmpty() || shown.isEmpty()) return false
+        if (want == shown || (want to shown) in approved) return true
+        val rest = separators.firstNotNullOfOrNull { sep -> shown.removePrefix(want).takeIf { shown.startsWith(want + sep) } }
+            ?: return false
+        if ('(' in rest || rest.length > 60 || branchWords.containsMatchIn(rest)) return false
+        return promotion.containsMatchIn(rest) || emoji.containsMatchIn(displayed)
+    }
+
     fun matches(expected: String, displayed: String): Boolean {
         if (expected.isBlank() || displayed.length !in 1..300) return false
         if (IdentityText.clean(expected) == IdentityText.clean(displayed)) return true
+        if ('\n' !in displayed && looseMatch(expected, displayed)) return true
         // Exact campaign heading observed in the native menu, 2026-10-30.
         // Chain recognition only; never proof of delivery address or branch.
         if (IdentityText.clean(expected) == "كنتاكي" &&

@@ -52,6 +52,55 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private val keetaBasket get() = KeetaBasketReader(keetaMenu, keetaBasketTitles, keetaChoicesByTitle)
     private fun installedKeetaProfile() = KeetaVersionProfile.resolve(
         graph.installations.value.singleOrNull { it.provider == ProviderId.KEETA }?.version)
+    /** After opening the first Keeta search result. If its menu title is not recognized, Terra may confirm
+     * that a visible title names the same restaurant (only those titles and the name are sent). The menu
+     * must still pass every other check, and items must still match by name before any add. */
+    private suspend fun awaitKeetaSearchedMenu(): CatalogFrame {
+        try { return await { keetaMenu.menu(it) } }
+        catch (timeout: TimeoutCancellationException) {
+            currentCoroutineContext().ensureActive(); checkSession()
+            val titles = keetaHeaderTitles()
+            val same = if (titles.isEmpty() || TerraConnectionStore(service).activeConnection() == null) null else try {
+                graph.catalog.value = graph.catalog.value.copy(message = "تيرا يتحقق من اسم المطعم في كيتا…")
+                TerraRecoveryClient(service).sameRestaurant(keetaMenu.restaurant, titles)
+            } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { null }
+            currentCoroutineContext().ensureActive(); checkSession()
+            graph.catalog.value = graph.catalog.value.copy(message = phase)
+            same ?: error("ما تعرفت على مطعم «${keetaMenu.restaurant}» في نتائج بحث كيتا؛ لم أضف شيئًا.")
+            lastStats.put("terraRestaurantMatch", true)
+            KeetaRestaurantName.approve(keetaMenu.restaurant, same)
+            return await { keetaMenu.menu(it) }
+        }
+    }
+
+    /** Short visible titles in the top quarter of the Keeta window; no edit fields, prices or long text. */
+    private fun keetaHeaderTitles(): List<String> {
+        val root = service.rootInActiveWindow ?: return emptyList()
+        try {
+            requireProviderWindow(root)
+            val screen = Rect(); root.getBoundsInScreen(screen)
+            val found = linkedSetOf<String>()
+            fun walk(node: AccessibilityNodeInfo, depth: Int) {
+                if (depth > 40 || found.size >= 8) return
+                val text = node.text?.toString()?.trim().orEmpty()
+                val bounds = Rect(); node.getBoundsInScreen(bounds)
+                if (!node.isEditable && !node.isPassword && node.className?.toString() == "android.widget.TextView" &&
+                    text.length in 2..60 && '\n' !in text && text.any(Char::isLetter) && '﷼' !in text &&
+                    text.count(Char::isDigit) <= 2 && bounds.top >= screen.top && bounds.bottom <= screen.top + screen.height() / 4) found += text
+                for (i in 0 until node.childCount) node.getChild(i)?.let { child ->
+                    try { walk(child, depth + 1) } finally { @Suppress("DEPRECATION") child.recycle() }
+                }
+            }
+            walk(root, 0)
+            return found.toList()
+        } finally { @Suppress("DEPRECATION") root.recycle() }
+    }
+
+    /** A Keeta name written differently from a requested item (dash, digits, hamza, emoji) reads as that item. */
+    private fun keetaLabel(raw: String, id: String = ""): String =
+        KeetaNameText.requested(raw.replace(Regex("[\\u200e\\u200f\\u061c\\u202a-\\u202e\\u2066-\\u2069\\ufeff]"), "").trim(), keetaBasketTitles)
+            ?: keetaMenu.functionalLabel(raw, id)
+
     private fun bindKeetaRequest(cart: CanonicalCart, line: CanonicalItem = cart.items.single(), meal: SingleChoiceMeal? = null) {
         val profile = checkNotNull(installedKeetaProfile()) { "إصدار كيتا غير مدعوم في مسار القراءة الحالي." }
         check(profile.allowsReading(multipleItems = meal != null && cart.items.size > 1)) { "إصدار كيتا غير مدعوم في مسار القراءة الحالي." }
@@ -687,7 +736,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         var frame = openKeetaRequest()
         if (keetaMenu.searchCandidate(frame) != null) {
             keetaBasketAction { keetaMenu.searchCandidate(it) }
-            frame = await { keetaMenu.menu(it) }
+            frame = awaitKeetaSearchedMenu()
         }
         if (keetaMenu.product(frame)) {
             closeKeetaReadSheet(frame)
@@ -954,7 +1003,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     var frame = openKeetaRequest()
                     if (keetaMenu.searchCandidate(frame) != null) {
                         keetaBasketAction { keetaMenu.searchCandidate(it) }
-                        frame = await { keetaMenu.menu(it) }
+                        frame = awaitKeetaSearchedMenu()
                     }
                     if (keetaMenu.basketDrawer(frame) || keetaMenu.product(frame)) {
                         closeKeetaReadSheet(frame)
@@ -1575,7 +1624,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         if(keetaMenu.basketDrawer(frame)) {closeKeetaReadSheet(frame);frame=await {keetaMenu.menu(it)}}
         if(keetaMenu.searchCandidate(frame)!=null) {
             keetaBasketAction { keetaMenu.searchCandidate(it) }
-            frame=await {keetaMenu.menu(it)}
+            frame = awaitKeetaSearchedMenu()
         }
         if(keetaMenu.menu(frame)) {
             // Each next requested item may be above the previous one. Rewind only the known list.
@@ -1610,7 +1659,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         var frame=openKeetaRequest()
         if(keetaMenu.searchCandidate(frame)!=null) {
             keetaBasketAction {keetaMenu.searchCandidate(it)}
-            frame=await {keetaMenu.menu(it)}
+            frame = awaitKeetaSearchedMenu()
         }
         if(keetaMenu.product(frame)) {
             closeKeetaReadSheet(frame);frame=await {keetaMenu.menu(it)}
@@ -1864,7 +1913,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             var frame = openKeetaRequest()
             if (keetaMenu.searchCandidate(frame) != null) {
                 keetaBasketAction { keetaMenu.searchCandidate(it) }
-                frame = await { keetaMenu.menu(it) }
+                frame = awaitKeetaSearchedMenu()
             }
             if (!keetaMenu.basketDrawer(frame)) {
                 if (keetaMenu.product(frame) || KeetaPromotionEvidence.terms(frame) || KeetaPromotionEvidence.couponSheet(frame)) {
@@ -2099,7 +2148,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         }
         if (keetaMenu.searchCandidate(frame) != null) {
             keetaBasketAction { keetaMenu.searchCandidate(it) }
-            frame = await { keetaMenu.menu(it) }
+            frame = awaitKeetaSearchedMenu()
         }
         if (keetaMenu.menu(frame)) {
             openKeetaPreviewProduct(frame)
@@ -2266,7 +2315,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             if (!(node.refresh() && node.isVisibleToUser && node.isEnabled && !node.isEditable && !node.isPassword &&
                 !(android.os.Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive) &&
                 node.className?.toString() == target.className && node.viewIdResourceName.orEmpty() == target.id &&
-                keetaMenu.functionalLabel((node.text ?: node.contentDescription)?.toString().orEmpty()) == target.label)) throw ScreenChangedBeforeAction()
+                keetaLabel((node.text ?: node.contentDescription)?.toString().orEmpty()) == target.label)) throw ScreenChangedBeforeAction()
             check(if (action == AccessibilityNodeInfo.ACTION_CLICK) node.isClickable else node.isScrollable)
             verifyActiveFrame(expected, root.windowId)
             checkSession()
@@ -3070,7 +3119,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             val index = nodes.size
             val raw = if (private || node.isEditable || disabledFinancial) "" else (node.text ?: node.contentDescription)?.toString().orEmpty()
             if (raw.length > 1000) { complete = false; return }
-            val label = if (provider == ProviderId.KEETA) keetaMenu.functionalLabel(raw, id) else raw
+            val label = if (provider == ProviderId.KEETA) keetaLabel(raw, id) else raw
             if (provider == ProviderId.KEETA && keetaMenu.requestedChoices.isNotEmpty() && label.isBlank() &&
                 !private && !node.isEditable && !node.isClickable && node.className?.toString() == "android.widget.TextView" &&
                 raw.length in 1..100 && !raw.contains('\n') && raw.any(Char::isLetter)) {
