@@ -57,3 +57,12 @@ test('gateway requires a provisioned device token and enforces a bounded model r
   for(let i=0;i<8;i++) assert.equal((await post(`Bearer ${token}`)).status,200);
   assert.equal((await post(`Bearer ${token}`)).status,429);assert.equal(calls,8);
 });
+
+test('restaurant name match must pick an offered title with high confidence', () => {
+  const names = { ...snapshot(), provider: 'KEETA', public_text: 'Restaurant name match. HungerStation restaurant: «ماكدونالدز».',
+    candidates: [{ id: 0, label: "McDonald's", class_name: 'android.widget.TextView' }, { id: 1, label: 'عروض', class_name: 'android.widget.TextView' }] };
+  const match = { screen_type: 'catalog', action: 'match_name', target_id: 0, confidence: .95, reason: 'نفس المطعم بالإنجليزي.' };
+  assert.deepEqual(validateAdvice(match, names), match);
+  for (const invalid of [{ ...match, target_id: 7 }, { ...match, confidence: .6 }, { ...match, screen_type: 'advert' }, { ...match, target_id: null }])
+    assert.throws(() => validateAdvice(invalid, names));
+});

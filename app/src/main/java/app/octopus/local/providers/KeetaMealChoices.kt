@@ -1,10 +1,10 @@
 package app.octopus.local.providers
 
 import app.octopus.local.domain.CanonicalCart
+import app.octopus.local.domain.CanonicalItem
 
 /** Required radio groups in the current product sheet. No coordinate or fuzzy matching. */
-class KeetaMealChoices(val cart: CanonicalCart) {
-    private val item = cart.items.single()
+class KeetaMealChoices(val cart: CanonicalCart, val item: CanonicalItem = cart.items.single()) {
     val values = item.options.map { it.value }.toSet()
     private val completed = mutableSetOf<String>()
     private val singleChoiceSeen = mutableSetOf<String>()
@@ -18,7 +18,7 @@ class KeetaMealChoices(val cart: CanonicalCart) {
         requiredGroups.size == values.size && requiredGroups.values.toSet() == values
 
     init {
-        require(item.quantity == 1 && item.size == null && item.note.isNullOrBlank() &&
+        require(item in cart.items && item.quantity == 1 && item.size == null && item.note.isNullOrBlank() &&
             values.size in 1..12 && values.size == item.options.size && item.options.all { it.quantity == 1 })
     }
 

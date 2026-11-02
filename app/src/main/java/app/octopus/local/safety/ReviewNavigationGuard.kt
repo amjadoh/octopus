@@ -74,15 +74,16 @@ object ReviewNavigationGuard {
         }
         val profile=KeetaVersionProfile.resolve(version) ?: return null
         if (!profile.allowsReview(multi)) return null
-        val menu = KeetaMenuReader(cart.restaurant, cart.items.first().name, version,
-            if (configured != null) cart.items.single().options.map { it.value }.toSet() else emptySet())
+        val menu = KeetaMenuReader(cart.restaurant, cart.items.first().name, version)
+        val drawer = if (configured != null) KeetaBasketReader.configured(cart, version) else KeetaBasketReader(menu)
         val expectedQuantity=if(multi)cart.items.sumOf {it.quantity} else cart.items.single().quantity
-        if (profile.allowsDirectDrawerReview && !multi) {
+        // Configured meals are bound to their drawer proof, so several of them also review from the drawer.
+        if (profile.allowsDirectDrawerReview && (!multi || configured != null)) {
             // Actual 3.13.301 drawer footer opens review without leaving the restaurant.
             // Bind every row and amount to the fresh prepared record, not just a menu count.
             val proof=admission ?: return null
             if(!proof.validFor(provider,cart,version,now) || frame!=proof.sourceFrame ||
-                KeetaBasketReader(menu).evidence(frame)!=(configured?.raw ?: proof.record.evidence))return null
+                drawer.evidence(frame)!=(configured?.raw ?: proof.record.evidence))return null
         } else if (!menu.menu(frame) || KeetaBasketReader(menu).menuQuantity(frame) != expectedQuantity) return null
         val label = frame.nodes.singleOrNull { it.label == "إتمام الدفع" && it.enabled } ?: return null
         var current = label

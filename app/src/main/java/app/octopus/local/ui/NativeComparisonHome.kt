@@ -57,8 +57,10 @@ import java.math.BigDecimal
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
                 Column(Modifier.padding(16.dp)) {
                     Text(error, color = MaterialTheme.colorScheme.error)
-                    if (!busy && cart != null && error in setOf(BasketMutationJournal.HIDDEN,
-                            BasketMutationJournal.UNRESOLVED, BasketMutationJournal.LEGACY_UNRESOLVED)) {
+                    // The message may carry the HungerStation result in front of the Keeta reason.
+                    if (!busy && cart != null && setOf(BasketMutationJournal.HIDDEN,
+                            BasketMutationJournal.UNRESOLVED, BasketMutationJournal.LEGACY_UNRESOLVED,
+                            BasketMutationJournal.KEETA_UNREADABLE, BasketMutationJournal.KEETA_DIFFERENT).any { error.endsWith(it) }) {
                         TextButton(onClick = { clearedCart = cart }) { Text("أفرغت سلة كيتا وأريد البدء من جديد") }
                     }
                 }
@@ -93,7 +95,8 @@ import java.math.BigDecimal
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("المقارنة", fontWeight = FontWeight.Bold, fontSize = 21.sp)
                 Row { Text("هنقرستيشن", Modifier.weight(1f)); Text(hunger?.let { money(it.total) } ?: "بانتظار القراءة") }
-                Row { Text("كيتا", Modifier.weight(1f)); Text(keeta?.let { money(it.total) } ?: "بانتظار القراءة") }
+                Row { Text("كيتا", Modifier.weight(1f)); Text(keeta?.let { money(it.total) } ?: if (!busy && state.comparisonProgress[ProviderId.KEETA]?.step ==
+                    app.octopus.local.automation.CartComparisonStep.PREPARATION_FAILED) "توقفت" else "بانتظار القراءة") }
                 if (hunger != null && keeta != null) {
                     HorizontalDivider()
                     val difference = hunger.total - keeta.total

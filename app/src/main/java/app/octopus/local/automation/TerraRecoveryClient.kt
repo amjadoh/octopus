@@ -37,6 +37,22 @@ class TerraRecoveryClient(private val context: Context,
             reply.isNull("target_id") && reply.optDouble("confidence", 0.0) in 0.8..1.0) true else null
     }
 
+    /** Which of the visible Keeta menu titles names the same restaurant as [expected]; null when unsure. */
+    suspend fun sameRestaurant(expected: String, titles: List<String>): String? = withContext(Dispatchers.IO) {
+        val store = TerraConnectionStore(context)
+        val config = store.activeConnection() ?: return@withContext null
+        val offered = titles.filter { it.length in 1..120 }.distinct().take(8)
+        if (expected.isBlank() || expected.length > 120 || offered.isEmpty()) return@withContext null
+        val candidates = JSONArray()
+        offered.forEachIndexed { i, label -> candidates.put(JSONObject().put("id", i).put("label", label).put("class_name", "android.widget.TextView")) }
+        val reply = exchange(store, config, payload(CatalogFrame(emptyList(), true), ProviderId.KEETA,
+            "Restaurant name match. HungerStation restaurant: «$expected». The candidates are titles visible on the Keeta menu just opened from searching that name. Answer match_name with the id of the title that names the same restaurant chain (a different spelling, language or a promotion after the name is fine). Stop if none is clearly the same restaurant, or a title is only a branch or another restaurant.",
+            candidates)) ?: return@withContext null
+        val id = reply.optInt("target_id", -1)
+        if (reply.optString("screen_type") == "catalog" && reply.optString("action") == "match_name" &&
+            id in offered.indices && reply.optDouble("confidence", 0.0) in 0.9..1.0) offered[id] else null
+    }
+
     suspend fun approveAdvertClose(frame: CatalogFrame, close: CatalogNode): Boolean? = withContext(Dispatchers.IO) {
         val store=TerraConnectionStore(context)
         val config=store.activeConnection() ?: return@withContext null

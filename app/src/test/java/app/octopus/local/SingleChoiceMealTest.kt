@@ -34,7 +34,7 @@ class SingleChoiceMealTest {
     }
     @Test fun partialStaleChangedPriceForeignProductAndAmbiguousGroupCannotResolve() {
         assertNull(SingleChoiceMeal.create(source, product.copy(optionsComplete = false), 2000))
-        assertNull(SingleChoiceMeal.create(source, product, 31_001))
+        assertNull(SingleChoiceMeal.create(source, product, 46_001))
         assertNull(SingleChoiceMeal.create(source, product, 999))
         assertNull(SingleChoiceMeal.create(source.copy(subtotal = 1900), product, 2000))
         assertNull(SingleChoiceMeal.create(source, product.copy(restaurant = "مطعم آخر"), 2000))
@@ -48,7 +48,7 @@ class SingleChoiceMealTest {
         assertNull(meal.resolve(target.copy(complete = false), 3000))
         assertNull(meal.resolve(target.copy(lines = target.lines + target.lines), 3000))
         assertNull(meal.resolve(target.copy(lines = listOf(target.lines.single().copy(quantity = 2))), 3000))
-        assertNull(meal.resolve(target, 602_001))
+        assertNull(meal.resolve(target, 1_202_001))
     }
     @Test fun exactNamedVariantAndUnselectedOptionalGroupsPreserveTheFullCartName() {
         val variantName = "وجبة تجريبية - وسط"

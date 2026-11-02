@@ -25,10 +25,18 @@ class ConfiguredBasketVerification private constructor(
 
         fun target(meal: SingleChoiceMeal, selection: KeetaMealChoices, menu: KeetaMenuReader,
             frame: CatalogFrame, now: Long): ConfiguredBasketVerification? {
-            if (!selection.ready || selection.cart != meal.cart || menu.VERSION != "3.13.301" ||
-                menu.requestedChoices != meal.values) return null
-            val raw = KeetaBasketReader(menu).evidence(frame) ?: return null
-            return create(meal, frame, raw, menu.VERSION, now)
+            if (selection.cart != meal.cart || menu.requestedChoices != meal.values) return null
+            return target(meal, listOf(selection), menu.VERSION, frame, now)
+        }
+
+        /** [selections] are the completed choice sessions, one per meal in request order. A prefix
+         * [meal] verifies the cart after each single add, before the next meal is opened. */
+        fun target(meal: SingleChoiceMeal, selections: List<KeetaMealChoices>, version: String,
+            frame: CatalogFrame, now: Long): ConfiguredBasketVerification? {
+            if (version != "3.13.301" || selections.map { it.item } != meal.cart.items ||
+                selections.any { !it.ready || it.cart.restaurant != meal.cart.restaurant }) return null
+            val raw = KeetaBasketReader.configured(meal.cart, version).evidence(frame) ?: return null
+            return create(meal, frame, raw, version, now)
         }
 
         private fun create(meal: SingleChoiceMeal, frame: CatalogFrame, raw: BasketEvidence, version: String,

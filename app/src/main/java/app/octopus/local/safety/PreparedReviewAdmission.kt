@@ -40,9 +40,9 @@ class PreparedReviewAdmission private constructor(
                 }
                 ProviderId.KEETA -> {
                     if(KeetaVersionProfile.resolve(version)?.allowsReview(multipleItems=multiple)!=true)return null
-                    val reader=KeetaMenuReader(cart.restaurant,cart.items.first().name,version,
-                        if (hasConfiguration) cart.items.single().options.map { it.value }.toSet() else emptySet())
-                    KeetaBasketReader(reader,cart.items.map {it.name}.toSet()).evidence(source) ?: return null
+                    val basket=if (hasConfiguration) KeetaBasketReader.configured(cart,version)
+                        else KeetaBasketReader(KeetaMenuReader(cart.restaurant,cart.items.first().name,version),cart.items.map {it.name}.toSet())
+                    basket.evidence(source) ?: return null
                 }
             }
             if(actual != (if (hasConfiguration) configured!!.raw else record.evidence))return null
