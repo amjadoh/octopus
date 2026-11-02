@@ -1,0 +1,36 @@
+{
+  "date": "2026-11-02",
+  "scope": "live_native_comparison_partial_result_when_keeta_stops",
+  "local": {
+    "unitTestsPassed": 599,
+    "unitTestFailures": 0,
+    "androidUiTestFailures": 0,
+    "androidUiTestsRunInCi": true,
+    "diagnosticApkBuildPassed": true,
+    "lintErrors": 0,
+    "privateCapturesKeptOutsideRepository": true
+  },
+  "changes": [
+    "If preparing Keeta stops without a user stop, the comparison still reads the HungerStation total, which is only read and never edited.",
+    "The Keeta row shows that it stopped, and the final message names both outcomes.",
+    "The message for an unverified Keeta options page names the product.",
+    "Everything from 1.3.21 is kept, including up to four meals with options."
+  ],
+  "physical": {
+    "device": "user phone trial of 1.3.21",
+    "build": "1.3.22 not run on a phone",
+    "phoneTrialOf1_3_21": "plain items stopped at an unverified Keeta options page before any add; no HungerStation total was shown",
+    "partialResultVerified": false,
+    "ciReleaseApkVerifiedOnPhone": false,
+    "noOrderOrPayment": true
+  },
+  "limitations": [
+    "Keeta items whose product sheet has options or additions are added only for the two verified ALBAIK items; other such items still stop before any add.",
+    "Multiple configured meals are still not run on a phone.",
+    "Not supported: a plain item in the same cart as a meal with options, two meals with the same name, quantity above one, a Keeta cart that already holds only some of the meals, and optional additions.",
+    "If the Keeta cart drawer scrolls with three or four meals, the comparison stops with a message; this has not been tried.",
+    "Verified on KFC only in earlier releases; other restaurants are not proven."
+  ],
+  "releaseReady": false,
+  "privacy": "No account data, addresses, tokens, private captures or signing material included."
+}
