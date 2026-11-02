@@ -1,0 +1,41 @@
+{
+  "date": "2026-11-02",
+  "scope": "live_native_comparison_keeta_single_sku_with_notes",
+  "local": {
+    "unitTestsPassed": 602,
+    "unitTestFailures": 0,
+    "androidUiTestFailures": 0,
+    "androidUiTestsRunInCi": true,
+    "diagnosticApkBuildPassed": true,
+    "lintErrors": 0,
+    "privateCapturesKeptOutsideRepository": true
+  },
+  "changes": [
+    "Configured meals: a stale or partial Keeta cart shows the clear-cart control; longer time windows for the meal proof.",
+    "A Compare tap reads the edited HungerStation cart, and a previous Keeta cart of matching rows is completed.",
+    "The 'I emptied the Keeta cart' confirmation shows again when the Keeta reason follows the HungerStation result.",
+    "Keeta 3.13.301 single-SKU sheets with an empty special-request section are accepted as plain products; a typed note, a second SKU or a price mismatch is still rejected.",
+    "The Add guard expects that one empty note field on such a sheet.",
+    "Everything from 1.3.22 is kept: the HungerStation total is shown even when Keeta stops."
+  ],
+  "physical": {
+    "device": "user phone (Honor MBH-N49), connected over adb",
+    "build": "1.3.26 not yet run on the phone",
+    "phoneTrialOf1_3_22": "HungerStation total read (47.00 SAR) for one ALBAIK meal; Keeta stopped at the single-SKU sheet with an empty note field before any add",
+    "singleSkuWithNotesVerified": false,
+    "ciReleaseApkVerifiedOnPhone": false,
+    "noOrderOrPayment": true,
+    "phoneTrialOf1_3_23": "HungerStation total read (47.00 SAR); Keeta stopped at the earlier-cart barrier with its confirmation button hidden; the Keeta ALBAIK cart was observed empty",
+    "phoneTrialOf1_3_24": "Single plain meal compared twice: HungerStation 47.00, Keeta 38.66; adding a second item exposed the edited-cart refusal and the missing edit consent on the native screen",
+    "phoneTrialOf1_3_25": "Two plain ALBAIK items compared: HungerStation 49.10, Keeta 40.72; the previous Keeta cart was completed"
+  },
+  "limitations": [
+    "Keeta products with real option groups are still added only for the verified cases; others stop before any add.",
+    "Multiple configured meals are still not run on a phone.",
+    "Not supported: a plain item in the same cart as a meal with options, two meals with the same name, quantity above one, a Keeta cart that already holds only some of the meals, and optional additions.",
+    "If the Keeta cart drawer scrolls with three or four meals, the comparison stops with a message; this has not been tried.",
+    "Verified on KFC only in earlier releases; other restaurants are not proven."
+  ],
+  "releaseReady": false,
+  "privacy": "No account data, addresses, tokens, private captures or signing material included."
+}
