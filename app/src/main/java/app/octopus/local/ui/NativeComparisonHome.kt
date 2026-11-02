@@ -59,7 +59,8 @@ import java.math.BigDecimal
                     Text(error, color = MaterialTheme.colorScheme.error)
                     // The message may carry the HungerStation result in front of the Keeta reason.
                     if (!busy && cart != null && setOf(BasketMutationJournal.HIDDEN,
-                            BasketMutationJournal.UNRESOLVED, BasketMutationJournal.LEGACY_UNRESOLVED).any { error.endsWith(it) }) {
+                            BasketMutationJournal.UNRESOLVED, BasketMutationJournal.LEGACY_UNRESOLVED,
+                            BasketMutationJournal.KEETA_UNREADABLE, BasketMutationJournal.KEETA_DIFFERENT).any { error.endsWith(it) }) {
                         TextButton(onClick = { clearedCart = cart }) { Text("أفرغت سلة كيتا وأريد البدء من جديد") }
                     }
                 }

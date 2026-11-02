@@ -47,7 +47,7 @@ class KeetaMealChoicesTest {
         assertTrue(returnCommand.consumeBack(drawer,meal.cart,reader.VERSION,1300))
         assertFalse(returnCommand.consumeBack(drawer,meal.cart,reader.VERSION,1301))
         assertNull(app.octopus.local.automation.KeetaOwnedDrawerReturn.createConfigured(drawer,proof.raw,meal,"future",1250))
-        assertNull(app.octopus.local.automation.KeetaOwnedDrawerReturn.createConfigured(drawer,proof.raw,meal,reader.VERSION,700000))
+        assertNull(app.octopus.local.automation.KeetaOwnedDrawerReturn.createConfigured(drawer,proof.raw,meal,reader.VERSION,1_300_000))
         assertTrue(proof.raw.lines.single().choices.all { it.quantity == null })
         assertTrue(proof.resolved.lines.single().choices.all { it.quantity == 1 })
         val record=PreparedBasketRecord.create(meal.cart,proof.resolved,reader.VERSION,1200)!!
