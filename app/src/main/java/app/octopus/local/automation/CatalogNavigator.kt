@@ -331,7 +331,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     endManualCatalog()
                     var reopened: CatalogFrame? = null
                     check(begin(returnOnSuccess = false, operation = CatalogOperation.COMPARE_MENU) {
-                        reopened = reopenNativeSourceBasket(resume)
+                        reopened = reopenNativeSourceBasket(resume, acceptChanged = true)
                     }) { graph.catalog.value.error ?: "تعذر الرجوع لسلة هنقرستيشن." }
                     token = generation
                     val reopenJob = job
@@ -418,7 +418,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         manualJob?.start()
     }
 
-    private suspend fun reopenNativeSourceBasket(original: BasketEvidence): CatalogFrame {
+    /** [acceptChanged] is only for a new Compare tap: the user may have edited the cart since it was
+     * last read, so the reopened cart becomes the new source (its own menu-counter proof still applies).
+     * After Keeta has been prepared the source must be unchanged. */
+    private suspend fun reopenNativeSourceBasket(original: BasketEvidence, acceptChanged: Boolean = false): CatalogFrame {
         check(provider == ProviderId.HUNGERSTATION)
         val restaurant = checkNotNull(original.restaurant)
         val launch = service.packageManager.getLaunchIntentForPackage(provider.packageName) ?: error("هنقرستيشن غير مثبت.")
@@ -442,7 +445,15 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 "لم تثبت السلة كاملة بعد إعادة فتحها."
             }
         }
-        check(BasketEvidenceReader.hungerStation(frame, true) == original) { "تغيرت السلة منذ قراءتها؛ أعد البدء من هنقرستيشن." }
+        val current = BasketEvidenceReader.hungerStation(frame, true)
+        if (acceptChanged && current != original) {
+            check(IdentityText.clean(current.restaurant.orEmpty()) == IdentityText.clean(restaurant)) {
+                "السلة المفتوحة لمطعم آخر؛ ابدأ من هنقرستيشن وافتح سلتك ثم اضغط قارن."
+            }
+            if (current.complete) { latestNativeCart = current; rememberNativeCart(current) }
+            return frame
+        }
+        check(current == original) { "تغيرت السلة منذ قراءتها؛ أعد البدء من هنقرستيشن." }
         return frame
     }
 
@@ -505,6 +516,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         comparisonJob = graph.scope.launch(start = CoroutineStart.LAZY) {
             try {
                 // The imported source is already known. Prepare Keeta before reading source review.
+                // The native Compare tap asks Octopus to make the Keeta cart match this exact request
+                // (the consent dialog says so); a previous cart of only matching rows may be completed.
+                // Unknown rows or add-ons still stop the preparation.
+                if (graph.draft.value?.fingerprint == desired.fingerprint) graph.approveExistingMatchingQuantity()
                 var keetaFailure: String? = null
                 for (id in listOf(ProviderId.KEETA, ProviderId.HUNGERSTATION)) {
                     currentCoroutineContext().ensureActive()
