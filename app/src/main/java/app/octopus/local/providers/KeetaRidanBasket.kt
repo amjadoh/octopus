@@ -41,7 +41,9 @@ open class KeetaBasketReader(private val catalog: KeetaMenuReader, private val r
             catalog.unitPrice(f) != expectedUnit) return null
         val body = catalog.productBody(f) ?: return null
         val content = f.descendants(body.index)
-        val expectedEditors = if (catalog.profile.usesCurrentLayout && !catalog.hasOptionalPlainProof(f)) 0 else 1
+        // The 3.13.301 single-SKU sheet carries one empty special-request field; enteredText is rejected below.
+        val singleSkuNotes = KeetaSingleSkuProduct.body(f, catalog.restaurant, catalog.title) == body && content.any { it.editable }
+        val expectedEditors = if (catalog.profile.usesCurrentLayout && !catalog.hasOptionalPlainProof(f) && !singleSkuNotes) 0 else 1
         if ((body.scrollable && !catalog.hasOptionalPlainProof(f)) || content.filter { it.editable }.size != expectedEditors || content.any { it.editable && it.enteredText }) return null
         val add = f.nodes.singleOrNull { it.label == "إضافة إلى السلة" } ?: return null
         for (group in ancestors(f, add)) {
