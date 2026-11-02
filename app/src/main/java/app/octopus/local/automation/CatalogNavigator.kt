@@ -505,6 +505,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         return message
     }
 
+    /** Keep the Keeta reason last, so its clear-cart control still matches when HungerStation also stops. */
+    private fun bothStopped(hunger: String, keeta: String?): String = if (keeta == null) hunger else "$hunger وتوقفت كيتا: $keeta"
+
     private fun keetaOnlyFailure(keeta: String): String =
         if (graph.catalog.value.finalTotals[ProviderId.HUNGERSTATION] != null) "قرأت سعر هنقرستيشن، وتوقفت كيتا: $keeta"
         else "توقفت كيتا: $keeta"
@@ -540,7 +543,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                         keetaFailure = keetaStopped(id)
                         continue
                     }
-                    check(graph.catalog.value.error == null) { graph.catalog.value.error.orEmpty() }
+                    check(graph.catalog.value.error == null) { bothStopped(graph.catalog.value.error.orEmpty(), keetaFailure) }
                     val total = graph.catalog.value.finalTotals[id]?.fresh(desired, System.currentTimeMillis()) == true
                     graph.catalog.value = graph.catalog.value.copy(comparisonProgress = graph.catalog.value.comparisonProgress +
                         (id to CartComparisonProgress(id, if (total) CartComparisonStep.TOTAL_READ else CartComparisonStep.REVIEW_UNAVAILABLE)))
@@ -630,7 +633,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                         // The source basket is only read, never edited: still show its total.
                         keetaStopped(id).also { keetaFailure = it }
                     } else {
-                        check(graph.catalog.value.error == null) { graph.catalog.value.error.orEmpty() }
+                        check(graph.catalog.value.error == null) { bothStopped(graph.catalog.value.error.orEmpty(), keetaFailure) }
                         null
                     }
                 }, unchanged = { graph.draft.value?.fingerprint == verified.cart.fingerprint }, progress = { progress ->
@@ -696,12 +699,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 frame = await { keetaMenu.basketDrawer(it) }
             }
             val observed = keetaBasket.evidence(frame)
-                ?: error("تعذرت قراءة سلة كيتا السابقة كاملة؛ لم أضف فوقها.")
+                ?: error(BasketMutationJournal.KEETA_UNREADABLE)
             // Preliminary identity only. Review admission still needs fresh Keeta group acknowledgement below.
             // A cart holding only some of the meals is never completed: that would need a partial-add proof.
-            check(meal.resolve(observed, System.currentTimeMillis()) != null) {
-                "سلة كيتا السابقة تختلف عن طلبك؛ لم أضف فوقها أو أكرر الوجبة."
-            }
+            check(meal.resolve(observed, System.currentTimeMillis()) != null) { BasketMutationJournal.KEETA_DIFFERENT }
             closeKeetaReadSheet(frame, meal)
             frame = await { keetaMenu.menu(it) }
             observed

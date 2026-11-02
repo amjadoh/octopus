@@ -60,9 +60,9 @@ class MultipleChoiceMealsTest {
         val five = (1..5).map { "وجبة $it" }
         val many = BasketEvidence(ProviderId.HUNGERSTATION, restaurant, five.map { line(it, firstValues, 1000) }, 5000, true)
         assertNull(SingleChoiceMeal.create(many, five.associateWith { schema(it, firstValues) }, 1500))
-        // Each meal is read in turn from the unchanged cart; two meals get two 30 s windows, not more.
-        assertNotNull(SingleChoiceMeal.create(source, schemas, 60_999))
-        assertNull(SingleChoiceMeal.create(source, schemas, 61_001))
+        // Each meal is read in turn from the unchanged cart; two meals get two 45 s windows, not more.
+        assertNotNull(SingleChoiceMeal.create(source, schemas, 90_999))
+        assertNull(SingleChoiceMeal.create(source, schemas, 91_001))
     }
 
     @Test fun hungerStationOpensOnlyTheNamedMealRow() {

@@ -14,6 +14,9 @@ class BasketMutationJournal(private val store: BasketJournalStore) {
     companion object {
         const val UNRESOLVED = "لم تُحسم نتيجة تعديل سابق؛ يجب قراءة السلة كاملة قبل أي إضافة أو تعديل جديد."
         const val HIDDEN = "سبق وجود سلة لهذا المطعم لكن محتوياتها غير ظاهرة الآن؛ لم أعتبرها فارغة ولم أكرر الإضافة."
+        /** A previous Keeta cart that cannot be read fully, or holds other or only some of the requested meals. */
+        const val KEETA_UNREADABLE = "تعذرت قراءة سلة كيتا السابقة كاملة؛ لم أضف فوقها. أفرغ سلة كيتا لهذا المطعم ثم اضغط «أفرغت سلة كيتا»."
+        const val KEETA_DIFFERENT = "سلة كيتا السابقة تختلف عن طلبك؛ لم أضف فوقها أو أكرر الوجبة. أفرغ سلة كيتا لهذا المطعم ثم اضغط «أفرغت سلة كيتا»."
         const val LEGACY_UNRESOLVED = "يوجد سجل قديم لسلة لم تُطابق هويتها بعد؛ يجب قراءة السلة السابقة كاملة قبل السماح بإضافة أولى جديدة."
     }
     private fun hash(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))

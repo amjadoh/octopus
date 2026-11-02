@@ -22,7 +22,7 @@ class SingleChoiceMeal private constructor(
     }
 
     fun resolve(evidence: BasketEvidence, now: Long): BasketEvidence? {
-        if (now < at || now - at > 600_000 || !evidence.complete ||
+        if (now < at || now - at > 1_200_000 || !evidence.complete ||
             IdentityText.clean(evidence.restaurant.orEmpty()) != IdentityText.clean(cart.restaurant) ||
             evidence.lines.size != cart.items.size || evidence.lines.map { it.name }.toSet() != valuesByTitle.keys) return null
         for (row in evidence.lines) {
@@ -50,7 +50,7 @@ class SingleChoiceMeal private constructor(
                 evidence.lines.map { it.name }.toSet() != products.keys) return null
             val restaurant = evidence.restaurant ?: return null
             // Meals are read one after another from the unchanged cart; each read gets its own 30 s window.
-            val window = 30_000L * evidence.lines.size
+            val window = 45_000L * evidence.lines.size
             val items = evidence.lines.map { row -> item(row, products.getValue(row.name), restaurant, now, window) ?: return null }
             val sum = runCatching { evidence.lines.fold(0L) { total, row -> Math.addExact(total, row.lineAmount!!) } }.getOrNull()
             if (sum == null || evidence.subtotal != sum) return null
