@@ -486,6 +486,18 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         return cart
     }
 
+    /** Takes the Keeta step's error off the screen so the HungerStation read can start, and keeps it. */
+    private fun keetaStopped(id: ProviderId): String {
+        val message = graph.catalog.value.error.orEmpty()
+        graph.catalog.value = graph.catalog.value.copy(error = null, comparisonProgress = graph.catalog.value.comparisonProgress +
+            (id to CartComparisonProgress(id, CartComparisonStep.PREPARATION_FAILED, message)))
+        return message
+    }
+
+    private fun keetaOnlyFailure(keeta: String): String =
+        if (graph.catalog.value.finalTotals[ProviderId.HUNGERSTATION] != null) "قرأت سعر هنقرستيشن، وتوقفت كيتا: $keeta"
+        else "توقفت كيتا: $keeta"
+
     private fun startImportedComparison(desired: CanonicalCart, evidence: BasketEvidence) {
         val epoch = ++comparisonEpoch
         graph.catalog.value = graph.catalog.value.copy(comparisonRunning = true, finalTotals = emptyMap(),
@@ -493,6 +505,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         comparisonJob = graph.scope.launch(start = CoroutineStart.LAZY) {
             try {
                 // The imported source is already known. Prepare Keeta before reading source review.
+                var keetaFailure: String? = null
                 for (id in listOf(ProviderId.KEETA, ProviderId.HUNGERSTATION)) {
                     currentCoroutineContext().ensureActive()
                     check(graph.draft.value?.fingerprint == desired.fingerprint) { "تغير الطلب؛ توقفت المقارنة." }
@@ -507,11 +520,17 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     job?.join()
                     currentCoroutineContext().ensureActive()
                     stepInterrupted?.let { throw CancellationException(it) }
+                    if (id == ProviderId.KEETA && graph.catalog.value.error != null) {
+                        // The source basket is only read, never edited: still show its total.
+                        keetaFailure = keetaStopped(id)
+                        continue
+                    }
                     check(graph.catalog.value.error == null) { graph.catalog.value.error.orEmpty() }
                     val total = graph.catalog.value.finalTotals[id]?.fresh(desired, System.currentTimeMillis()) == true
                     graph.catalog.value = graph.catalog.value.copy(comparisonProgress = graph.catalog.value.comparisonProgress +
                         (id to CartComparisonProgress(id, if (total) CartComparisonStep.TOTAL_READ else CartComparisonStep.REVIEW_UNAVAILABLE)))
                 }
+                keetaFailure?.let { error(keetaOnlyFailure(it)) }
                 check(ProviderId.entries.all { graph.catalog.value.finalTotals[it]?.fresh(desired, System.currentTimeMillis()) == true }) {
                     "لم تكتمل قراءة الإجماليين؛ لا توجد مقارنة نهائية بعد."
                 }
@@ -580,6 +599,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 currentCoroutineContext().ensureActive()
                 check(graph.catalog.value.error == null) { graph.catalog.value.error.orEmpty() }
                 val verified = checkNotNull(meal) { "لم تكتمل قراءة خيارات الوجبة." }
+                var keetaFailure: String? = null
                 CartComparisonFlow().run(readMenus = {}, available = { true }, prepare = { id ->
                     check(begin(operation = CatalogOperation.BUILD_CART, timeoutMillis = 600_000) {
                         if (id == ProviderId.KEETA) prepareConfiguredKeeta(verified)
@@ -591,13 +611,19 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     job?.join()
                     currentCoroutineContext().ensureActive()
                     stepInterrupted?.let { throw CancellationException(it) }
-                    check(graph.catalog.value.error == null) { graph.catalog.value.error.orEmpty() }
-                    null
+                    if (id == ProviderId.KEETA && graph.catalog.value.error != null) {
+                        // The source basket is only read, never edited: still show its total.
+                        keetaStopped(id).also { keetaFailure = it }
+                    } else {
+                        check(graph.catalog.value.error == null) { graph.catalog.value.error.orEmpty() }
+                        null
+                    }
                 }, unchanged = { graph.draft.value?.fingerprint == verified.cart.fingerprint }, progress = { progress ->
                     graph.catalog.value = graph.catalog.value.copy(comparisonProgress = graph.catalog.value.comparisonProgress +
                         (progress.provider to progress))
                 }, totalAvailable = { id -> graph.catalog.value.finalTotals[id]?.fresh(verified.cart, System.currentTimeMillis()) == true },
                     providerOrder = listOf(ProviderId.KEETA, ProviderId.HUNGERSTATION))
+                keetaFailure?.let { error(keetaOnlyFailure(it)) }
                 check(ProviderId.entries.all { graph.catalog.value.finalTotals[it]?.fresh(verified.cart, System.currentTimeMillis()) == true }) {
                     "لم تكتمل قراءة الإجماليين؛ لا توجد مقارنة نهائية بعد."
                 }
@@ -1463,7 +1489,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private suspend fun ensureKeetaPlainProduct(initial:CatalogFrame):CatalogFrame {
         if (keetaMenu.productBody(initial) != null) return initial
         val session = KeetaOptionalPlainSession.start(initial,keetaMenu,System.currentTimeMillis())
-            ?: error("خيارات كيتا تحتاج قارئًا موثقًا لهذا المنتج؛ لم أضف.")
+            ?: error("«${keetaMenu.title}» في كيتا له صفحة خيارات أو إضافات لم يُتحقق منها بعد؛ لم أضفه.")
         var frame = initial
         repeat(12) {
             if (keetaMenu.acceptOptionalPlain(frame,session,System.currentTimeMillis())) return frame
