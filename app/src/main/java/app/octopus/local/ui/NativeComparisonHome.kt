@@ -57,8 +57,9 @@ import java.math.BigDecimal
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
                 Column(Modifier.padding(16.dp)) {
                     Text(error, color = MaterialTheme.colorScheme.error)
-                    if (!busy && cart != null && error in setOf(BasketMutationJournal.HIDDEN,
-                            BasketMutationJournal.UNRESOLVED, BasketMutationJournal.LEGACY_UNRESOLVED)) {
+                    // The message may carry the HungerStation result in front of the Keeta reason.
+                    if (!busy && cart != null && setOf(BasketMutationJournal.HIDDEN,
+                            BasketMutationJournal.UNRESOLVED, BasketMutationJournal.LEGACY_UNRESOLVED).any { error.endsWith(it) }) {
                         TextButton(onClick = { clearedCart = cart }) { Text("أفرغت سلة كيتا وأريد البدء من جديد") }
                     }
                 }
