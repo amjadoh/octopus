@@ -127,7 +127,7 @@ fun CatalogScreen(graph: AppGraph, onSetup: () -> Unit, onProviders: () -> Unit,
             Card(colors = CardDefaults.cardColors(containerColor = OctopusPalette.Soft), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Text(if (state.menu == null) "جهّز في هنقرستيشن، وقارن هنا" else "اختر هنا، وقارن عندما يكتمل طلبك", fontWeight = FontWeight.Bold)
-                    Text("اختر عنوانك والمطعم ووجباتك في هنقرستيشن. افتح السلة واضغط «قارن» لنقل الطلب إلى كيتا والعودة بالنتيجة. يدعم صنفًا أو صنفين دون إضافات، أو وجبة واحدة بخيارات يُختار واحد منها في كل مجموعة. راجع تطابق عنوان التطبيقين.",
+                    Text("اختر عنوانك والمطعم ووجباتك في هنقرستيشن. افتح السلة واضغط «قارن» لنقل الطلب إلى كيتا والعودة بالنتيجة. يدعم صنفًا أو صنفين دون إضافات، أو حتى 4 وجبات بخيارات مختلفة الأسماء، كل وجبة بكمية واحدة ويُختار خيار واحد في كل مجموعة. راجع تطابق عنوان التطبيقين.",
                         fontSize = 12.sp, color = OctopusPalette.Muted)
                     Button(onClick = { requestManualReading(nativeCart = true) },
                         enabled = !state.busy && !state.manualCaptureActive && ready,

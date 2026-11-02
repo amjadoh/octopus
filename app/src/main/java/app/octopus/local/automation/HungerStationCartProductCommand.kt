@@ -14,13 +14,18 @@ class HungerStationCartProductCommand private constructor(
             current == frame && node == target && used.compareAndSet(false, true)
 
     companion object {
-        fun create(frame: CatalogFrame, source: BasketEvidence, now: Long): HungerStationCartProductCommand? {
-            val row = source.lines.singleOrNull() ?: return null
-            if (!frame.complete || !source.complete || source.provider != ProviderId.HUNGERSTATION ||
+        fun create(frame: CatalogFrame, source: BasketEvidence, now: Long): HungerStationCartProductCommand? =
+            source.lines.singleOrNull()?.let { create(frame, source, it.name, now) }
+
+        /** Several meals: open only the row whose first line is exactly [name]. */
+        fun create(frame: CatalogFrame, source: BasketEvidence, name: String, now: Long): HungerStationCartProductCommand? {
+            val row = source.lines.singleOrNull { it.name == name } ?: return null
+            if (source.lines.map { it.name }.distinct().size != source.lines.size || !frame.complete || !source.complete || source.provider != ProviderId.HUNGERSTATION ||
                 row.quantity != 1 || row.choices.isEmpty() || frame.nodes.any { it.enteredText } ||
                 HungerStationCatalog.screen(frame) != CatalogScreen.CART ||
                 BasketEvidenceReader.hungerStation(frame, true) != source) return null
-            val target = frame.nodes.singleOrNull { it.id == "FlutterCart_cartItem" } ?: return null
+            val target = frame.nodes.filter { it.id == "FlutterCart_cartItem" }
+                .singleOrNull { it.label.lineSequence().first().trim() == row.name } ?: return null
             if (!target.enabled || !target.clickable || target.editable || target.omittedText ||
                 target.label.lineSequence().first().trim() != row.name ||
                 target.label.lineSequence().none { it.trim() == "تعديل" }) return null

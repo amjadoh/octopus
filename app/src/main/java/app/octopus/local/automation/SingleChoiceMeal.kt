@@ -3,32 +3,66 @@ package app.octopus.local.automation
 import app.octopus.local.domain.*
 import app.octopus.local.providers.*
 
-/** A missing count is resolved only from a fresh, complete, single-choice product schema. */
+/** A missing count is resolved only from a fresh, complete, single-choice product schema.
+ * Several meals are allowed when each is a distinct cart row of quantity one. */
 class SingleChoiceMeal private constructor(
     val cart: CanonicalCart,
     val source: BasketEvidence,
     private val at: Long,
 ) {
-    val values: Set<String> = cart.items.single().options.map { it.value }.toSet()
+    /** Required choices per meal row, keyed by the exact cart row name. */
+    val valuesByTitle: Map<String, Set<String>> = cart.items.associate { item -> item.name to item.options.map { it.value }.toSet() }
+    /** Every requested choice across all meals; used only to retain screen labels. */
+    val values: Set<String> = valuesByTitle.values.flatten().toSet()
+
+    /** The first [count] meals, used to verify the target cart between single adds. */
+    fun prefix(count: Int): SingleChoiceMeal {
+        require(count in 1..cart.items.size)
+        return if (count == cart.items.size) this else SingleChoiceMeal(cart.copy(items = cart.items.take(count)), source, at)
+    }
 
     fun resolve(evidence: BasketEvidence, now: Long): BasketEvidence? {
-        if (now < at || now - at > 600_000 || !evidence.complete ||
-            IdentityText.clean(evidence.restaurant.orEmpty()) != IdentityText.clean(cart.restaurant)) return null
-        val row = evidence.lines.singleOrNull() ?: return null
-        if (row.name != cart.items.single().name || row.quantity != 1 || row.lineAmount == null || row.lineAmount < 0 ||
-            evidence.subtotal != row.lineAmount || row.choices.size != values.size ||
-            row.choices.map { it.value }.toSet() != values || row.choices.any { it.quantity != null && it.quantity != 1 }) return null
-        return evidence.copy(lines = listOf(row.copy(choices = row.choices.map { it.copy(quantity = 1) })))
+        if (now < at || now - at > 1_200_000 || !evidence.complete ||
+            IdentityText.clean(evidence.restaurant.orEmpty()) != IdentityText.clean(cart.restaurant) ||
+            evidence.lines.size != cart.items.size || evidence.lines.map { it.name }.toSet() != valuesByTitle.keys) return null
+        for (row in evidence.lines) {
+            val wanted = valuesByTitle.getValue(row.name)
+            if (row.quantity != 1 || row.lineAmount == null || row.lineAmount < 0 || row.choices.size != wanted.size ||
+                row.choices.map { it.value }.toSet() != wanted || row.choices.any { it.quantity != null && it.quantity != 1 }) return null
+        }
+        val sum = runCatching { evidence.lines.fold(0L) { total, row -> Math.addExact(total, row.lineAmount!!) } }.getOrNull()
+        if (sum == null || evidence.subtotal != sum) return null
+        return evidence.copy(lines = evidence.lines.map { row -> row.copy(choices = row.choices.map { it.copy(quantity = 1) }) })
     }
 
     companion object {
+        const val MAX_MEALS = 4
+
         fun create(evidence: BasketEvidence, product: ConfiguredProduct, now: Long): SingleChoiceMeal? {
-            if (evidence.provider != ProviderId.HUNGERSTATION || !evidence.complete ||
-                !product.optionsComplete || product.product.size != null ||
-                product.source.provider != ProviderId.HUNGERSTATION ||
-                product.source.providerVersion != HungerStationCatalog.TESTED_VERSION || !product.source.fresh(now, 30_000) ||
-                evidence.restaurant != product.restaurant) return null
             val row = evidence.lines.singleOrNull() ?: return null
+            return create(evidence, mapOf(row.name to product), now)
+        }
+
+        /** [products] maps every cart row name to the schema read from that row's own edit page. */
+        fun create(evidence: BasketEvidence, products: Map<String, ConfiguredProduct>, now: Long): SingleChoiceMeal? {
+            if (evidence.provider != ProviderId.HUNGERSTATION || !evidence.complete || evidence.lines.size !in 1..MAX_MEALS ||
+                evidence.lines.map { it.name }.distinct().size != evidence.lines.size ||
+                evidence.lines.map { it.name }.toSet() != products.keys) return null
+            val restaurant = evidence.restaurant ?: return null
+            // Meals are read one after another from the unchanged cart; each read gets its own 30 s window.
+            val window = 45_000L * evidence.lines.size
+            val items = evidence.lines.map { row -> item(row, products.getValue(row.name), restaurant, now, window) ?: return null }
+            val sum = runCatching { evidence.lines.fold(0L) { total, row -> Math.addExact(total, row.lineAmount!!) } }.getOrNull()
+            if (sum == null || evidence.subtotal != sum) return null
+            val cart = CanonicalCart(restaurant, null, items)
+            return SingleChoiceMeal(cart, evidence, now).takeIf { it.resolve(evidence, now) != null }
+        }
+
+        private fun item(row: BasketLineEvidence, product: ConfiguredProduct, restaurant: String, now: Long, window: Long): CanonicalItem? {
+            if (!product.optionsComplete || product.product.size != null ||
+                product.source.provider != ProviderId.HUNGERSTATION ||
+                product.source.providerVersion != HungerStationCatalog.TESTED_VERSION || !product.source.fresh(now, window) ||
+                restaurant != product.restaurant) return null
             val allGroups = product.product.groups
             val variant = if (row.name == product.product.title) null else allGroups.singleOrNull { g ->
                 g.title == "اختر العنصر" && g.minimum == 1 && g.maximum == 1 &&
@@ -36,7 +70,7 @@ class SingleChoiceMeal private constructor(
             } ?: if (row.name != product.product.title) return null else null
             val groups = allGroups.filter { it != variant && it.minimum > 0 }
             if (row.quantity != 1 || row.lineAmount == null || row.lineAmount < 0 ||
-                evidence.subtotal != row.lineAmount || groups.isEmpty() || groups.size > 12 ||
+                groups.isEmpty() || groups.size > 12 ||
                 groups.any { it.minimum != 1 || it.maximum != 1 } || row.choices.size != groups.size ||
                 row.choices.any { it.quantity != null && it.quantity != 1 } ||
                 row.choices.map { it.value }.distinct().size != row.choices.size) return null
@@ -49,9 +83,7 @@ class SingleChoiceMeal private constructor(
                 CartOption(group.title, choice.value)
             }
             if (used.size != groups.size) return null
-            val cart = CanonicalCart(evidence.restaurant ?: return null, null,
-                listOf(CanonicalItem(row.name, null, options, 1)))
-            return SingleChoiceMeal(cart, evidence, now).takeIf { it.resolve(evidence, now) != null }
+            return CanonicalItem(row.name, null, options, 1)
         }
     }
 }
