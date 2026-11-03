@@ -186,6 +186,8 @@ class KeetaMealChoicesTest {
         val f=frame()
         val step=session.next(f,reader) as KeetaMealChoices.Step.Select
         assertTrue(session.consume(step,f,reader))
+        // An unacknowledged tap is re-read a few times (Keeta draws "تم" late), never re-tapped, then blocks.
+        repeat(5) { assertEquals(KeetaMealChoices.Step.Wait,session.next(f,reader)) }
         assertEquals(KeetaMealChoices.Step.Blocked,session.next(f,reader))
         session.endObserved()
         assertFalse(session.ready)

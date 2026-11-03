@@ -61,7 +61,16 @@ enum class KeetaSearchAction { OPEN_SEARCH, EDIT_QUERY, ENTER_QUERY, SUBMIT_QUER
 open class KeetaMenuReader(val restaurant: String, val title: String, val VERSION: String = "3.12.501",
     val requestedChoices: Set<String> = emptySet(),
     /** Other meal names of the same configured request; a drawer row may prefix its choices with one. */
-    val otherMealTitles: Set<String> = emptySet()) {
+    val otherMealTitles: Set<String> = emptySet(),
+    /** The user's matches for this restaurant and meal (LearnedNames): Keeta-only choices to pick, and
+     * Keeta names of HungerStation choices. Looked up by name, so every reader of this meal agrees. */
+    learned: LearnedNames.Choices = LearnedNames.choicesFor(restaurant, title),
+    /** The Keeta name the user chose for this meal, when it differs (LearnedNames). */
+    val keetaTitle: String? = LearnedNames.shared?.keetaMeal(restaurant, title)) {
+    val extraChoices: Set<String> = if (requestedChoices.isEmpty()) emptySet() else learned.extras - requestedChoices
+    val choiceAliases: Map<String, String> = learned.aliases.filter { (keeta, hunger) -> hunger in requestedChoices && keeta !in requestedChoices }
+    /** Requested choices the user agreed this Keeta meal has no place for: read as present in its cart row. */
+    val ignoredChoices: Set<String> = learned.ignored intersect requestedChoices
     companion object {
         /** Fixed public labels of the Keeta cart-drawer savings section (cart over its delivery-discount threshold). */
         const val SAVINGS_TOTAL = "إجمالي التوفير"
@@ -97,12 +106,18 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
     fun configuredChoices(text: String): List<BasketChoiceEvidence>? {
         if (requestedChoices.isEmpty()) return null
         val displayed = text.split(',', '،').map(String::trim)
-        fun named(parts: List<String>): List<BasketChoiceEvidence>? {
-            val names = parts.map { if (it in requestedChoices) it else KeetaNameText.requestedChoice(it, requestedChoices) ?: return null }
-            if (names.isEmpty() || names.distinct().size != names.size) return null
-            return names.map { BasketChoiceEvidence(it, null) }
+        fun named(all: List<String>): List<BasketChoiceEvidence>? {
+            // A Keeta-only choice the user picked is not part of the HungerStation request.
+            val parts = all.filter { it !in extraChoices }
+            val names = parts.map { if (it in requestedChoices) it else choiceAliases[it]
+                ?: KeetaNameText.requestedChoice(it, requestedChoices) ?: return null }
+            if (names.isEmpty() || names.distinct().size != names.size || names.any { it in ignoredChoices }) return null
+            return (names + ignoredChoices).map { BasketChoiceEvidence(it, null) }
         }
-        val titled = (displayed.firstOrNull() == title || displayed.firstOrNull() in otherMealTitles) && displayed.size > 1
+        val first = displayed.firstOrNull()
+        // A drawer row starts with the meal's name: its HungerStation name, or the Keeta name the user chose.
+        val titled = (first == title || first in otherMealTitles ||
+            (keetaTitle != null && first != null && KeetaNameText.loose(first) == KeetaNameText.loose(keetaTitle))) && displayed.size > 1
         if (!titled) return named(displayed)
         // S22 Popeyes: the first choice can carry the meal's own name ("ساندويتش ديلوكس، بيبسي، …"). Keep it only
         // when it names a requested choice and the whole list then reads; otherwise it is the title prefix (KFC).
@@ -111,7 +126,8 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
     }
     fun functionalLabel(raw: String, resourceId: String = ""): String {
         val text = raw.replace(Regex("[\\u200e\\u200f\\u061c\\u202a-\\u202e\\u2066-\\u2069\\ufeff]"), "").trim()
-        if (requestedChoices.isNotEmpty() && (text in requestedChoices ||
+        if (requestedChoices.isNotEmpty()) choiceAliases[text]?.let { return it }
+        if (requestedChoices.isNotEmpty() && (text in requestedChoices || text in extraChoices ||
                 text in setOf("تفاصيل العرض الترويجي", "يتم تأكيد المبلغ النهائي عند صفحة إتمام الدفع", "الإجمالي الفرعي", "الخصم", "الأصناف الترويجية", "الإجمالي") ||
                 text in setOf("مطلوب", "اختر 1", "اختر ١", "تم", "اختياري") ||
                 configuredChoices(text) != null)) return text
