@@ -352,6 +352,18 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         return true
     }
 
+    /** After a comparison: HungerStation's launcher reopens its home, so navigate (read-only) back to the
+     * compared cart and leave it on screen. Nothing is added, removed, confirmed or paid. */
+    fun openComparedHungerCart(): Boolean {
+        if (nativeCompareStarting || job?.isActive == true || comparisonJob?.isActive == true || graph.session.value.active) return false
+        val source = latestNativeCart ?: rememberedNativeCart() ?: return false
+        return begin(returnOnSuccess = false, operation = CatalogOperation.OPEN_PREPARED_CART) {
+            reopenNativeSourceBasket(source, acceptChanged = true)
+            graph.catalog.value = graph.catalog.value.copy(
+                message = "فُتحت سلتك في هنقرستيشن. التحكم الآن لك؛ راجع الإجمالي وأكمل الدفع بنفسك.")
+        }
+    }
+
     private val nativeCartFile get() = service.filesDir.resolve("last-native-cart.json")
 
     private fun rememberNativeCart(cart: BasketEvidence) {
