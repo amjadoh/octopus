@@ -2,10 +2,20 @@ package app.octopus.local.providers
 
 import app.octopus.local.domain.CanonicalCart
 import app.octopus.local.domain.CanonicalItem
+import app.octopus.local.pricing.MoneyParser
 
 /** Required radio groups in the current product sheet. No coordinate matching; names only through KeetaNameText. */
-class KeetaMealChoices(val cart: CanonicalCart, val item: CanonicalItem = cart.items.single()) {
+class KeetaMealChoices(val cart: CanonicalCart, val item: CanonicalItem = cart.items.single(),
+    /** Keeta-only choices the user picked for this meal (LearnedNames); selected like requested ones. */
+    private val extras: Set<String> = emptySet(),
+    /** HungerStation choices the user agreed this Keeta meal has no place for (LearnedNames). */
+    private val ignored: Set<String> = emptySet()) {
     val values = item.options.map { it.value }.toSet()
+    private val wanted = values - ignored + extras
+    /** Required groups seen with no row named like a wanted choice: heading and its rows' raw names. */
+    val unmatched = linkedMapOf<String, List<String>>()
+    /** Raw (pre-redaction) labels of the frame being read; only for asking the user about [unmatched]. */
+    private var raw: Map<Int, String> = emptyMap()
     private val completed = mutableSetOf<String>()
     private val singleChoiceSeen = mutableSetOf<String>()
     private val requiredGroups = mutableMapOf<String, String?>()
@@ -14,12 +24,22 @@ class KeetaMealChoices(val cart: CanonicalCart, val item: CanonicalItem = cart.i
     private var failed = false
     private var reachedEnd = false
     private var readyFrame: CatalogFrame? = null
-    val ready: Boolean get() = !failed && pending == null && incompleteHeaders.isEmpty() && reachedEnd && completed == values &&
-        requiredGroups.size == values.size && requiredGroups.values.toSet() == values
+    val ready: Boolean get() = !failed && pending == null && incompleteHeaders.isEmpty() && reachedEnd && completed == wanted &&
+        requiredGroups.size == wanted.size && requiredGroups.values.toSet() == wanted
+    /** HungerStation choices not yet found in Keeta. */
+    val missing: Set<String> get() = values - ignored - requiredGroups.values.filterNotNull().toSet()
+    /** Device-tools diagnostics only: why the session stopped (no labels beyond group keys and names). */
+    fun debugState(): String = "failed=$failed pending=$pending end=$reachedEnd incomplete=$incompleteHeaders " +
+        "required=$requiredGroups completed=$completed wanted=$wanted unmatched=$unmatched lastBlock=$lastBlock"
+    private var lastBlock = ""
+    private var pendingWaits = 0
+    /** The sheet's end was read: every Keeta required group has been seen. */
+    val endSeen: Boolean get() = reachedEnd
 
     init {
         require(item in cart.items && item.quantity == 1 && item.size == null && item.note.isNullOrBlank() &&
-            values.size in 1..12 && values.size == item.options.size && item.options.all { it.quantity == 1 })
+            values.size in 1..12 && values.size == item.options.size && item.options.all { it.quantity == 1 } &&
+            extras.none { it in values } && ignored.all { it in values } && ((values - ignored).isNotEmpty() || extras.isNotEmpty()))
     }
 
     data class Group(val key: String, val value: String?, val done: Boolean, val target: CatalogNode?, val rows: Int = 0)
@@ -27,38 +47,46 @@ class KeetaMealChoices(val cart: CanonicalCart, val item: CanonicalItem = cart.i
         data class Select(val value: String, val target: CatalogNode) : Step
         data object Scroll : Step
         data object VerifyPrevious : Step
+        /** The tapped row shows selected, but its group's "تم" is not drawn yet: read again shortly. */
+        data object Wait : Step
         data object Ready : Step
         data object Blocked : Step
     }
 
-    fun next(frame: CatalogFrame, menu: KeetaMenuReader): Step {
+    fun next(frame: CatalogFrame, menu: KeetaMenuReader, rawLabels: Map<Int, String> = emptyMap()): Step {
+        raw = rawLabels
         if (failed || !frame.complete || menu.title != item.name || menu.restaurant != cart.restaurant ||
-            !menu.product(frame) || frame.nodes.any { it.enteredText }) return Step.Blocked
-        val groups = groups(frame) ?: return Step.Blocked.also { failed = true }
+            !menu.product(frame) || frame.nodes.any { it.enteredText }) return Step.Blocked.also { lastBlock = "entry" }
+        val groups = groups(frame) ?: return Step.Blocked.also { lastBlock = "b1"; failed = true }
         for (group in groups) {
             if (!group.done) singleChoiceSeen += group.key
             else if (group.key !in singleChoiceSeen) {
                 // Keeta preselects a required group with one row; that row is then the only possible selection.
-                if (group.rows != 1 || group.value == null) return Step.Blocked.also { failed = true }
+                if (group.rows != 1 || group.value == null) return Step.Blocked.also { lastBlock = "b2"; failed = true }
                 singleChoiceSeen += group.key; completed += group.value
             }
             val previous = requiredGroups[group.key]
-            if (previous != null && group.value != null && previous != group.value) return Step.Blocked.also { failed = true }
+            if (previous != null && group.value != null && previous != group.value) return Step.Blocked.also { lastBlock = "b3"; failed = true }
             requiredGroups[group.key] = group.value ?: previous
         }
-        if (requiredGroups.size > values.size) return Step.Blocked.also { failed = true }
+        if (requiredGroups.size > wanted.size) return Step.Blocked.also { lastBlock = "b4"; failed = true }
         pending?.let { value ->
             val observed = groups.singleOrNull { it.value == value }
             if (observed == null) return Step.VerifyPrevious
-            if (!observed.done) return Step.Blocked.also { failed = true }
+            if (!observed.done) {
+                // S22 Hardee's: Keeta redraws the group's "تم" after the 350 ms re-read; wait up to ~2 s, never re-tap.
+                if (++pendingWaits <= 5) return Step.Wait
+                return Step.Blocked.also { lastBlock = "b5"; failed = true }
+            }
             completed += value
             pending = null
+            pendingWaits = 0
         }
         groups.firstOrNull { it.value != null && it.value !in completed && it.target != null }?.let {
             return Step.Select(it.value!!, it.target!!)
         }
         return if (ready) Step.Ready.also { readyFrame = frame }
-            else if (reachedEnd) Step.Blocked.also { failed = true } else Step.Scroll
+            else if (reachedEnd) Step.Blocked.also { lastBlock = "end"; failed = true } else Step.Scroll
     }
 
     /** Called before one dispatch. An uncertain dispatch is never retried. */
@@ -101,7 +129,7 @@ class KeetaMealChoices(val cart: CanonicalCart, val item: CanonicalItem = cart.i
         val markers = frame.nodes.filter { it.label == "مطلوب" }
         // Optional ("اختياري") groups are left untouched; they have no "مطلوب" marker, and the cart read after
         // the add still rejects any extra row. Requested names may be written differently (KeetaNameText).
-        fun named(label: String): String? = clean(label).let { if (it in values) it else KeetaNameText.requestedChoice(it, values) }
+        fun named(label: String): String? = clean(label).let { if (it in wanted) it else KeetaNameText.requestedChoice(it, values) }
         for (marker in markers) {
             var parent = marker
             var found: Group? = null
@@ -133,6 +161,13 @@ class KeetaMealChoices(val cart: CanonicalCart, val item: CanonicalItem = cart.i
                             val key = "$title|$firstRow"
                             val matched = matches.singleOrNull()
                             if (matched == null) {
+                                // Remember the rows' own names (raw, this frame only) so the user can pick one.
+                                val names = rows.mapNotNull { row -> frame.descendants(row.index)
+                                    .firstOrNull { it.className == "android.widget.TextView" && (raw[it.index] ?: clean(it.label)).isNotBlank() &&
+                                        MoneyParser.parse(raw[it.index] ?: it.label) == null }
+                                    ?.let { raw[it.index] ?: clean(it.label) } }
+                                if (names.size == rows.size && names.distinct().size == names.size && names.size in 1..20)
+                                    unmatched.putIfAbsent(title, names)
                                 found = Group(key, null, status.single().label == "تم", null, rows.size)
                                 return@repeat
                             }

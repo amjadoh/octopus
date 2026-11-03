@@ -625,7 +625,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
 
     private fun startImportedComparison(desired: CanonicalCart, evidence: BasketEvidence) {
         val epoch = ++comparisonEpoch
-        graph.catalog.value = graph.catalog.value.copy(comparisonRunning = true, mealQuestion = null, finalTotals = emptyMap(),
+        graph.catalog.value = graph.catalog.value.copy(comparisonRunning = true, mealQuestion = null, choiceQuestion = null, finalTotals = emptyMap(),
             comparisonProgress = emptyMap(), previews = emptyList(), error = null)
         comparisonJob = graph.scope.launch(start = CoroutineStart.LAZY) {
             try {
@@ -680,7 +680,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private fun startConfiguredComparison(original: BasketEvidence, probe: CanonicalCart) {
         val epoch = ++comparisonEpoch
         val previousFingerprint = graph.draft.value?.fingerprint
-        graph.catalog.value = graph.catalog.value.copy(comparisonRunning = true, mealQuestion = null, finalTotals = emptyMap(),
+        graph.catalog.value = graph.catalog.value.copy(comparisonRunning = true, mealQuestion = null, choiceQuestion = null, finalTotals = emptyMap(),
             comparisonProgress = emptyMap(), previews = emptyList(), error = null)
         comparisonJob = graph.scope.launch(start = CoroutineStart.LAZY) {
             var meal: SingleChoiceMeal? = null
@@ -837,15 +837,29 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             phase = "فتح الوجبة المطابقة في كيتا$counter"
             openKeetaPreviewProduct(frame)
             frame = awaitKeetaProduct()
-            val selection = KeetaMealChoices(desired, item)
+            val selection = KeetaMealChoices(desired, item, keetaMenu.extraChoices, keetaMenu.ignoredChoices)
             var complete = false
             for (attempt in 0 until 60) {
                 checkSession()
-                when (val step = selection.next(frame, keetaMenu)) {
+                when (val step = selection.next(frame, keetaMenu, lastKeetaRawLabels)) {
                     KeetaMealChoices.Step.Blocked -> {
                         if (BuildConfig.VERSION_NAME.endsWith("-device-tools")) runCatching {
                             service.filesDir.resolve("keeta-choice-stop-frame.json")
                                 .writeText(com.google.gson.Gson().toJson(frame))
+                            service.filesDir.resolve("keeta-choice-stop-state.txt").writeText(selection.debugState() +
+                                "\nraw=" + lastKeetaRawLabels.values.joinToString("|"))
+                        }
+                        // A required Keeta group named nothing like the HungerStation choices: ask the user once.
+                        selection.unmatched.entries.firstOrNull()?.let { (group, rows) ->
+                            graph.catalog.value = graph.catalog.value.copy(choiceQuestion =
+                                ChoiceQuestion(keetaMenu.restaurant, item.name, group, rows, selection.missing.toList()))
+                            error("في كيتا اختيار «$group» ما عرفت وش يقابله؛ اختر تحت.")
+                        }
+                        // Every Keeta group read, yet some HungerStation choices have no place in this Keeta meal.
+                        if (selection.endSeen && selection.missing.isNotEmpty()) {
+                            graph.catalog.value = graph.catalog.value.copy(choiceQuestion =
+                                ChoiceQuestion(keetaMenu.restaurant, item.name, "", emptyList(), selection.missing.toList()))
+                            error("بعض اختياراتك في هنقرستيشن ما لها مكان في وجبة كيتا؛ شوف تحت.")
                         }
                         error("خيارات كيتا غير مطابقة أو غير مكتملة؛ لم أضف الوجبة.")
                     }
@@ -855,6 +869,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                         keetaBasketAction { current -> step.target.takeIf { current == frame && selection.consume(step, current, keetaMenu) } }
                         delay(350)
                     }
+                    KeetaMealChoices.Step.Wait -> delay(400)
                     KeetaMealChoices.Step.Scroll, KeetaMealChoices.Step.VerifyPrevious -> {
                         val backward = step == KeetaMealChoices.Step.VerifyPrevious
                         val body = keetaMenu.configuredProductBody(frame)?.takeIf { it.scrollable }
@@ -932,7 +947,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             return false
         }
         val verifiesOwnedBaskets = installedKeetaProfile()?.allowsOwnedPlainPreparation == true
-        graph.catalog.value = graph.catalog.value.copy(comparisonRunning = true, mealQuestion = null, comparisonProgress = emptyMap(), finalTotals = emptyMap(), previews = emptyList(), error = null)
+        graph.catalog.value = graph.catalog.value.copy(comparisonRunning = true, mealQuestion = null, choiceQuestion = null, comparisonProgress = emptyMap(), finalTotals = emptyMap(), previews = emptyList(), error = null)
         val comparisonAreaUrl = graph.settings.value.catalogArea?.url
         val epoch = ++comparisonEpoch
         comparisonJob = graph.scope.launch(start = CoroutineStart.LAZY) {
@@ -3149,7 +3164,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     continue
                 }
                 if (provider == ProviderId.HUNGERSTATION && (HungerStationLocationPrompt.shown(frame) ||
-                        hungerLocationPromptMarkers == HungerStationLocationPrompt.PHRASES || HungerWindow.locationPrompt())) {
+                        hungerLocationPromptMarkers == HungerStationLocationPrompt.PHRASES ||
+                        // The window class alone only while no known HungerStation screen is readable, and only
+                        // when the prompt opened during this wait (S22: a stale record pressed Back on the home).
+                        (HungerWindow.locationPrompt(waitingSince - 60_000) && HungerStationCatalog.screen(frame) == CatalogScreen.UNKNOWN))) {
                     check(++dismissedLocationPrompts <= 2) {
                         "هنقرستيشن يسأل «${HungerStationLocationPrompt.TITLE}» لأن موقعك بعيد عن عنوان التوصيل؛ اختر من التنبيه ثم اضغط «قارن» مرة ثانية."
                     }
@@ -3278,6 +3296,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         val rawFrame = CatalogFrame(nodes, complete)
         val captured = if (provider == ProviderId.KEETA)
             KeetaMealChoices.restoreHeaders(rawFrame, keetaMenu, configuredHeadingCandidates) else rawFrame
+        if (provider == ProviderId.KEETA) lastKeetaRawLabels = configuredHeadingCandidates.toMap()
         if(BuildConfig.VERSION_NAME.endsWith("-device-tools") && provider==ProviderId.HUNGERSTATION &&
             captured.hasId("FlutterMenu_bottomSheetClose") && captured.nodes.none{it.editable}) runCatching {
             service.filesDir.resolve("hs-variant-public-frame.json").writeText(com.google.gson.Gson().toJson(captured))
@@ -3558,6 +3577,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
 
     /** Fixed phrases of HungerStation's different-location prompt seen in the last capture (see capture). */
     private val hungerLocationPromptMarkers = mutableSetOf<String>()
+    /** Raw names of redacted Keeta labels in the last capture; read only to ask the user about a choice group. */
+    private var lastKeetaRawLabels: Map<Int, String> = emptyMap()
     private fun privateId(id: String) = id.contains(Regex("address|location|welcome|wallet|phone|email|password|otp|verification|recipient|contact", RegexOption.IGNORE_CASE))
     private fun showManualControls(): Boolean = try {
         fun dp(value: Int) = (value * service.resources.displayMetrics.density).toInt()

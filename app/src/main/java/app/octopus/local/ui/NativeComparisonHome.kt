@@ -34,6 +34,7 @@ import java.math.BigDecimal
     val cart by graph.draft.collectAsStateWithLifecycle()
     var consent by remember { mutableStateOf(false) }
     var clearedCart by remember { mutableStateOf<CanonicalCart?>(null) }
+    var pickedRow by remember { mutableStateOf<String?>(null) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val busy = state.busy || state.comparisonRunning
     val context = LocalContext.current
@@ -99,6 +100,47 @@ import java.math.BigDecimal
                         }
                         TextButton(onClick = { graph.catalog.value = graph.catalog.value.copy(mealQuestion = null) }) {
                             Text("ولا وحدة منها")
+                        }
+                    }
+                    // A Keeta choice group HungerStation names differently or lacks: the user picks its row, then
+                    // says which HungerStation choice it is (or none). Remembered for this restaurant and meal.
+                    val choice = state.choiceQuestion
+                    if (!busy && choice != null) {
+                        fun learn(row: String, hunger: String?) {
+                            graph.learnedNames.rememberChoice(choice.restaurant, choice.hungerMeal, row, hunger)
+                            pickedRow = null
+                            graph.catalog.value = graph.catalog.value.copy(choiceQuestion = null, error = null)
+                            if (!LiveCatalogBridge.compareCapturedNativeBasket() && graph.catalog.value.error == null)
+                                graph.catalog.value = graph.catalog.value.copy(error = "حفظت اختيارك؛ ابدأ من هنقرستيشن واضغط «قارن».")
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        val row = pickedRow
+                        if (choice.rows.isEmpty()) {
+                            Text("هذي من طلبك في هنقرستيشن وما لها مكان في «${choice.hungerMeal}» بكيتا: " +
+                                choice.unmatchedHunger.joinToString("، ") { "«$it»" } + ". نتجاهلها في كيتا؟", fontWeight = FontWeight.Bold)
+                            OutlinedButton(onClick = {
+                                graph.learnedNames.rememberIgnored(choice.restaurant, choice.hungerMeal, choice.unmatchedHunger)
+                                graph.catalog.value = graph.catalog.value.copy(choiceQuestion = null, error = null)
+                                if (!LiveCatalogBridge.compareCapturedNativeBasket() && graph.catalog.value.error == null)
+                                    graph.catalog.value = graph.catalog.value.copy(error = "حفظت اختيارك؛ ابدأ من هنقرستيشن واضغط «قارن».")
+                            }, modifier = Modifier.fillMaxWidth()) { Text("إيه، تجاهلها") }
+                        } else if (row == null) {
+                            Text("في كيتا، «${choice.hungerMeal}» فيها «${choice.group}». وش تختار؟", fontWeight = FontWeight.Bold)
+                            choice.rows.forEach { name ->
+                                OutlinedButton(onClick = { if (choice.unmatchedHunger.isEmpty()) learn(name, null) else pickedRow = name },
+                                    modifier = Modifier.fillMaxWidth()) { Text(name) }
+                            }
+                        } else {
+                            Text("«$row» يقابل أي اختيار من طلبك في هنقرستيشن؟", fontWeight = FontWeight.Bold)
+                            choice.unmatchedHunger.forEach { name ->
+                                OutlinedButton(onClick = { learn(row, name) }, modifier = Modifier.fillMaxWidth()) { Text(name) }
+                            }
+                            OutlinedButton(onClick = { learn(row, null) }, modifier = Modifier.fillMaxWidth()) {
+                                Text("ما له مقابل (اختيار زيادة في كيتا)")
+                            }
+                        }
+                        TextButton(onClick = { pickedRow = null; graph.catalog.value = graph.catalog.value.copy(choiceQuestion = null) }) {
+                            Text("ألغِ")
                         }
                     }
                 }
