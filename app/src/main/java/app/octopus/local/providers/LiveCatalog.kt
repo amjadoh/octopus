@@ -45,6 +45,8 @@ data class LiveCatalogState(
     val preparedBaskets: PreparedBasketLedger = PreparedBasketLedger(),
     /** Keeta did not show the meal by name; the user picks its Keeta meal once (remembered per restaurant). */
     val mealQuestion: MealQuestion? = null,
+    /** A Keeta choice group without a HungerStation counterpart by name: the user picks its row once. */
+    val choiceQuestion: ChoiceQuestion? = null,
 )
 
 /** Manual native-cart management invalidates readiness before leaving Octopus. */
