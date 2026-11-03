@@ -356,6 +356,11 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         runCatching { nativeCartFile.writeText(com.google.gson.Gson().toJson(cart)) }
     }
 
+    private fun forgetNativeCart() {
+        latestNativeCart = null
+        runCatching { nativeCartFile.delete() }
+    }
+
     private fun rememberedNativeCart(): BasketEvidence? = runCatching {
         com.google.gson.Gson().fromJson(nativeCartFile.readText(), BasketEvidence::class.java)
             .takeIf { it.provider == ProviderId.HUNGERSTATION && it.complete && it.restaurant != null && it.lines.isNotEmpty() }
@@ -484,8 +489,11 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 navigateToRestaurant(LiveRestaurant(restaurant, null, restaurant))
                 frame = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
             }
-            val (settled, proof) = awaitMenuCartProof(frame, restaurant, HungerStationCatalog.TESTED_VERSION)
-                ?: error("لم يتطابق عداد قائمة المطعم مع السلة؛ لم أنقلها.")
+            val (settled, proof) = awaitMenuCartProof(frame, restaurant, HungerStationCatalog.TESTED_VERSION) ?: run {
+                if (acceptChanged) forgetNativeCart()
+                error(if (acceptChanged) "ما لقيت سلتك في فرع «$restaurant» اللي فتحه هنقرستيشن (ممكن فتح فرع ثاني حسب موقعك). افتح سلتك في هنقرستيشن واضغط «قارن» العائم."
+                    else "لم يتطابق عداد قائمة المطعم مع السلة؛ لم أنقلها.")
+            }
             frame = settled
             nativeCartImport.observe(frame, System.currentTimeMillis())
             act(frame, CatalogAction.OPEN_BASKET, { it == proof.command.node }, basketCommand = proof.command)
@@ -3036,6 +3044,17 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                         return@let
                     }
                     if(HungerStationSpinPromo.closeTarget(frame)!=null) continue
+                }
+                val keetaAdvertClose = if (provider == ProviderId.KEETA) KeetaFullScreenAdvert.closeTarget(frame) else null
+                if (keetaAdvertClose != null) {
+                    val close = keetaAdvertClose
+                    check(++dismissedPromos <= 3) { "تكرر ظهور إعلانات كيتا؛ توقفت دون تغيير الطلب." }
+                    phase = "إغلاق إعلان كيتا"
+                    check(performKeetaReadAction(root, close, AccessibilityNodeInfo.ACTION_CLICK)) { "تعذر إغلاق إعلان كيتا؛ توقفت." }
+                    lastStats.put("keetaAdvertClosed", dismissedPromos)
+                    fingerprint = null
+                    delay(400)
+                    continue
                 }
                 if(provider==ProviderId.KEETA) stopAtKeetaMinimumOrder(frame)
                 if(provider==ProviderId.KEETA && (KeetaAvailability.closedNotice(frame) || KeetaAvailability.closedMenu(frame)))
