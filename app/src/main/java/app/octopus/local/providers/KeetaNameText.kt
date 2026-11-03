@@ -32,4 +32,24 @@ object KeetaNameText {
         if (key.isEmpty()) return null
         return titles.filter { loose(it) == key }.singleOrNull()
     }
+
+    private val sandwich = setOf("ساندويتش", "سندويتش", "ساندوتش", "سندوتش", "ساندويش", "سندويش")
+    /** Words HungerStation adds to a choice name that Keeta leaves out ("ساندوتش تشيكن ديلوكس" ↔ "ساندويتش ديلوكس"). */
+    private val fillers = setOf("تشيكن", "دجاج")
+    private fun words(value: String): List<String> = loose(value).replace("-", " ").replace(",", " ")
+        .split(' ').filter(String::isNotBlank).map { if (it in sandwich) "ساندوتش" else it }
+
+    /** The requested choice that [raw] names, when exactly one does: the same writing, or the same words
+     * after the sandwich spelling, with HungerStation's extra words limited to [fillers]. A size, "حار" or
+     * any other dropped word keeps the names different. */
+    fun requestedChoice(raw: String, choices: Set<String>): String? {
+        if (raw.isBlank() || raw.length > 300 || '\n' in raw) return null
+        choices.filter { loose(it) == loose(raw) }.singleOrNull()?.let { return it }
+        val shown = words(raw)
+        if (shown.size < 2 || shown.distinct().size != shown.size) return null
+        return choices.filter { choice ->
+            val wanted = words(choice)
+            wanted.distinct().size == wanted.size && wanted.containsAll(shown) && (wanted - shown.toSet()).all { it in fillers }
+        }.singleOrNull()
+    }
 }

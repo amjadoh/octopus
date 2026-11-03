@@ -2056,22 +2056,38 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             ReviewNavigationGuard.keetaReviewBackTarget(it,version)!=null}
         var frame = try {await(ready)} catch(timeout:TimeoutCancellationException) {
             currentCoroutineContext().ensureActive();checkSession()
-            val root=service.rootInActiveWindow ?: throw timeout
+            var root=service.rootInActiveWindow ?: throw timeout
+            var recovered:CatalogFrame?=null
             try {
                 requireProviderWindow(root)
-                val foreign=capture(root)
-                check(KeetaForeignMenuRecovery.permits(foreign,version)) {"شاشة كيتا الحالية ليست قائمة طعام معروفة للعودة الآمنة؛ توقفت."}
-                val entry=android.content.ComponentName(provider.packageName,"com.sankuai.sailor.shell.SplashActivity")
-                @Suppress("DEPRECATION")
-                val activity=service.packageManager.getActivityInfo(entry,0)
-                check(activity.enabled && activity.exported)
-                verifyActiveFrame(foreign,root.windowId);checkSession()
-                // Observed installed entry, not a guessed deep link. One launcher recovery only;
-                // it changes no basket and never presses an unknown screen control.
-                targetSeen=false
-                service.startActivity(Intent().setComponent(entry).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                var foreign=capture(root)
+                if (KeetaForeignMenuRecovery.drawerOverForeignMenu(foreign,version)) {
+                    // S22: Keeta reopened on another restaurant with its cart drawer open. Back closes it; the
+                    // screen under it (that menu, or Keeta's earlier search results) is then read as usual.
+                    phase="إغلاق سلة كيتا المفتوحة على مطعم آخر"
+                    check(service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)) {"تعذر إغلاق سلة كيتا المفتوحة؛ توقفت."}
+                    recovered=try {await(ready)} catch(_:TimeoutCancellationException) {null}
+                    if (recovered==null) {
+                        @Suppress("DEPRECATION") root.recycle()
+                        root=service.rootInActiveWindow ?: throw timeout
+                        requireProviderWindow(root)
+                        foreign=capture(root)
+                    }
+                }
+                if (recovered==null) {
+                    check(KeetaForeignMenuRecovery.permits(foreign,version)) {"شاشة كيتا الحالية ليست قائمة طعام معروفة للعودة الآمنة؛ توقفت."}
+                    val entry=android.content.ComponentName(provider.packageName,"com.sankuai.sailor.shell.SplashActivity")
+                    @Suppress("DEPRECATION")
+                    val activity=service.packageManager.getActivityInfo(entry,0)
+                    check(activity.enabled && activity.exported)
+                    verifyActiveFrame(foreign,root.windowId);checkSession()
+                    // Observed installed entry, not a guessed deep link. One launcher recovery only;
+                    // it changes no basket and never presses an unknown screen control.
+                    targetSeen=false
+                    service.startActivity(Intent().setComponent(entry).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
             } finally {@Suppress("DEPRECATION") root.recycle()}
-            await(ready)
+            recovered ?: await(ready)
         }
         if (ReviewNavigationGuard.keetaReviewBackTarget(frame, version) != null) {
             leaveKeetaPreviousReview(frame, version)

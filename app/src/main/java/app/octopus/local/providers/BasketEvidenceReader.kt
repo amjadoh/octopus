@@ -23,7 +23,12 @@ object BasketEvidenceReader {
         val restaurant = title?.takeIf { it.size == 2 && it[0] == "السلة" }?.get(1)
         val cards = frame.nodes.filter { it.id == "FlutterCart_cartItem" }
         val parsed = cards.mapNotNull { card ->
-            val parts = lines(card.label)
+            val raw = lines(card.label)
+            // S22 / HS 8.0.304, discounted Popeyes meal: "31.50 § 42 §" — the current price, then the higher
+            // struck-through one. Keep the current price; any other second amount is rejected.
+            val parts = if (raw.size >= 5 && raw.last() == "§" && raw[raw.size - 3] == "§" &&
+                (MoneyParser.parse(raw[raw.size - 2]) ?: -1) > (MoneyParser.parse(raw[raw.size - 4]) ?: Long.MAX_VALUE))
+                raw.dropLast(2) else raw
             val edit = parts.indexOf("تعديل")
             val plain = parts.size == 3 && parts.last() == "§" && MoneyParser.parse(parts[1]) != null
             if (!plain && (edit < 1 || parts.size != edit + 3 || parts.last() != "§")) return@mapNotNull null

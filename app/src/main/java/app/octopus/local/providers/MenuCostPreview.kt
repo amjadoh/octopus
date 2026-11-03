@@ -97,10 +97,17 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
     fun configuredChoices(text: String): List<BasketChoiceEvidence>? {
         if (requestedChoices.isEmpty()) return null
         val displayed = text.split(',', '،').map(String::trim)
-        val parts = if ((displayed.firstOrNull() == title || displayed.firstOrNull() in otherMealTitles) && displayed.size > 1)
-            displayed.drop(1) else displayed
-        if (parts.isEmpty() || parts.distinct().size != parts.size || parts.any { it !in requestedChoices }) return null
-        return parts.map { BasketChoiceEvidence(it, null) }
+        fun named(parts: List<String>): List<BasketChoiceEvidence>? {
+            val names = parts.map { if (it in requestedChoices) it else KeetaNameText.requestedChoice(it, requestedChoices) ?: return null }
+            if (names.isEmpty() || names.distinct().size != names.size) return null
+            return names.map { BasketChoiceEvidence(it, null) }
+        }
+        val titled = (displayed.firstOrNull() == title || displayed.firstOrNull() in otherMealTitles) && displayed.size > 1
+        if (!titled) return named(displayed)
+        // S22 Popeyes: the first choice can carry the meal's own name ("ساندويتش ديلوكس، بيبسي، …"). Keep it only
+        // when it names a requested choice and the whole list then reads; otherwise it is the title prefix (KFC).
+        return named(displayed).takeIf { KeetaNameText.requestedChoice(displayed.first(), requestedChoices) != null }
+            ?: named(displayed.drop(1))
     }
     fun functionalLabel(raw: String, resourceId: String = ""): String {
         val text = raw.replace(Regex("[\\u200e\\u200f\\u061c\\u202a-\\u202e\\u2066-\\u2069\\ufeff]"), "").trim()
