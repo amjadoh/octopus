@@ -102,8 +102,12 @@ class OctopusAccessibilityService : AccessibilityService() {
         graph.session.value = SessionState()
     }
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Contents of AccessibilityEvent are not copied or logged.
+        // Contents of AccessibilityEvent are not copied or logged; only HungerStation's window class is noted,
+        // to recognize its different-location prompt (whose labels are redacted as location data).
         // Sampling verifies the current foreground package independently.
+        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
+            event.packageName?.toString() == "com.hungerstation.android.web")
+            HungerWindow.className = event.className?.toString()
     }
     override fun onInterrupt() { catalogNavigator?.stop("توقفت العملية؛ أعد المحاولة عند جاهزية الخدمة."); stopRead("SERVICE_INTERRUPTED", "توقفت الخدمة؛ ابدأ اختبارًا جديدًا عند العودة.") }
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
