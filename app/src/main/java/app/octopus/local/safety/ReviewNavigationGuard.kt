@@ -34,6 +34,9 @@ object ReviewNavigationGuard {
         val lines = value.trim().lines().map(String::trim)
         return lines == listOf("مراجعة الطلب", restaurant.trim())
     }
+    /** The HS review's place-order button stays on screen after the heading scrolls away. Recognition only; never clicked. */
+    fun hungerPlaceOrderButton(value: String?, className: String?): Boolean =
+        className == "android.widget.Button" && value?.trim()?.lines()?.firstOrNull()?.trim() == "تنفيذ الطلب"
     /** Observed optional recommendations between the cart and review; never add a recommendation. */
     fun hungerRecommendationsTarget(frame: CatalogFrame, version: String): CatalogNode? {
         if (version != HungerStationCatalog.TESTED_VERSION || !frame.complete || frame.nodes.any { it.editable }) return null

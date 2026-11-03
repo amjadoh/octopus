@@ -23,6 +23,14 @@ class KeetaSingleSkuNotesTest {
         assertNull(KeetaBasketReader(reader).addTarget(actual, 2300))
     }
 
+    @Test fun samsungCounterWrittenTheOtherWayIsTheSameEmptyNote() {
+        // S22 (SM-S908E) shows the empty counter as "70/0".
+        val samsung = changed { if (it.label == "0/70") it.copy(label = "70/0") else it }
+        assertNotNull(KeetaSingleSkuProduct.body(samsung, "البيك", title))
+        assertNotNull(KeetaBasketReader(reader).addTarget(samsung, 2200))
+        assertNull(KeetaSingleSkuProduct.body(changed { if (it.label == "0/70") it.copy(label = "70/3") else it }, "البيك", title))
+    }
+
     @Test fun typedNoteOrChangedNotesSectionIsRejected() {
         val typed = changed { if (it.index == editor.index) it.copy(label = "بدون صوص", enteredText = true) else it }
         assertNull(reader.productBody(typed))
