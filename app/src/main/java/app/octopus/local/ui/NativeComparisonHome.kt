@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -35,6 +36,13 @@ import java.math.BigDecimal
     var clearedCart by remember { mutableStateOf<CanonicalCart?>(null) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val busy = state.busy || state.comparisonRunning
+    val context = LocalContext.current
+    // Each app is left on its own review after the comparison; its launcher intent resumes that screen.
+    fun continueIn(id: ProviderId) {
+        val launch = context.packageManager.getLaunchIntentForPackage(id.packageName)
+        if (launch == null) graph.catalog.value = graph.catalog.value.copy(error = "${id.title} غير مثبت.")
+        else context.startActivity(launch)
+    }
     LaunchedEffect(Unit) { while (true) { now = System.currentTimeMillis(); delay(5000) } }
     fun start() {
         if (!connected) { onSetup(); return }
@@ -106,6 +114,17 @@ import java.math.BigDecimal
                         else -> "السعر متساوٍ"
                     }, fontSize = 23.sp, fontWeight = FontWeight.Bold, color = OctopusPalette.Petrol)
                     Text("راجع تطابق عنوان التوصيل والفرع في التطبيقين.", color = OctopusPalette.Muted, fontSize = 12.sp)
+                    val cheaper = when {
+                        difference > 0 -> listOf(ProviderId.KEETA)
+                        difference < 0 -> listOf(ProviderId.HUNGERSTATION)
+                        else -> listOf(ProviderId.HUNGERSTATION, ProviderId.KEETA)
+                    }
+                    cheaper.forEach { id ->
+                        Button(onClick = { continueIn(id) }, enabled = !busy, modifier = Modifier.fillMaxWidth().height(58.dp),
+                            shape = RoundedCornerShape(18.dp)) { Text("أكمل الطلب في ${id.title}", fontSize = 19.sp, fontWeight = FontWeight.Bold) }
+                    }
+                    Text("يفتح سلتك الجاهزة في ${cheaper.joinToString(" أو ") { it.title }}؛ تأكد من الإجمالي وأكمل الدفع بنفسك.",
+                        color = OctopusPalette.Muted, fontSize = 12.sp)
                 }
                 if (stale) {
                     val readAt = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT)
