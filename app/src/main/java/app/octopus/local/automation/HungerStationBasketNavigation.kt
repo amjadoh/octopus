@@ -49,13 +49,23 @@ internal object HungerStationBasketControls {
         if (!target.enabled || target.editable || target.id.isNotEmpty() || target.className != "android.widget.Button") return null
         val lines = target.label.replace(Regex("[\\u200e\\u200f\\u061c\\u202a-\\u202e\\u2066-\\u2069]"), "")
             .lineSequence().map(String::trim).toList()
-        if (lines.size != 3 || lines[0] != "عرض السلة" || lines[2] != "§" ||
-            MoneyParser.parse(lines[1])?.let { it >= 0 } != true) return null
+        if (footerAmount(lines)?.let { it >= 0 } != true) return null
         val counter = frame.nodes.filter { it.parent == target.index && it.id == "FlutterMenu_goToCartQuantity" }.singleOrNull() ?: return null
         if (!counter.enabled || counter.clickable || counter.editable || counter.className != "android.view.View") return null
         val quantity = counter.label.map { c -> if (c in '٠'..'٩') ('0'.code + c.code - '٠'.code).toChar() else c }.joinToString("").toIntOrNull()
         if (quantity == null || quantity !in 1..99) return null
         return target
+    }
+
+    /** The cart-bar amount: "عرض السلة 36 §", or — S22 / HS 8.0.304, discounted item — "عرض السلة 42 § 31.50 §"
+     * with the struck-through amount first; then the lower current amount, and only when it is lower. */
+    fun footerAmount(lines: List<String>): Long? {
+        if (lines.firstOrNull() != "عرض السلة") return null
+        if (lines.size == 3 && lines[2] == "§") return MoneyParser.parse(lines[1])
+        if (lines.size != 5 || lines[2] != "§" || lines[4] != "§") return null
+        val struck = MoneyParser.parse(lines[1]) ?: return null
+        val current = MoneyParser.parse(lines[3]) ?: return null
+        return current.takeIf { it in 0 until struck }
     }
 }
 

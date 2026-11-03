@@ -40,4 +40,12 @@ class KeetaRestaurantNameTest {
         assertFalse(KeetaRestaurantName.matches("براون كوفي","براون هارت كافيه"))
         assertFalse(KeetaRestaurantName.matches("بون كافية","براون كافيه"))
     }
+
+    @Test fun aPricedCampaignAfterASpaceIsTheSameChain() {
+        assertTrue(KeetaRestaurantName.matches("هارديز", "هارديز جولد ستار رابتور 13 ريال"))
+        assertFalse(KeetaRestaurantName.matches("هارديز", "هارديز العليا"))
+        assertFalse(KeetaRestaurantName.matches("هارديز", "هارديز فرع العليا 13 ريال"))
+        assertFalse(KeetaRestaurantName.matches("هارديز", "هارديزبرجر 13 ريال"))
+        assertFalse(KeetaRestaurantName.matches("هارديز", "هارديز النرجس عروض"))
+    }
 }

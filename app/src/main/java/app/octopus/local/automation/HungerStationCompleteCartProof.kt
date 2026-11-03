@@ -32,8 +32,9 @@ class HungerStationCompleteCartProof private constructor(
             if(frame.nodes.none {!it.editable && it.label.lineSequence().any {line->IdentityText.clean(line)==IdentityText.clean(restaurant)}})return null
             val count=frame.nodes.singleOrNull {it.parent==target.index && it.id=="FlutterMenu_goToCartQuantity"} ?: return null
             val quantity=count.label.map {if(it in '٠'..'٩')('0'.code+it.code-'٠'.code).toChar() else it}.joinToString("").toIntOrNull() ?: return null
-            val amount=target.label.replace(Regex("[\\u200e\\u200f\\u061c\\u202a-\\u202e\\u2066-\\u2069]"),"")
-                .lineSequence().map(String::trim).toList().getOrNull(1)?.let(MoneyParser::parse) ?: return null
+            val lines=target.label.replace(Regex("[\\u200e\\u200f\\u061c\\u202a-\\u202e\\u2066-\\u2069]"),"")
+                .lineSequence().map(String::trim).toList()
+            val amount=HungerStationBasketControls.footerAmount(lines) ?: return null
             return quantity to amount
         }
         fun fromMenu(frame:CatalogFrame,restaurant:String,version:String?,now:Long):HungerStationCompleteCartProof? {
