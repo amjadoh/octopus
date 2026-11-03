@@ -2049,12 +2049,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         KeetaPromotionEvidence.emptySheet(frame) || keetaMenu.searchCandidate(frame) != null
 
     /** Uses observed home/search controls and the exact review-header back arrow. */
-    private suspend fun openKeetaRequest(): CatalogFrame {
-        val version = graph.installations.value.single { it.provider == ProviderId.KEETA }.version.orEmpty()
-        val ready:(CatalogFrame)->Boolean = {keetaReadable(it) || unsupportedKeetaNotes(it) || keetaMenu.homeSearch(it)!=null ||
-            keetaMenu.searchInput(it)!=null || keetaMenu.editSearchQuery(it)!=null ||
-            ReviewNavigationGuard.keetaReviewBackTarget(it,version)!=null}
-        var frame = try {await(ready)} catch(timeout:TimeoutCancellationException) {
+    private suspend fun awaitKeetaEntry(version: String, ready: (CatalogFrame) -> Boolean): CatalogFrame =
+        try {await(ready)} catch(timeout:TimeoutCancellationException) {
             currentCoroutineContext().ensureActive();checkSession()
             var root=service.rootInActiveWindow ?: throw timeout
             var recovered:CatalogFrame?=null
@@ -2089,9 +2085,17 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             } finally {@Suppress("DEPRECATION") root.recycle()}
             recovered ?: await(ready)
         }
+
+    private suspend fun openKeetaRequest(): CatalogFrame {
+        val version = graph.installations.value.single { it.provider == ProviderId.KEETA }.version.orEmpty()
+        val ready:(CatalogFrame)->Boolean = {keetaReadable(it) || unsupportedKeetaNotes(it) || keetaMenu.homeSearch(it)!=null ||
+            keetaMenu.searchInput(it)!=null || keetaMenu.editSearchQuery(it)!=null ||
+            ReviewNavigationGuard.keetaReviewBackTarget(it,version)!=null}
+        var frame = awaitKeetaEntry(version, ready)
         if (ReviewNavigationGuard.keetaReviewBackTarget(frame, version) != null) {
             leaveKeetaPreviousReview(frame, version)
-            frame = await { keetaReadable(it) || unsupportedKeetaNotes(it) || keetaMenu.homeSearch(it) != null ||
+            // Leaving an earlier review can land on that restaurant's menu with its cart drawer open (S22).
+            frame = awaitKeetaEntry(version) { keetaReadable(it) || unsupportedKeetaNotes(it) || keetaMenu.homeSearch(it) != null ||
                 keetaMenu.searchInput(it) != null || keetaMenu.editSearchQuery(it) != null }
         }
         requireSupportedKeetaNotes(frame)
