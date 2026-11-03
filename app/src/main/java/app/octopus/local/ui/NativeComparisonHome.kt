@@ -83,6 +83,24 @@ import java.math.BigDecimal
                             BasketMutationJournal.KEETA_UNREADABLE, BasketMutationJournal.KEETA_DIFFERENT).any { error.endsWith(it) }) {
                         TextButton(onClick = { clearedCart = cart }) { Text("أفرغت سلة كيتا وأريد البدء من جديد") }
                     }
+                    // Keeta names the meal differently: the user picks it once; Octopus remembers it for this
+                    // restaurant and compares again. Every price and cart check still applies after the pick.
+                    val question = state.mealQuestion
+                    if (!busy && question != null) {
+                        Spacer(Modifier.height(10.dp))
+                        Text("أي وجبة في كيتا هي «${question.hungerMeal}»؟", fontWeight = FontWeight.Bold)
+                        question.candidates.forEach { name ->
+                            OutlinedButton(onClick = {
+                                graph.learnedNames.rememberKeetaMeal(question.restaurant, question.hungerMeal, name)
+                                graph.catalog.value = graph.catalog.value.copy(mealQuestion = null, error = null)
+                                if (!LiveCatalogBridge.compareCapturedNativeBasket() && graph.catalog.value.error == null)
+                                    graph.catalog.value = graph.catalog.value.copy(error = "حفظت اختيارك؛ ابدأ من هنقرستيشن واضغط «قارن».")
+                            }, modifier = Modifier.fillMaxWidth()) { Text(name) }
+                        }
+                        TextButton(onClick = { graph.catalog.value = graph.catalog.value.copy(mealQuestion = null) }) {
+                            Text("ولا وحدة منها")
+                        }
+                    }
                 }
             }
         }
