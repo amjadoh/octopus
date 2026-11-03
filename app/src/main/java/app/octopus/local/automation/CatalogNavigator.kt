@@ -3066,6 +3066,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         var fingerprint: String? = null
         var since = 0L
         var dismissedPromos = 0
+        var dismissedLocationPrompts = 0
         val waitingSince = SystemClock.elapsedRealtime()
         var terraChecked = false
         while (true) {
@@ -3103,6 +3104,16 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     lastStats.put("keetaAdvertClosed", dismissedPromos)
                     fingerprint = null
                     delay(400)
+                    continue
+                }
+                if (provider == ProviderId.HUNGERSTATION && HungerStationLocationPrompt.shown(frame)) {
+                    check(++dismissedLocationPrompts <= 2) {
+                        "هنقرستيشن يسأل «${HungerStationLocationPrompt.TITLE}» لأن موقعك بعيد عن عنوان التوصيل؛ اختر من التنبيه ثم اضغط «قارن» مرة ثانية."
+                    }
+                    phase = "إغلاق تنبيه الموقع في هنقرستيشن"
+                    check(service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)) { "تعذر إغلاق تنبيه الموقع في هنقرستيشن؛ توقفت." }
+                    fingerprint = null
+                    delay(700)
                     continue
                 }
                 if(provider==ProviderId.KEETA) stopAtKeetaMinimumOrder(frame)

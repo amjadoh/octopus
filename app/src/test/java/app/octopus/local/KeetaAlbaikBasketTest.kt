@@ -34,7 +34,7 @@ class KeetaAlbaikBasketTest {
 
     /** S22 (3.13.301): a cart over 30 ﷼ closes the drawer list with a delivery-savings section. */
     private fun withSavings(saved: String = "\u200f2\u00a0﷼\u200f", discount: String = "-\u200f2\u00a0﷼\u200f",
-        clickableNote: Boolean = false): CatalogFrame {
+        clickableNote: Boolean = false, promoted: String? = null): CatalogFrame {
         val f = recorded()
         val scroll = f.nodes.single { it.className == "android.widget.ScrollView" && f.descendants(it.index).any { n -> n.label in titles } }
         val content = f.nodes.single { it.parent == scroll.index }
@@ -45,8 +45,12 @@ class KeetaAlbaikBasketTest {
         val section = node(content.index); node(section)
         val inner = node(node(section))
         val total = node(inner); node(node(total), "إجمالي التوفير", "android.widget.TextView"); node(node(total), saved, "android.widget.TextView")
-        val row = node(node(inner)); node(node(row, clickable = true), "خصم التوصيل", "android.widget.TextView")
+        val rows = node(inner); val row = node(rows)
+        node(node(row, clickable = true), if (promoted != null) "الخصم" else "خصم التوصيل", "android.widget.TextView")
         node(node(row), discount, "android.widget.TextView")
+        // S22 KFC Twister: "الخصم" carries one "الأصناف الترويجية" breakdown row.
+        if (promoted != null) { val part = node(node(rows)); node(node(part), "الأصناف الترويجية", "android.widget.TextView")
+            node(node(part), promoted, "android.widget.TextView") }
         node(inner); node(inner, "يتم تأكيد المبلغ النهائي عند صفحة إتمام الدفع", "android.widget.TextView", clickableNote)
         return f.copy(nodes = f.nodes + added)
     }
@@ -58,5 +62,12 @@ class KeetaAlbaikBasketTest {
         assertNull(reader().evidence(withSavings(clickableNote = true)))
         val extra = withSavings().let { f -> f.copy(nodes = f.nodes.map { if (it.label == "إجمالي التوفير") it.copy(label = "", omittedText = true) else it }) }
         assertNull(reader().evidence(extra))
+    }
+    @Test fun promotedItemSavingsSectionUnderTheRowsIsNotAnItem() {
+        assertEquals(reader().evidence(recorded()), reader().evidence(withSavings(promoted = "-\u200f2\u00a0﷼\u200f")))
+    }
+    @Test fun promotedItemSavingsThatDoNotAddUpStillRejectTheBasket() {
+        assertNull(reader().evidence(withSavings(promoted = "-\u200f1\u00a0﷼\u200f")))
+        assertNull(reader().evidence(withSavings(discount = "-\u200f3\u00a0﷼\u200f", promoted = "-\u200f3\u00a0﷼\u200f")))
     }
 }
