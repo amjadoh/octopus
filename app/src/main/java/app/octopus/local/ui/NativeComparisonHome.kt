@@ -67,7 +67,13 @@ import java.math.BigDecimal
             IconButton(onClick = onSettings) { Icon(Icons.Outlined.Settings, "الإعدادات") }
         }
         Text("جهّز طلبك في هنقرستيشن، وقارن سعره مع كيتا.", color = OctopusPalette.Muted, fontSize = 15.sp)
-        state.error?.let { error ->
+        // Always say in red why a comparison stopped: the general error, or else a provider's own failure reason.
+        val failures = if (busy) emptyList() else state.comparisonProgress.values.filter {
+            it.step in setOf(app.octopus.local.automation.CartComparisonStep.PREPARATION_FAILED,
+                app.octopus.local.automation.CartComparisonStep.REVIEW_UNAVAILABLE) }
+        val shownError = state.error ?: failures.takeIf { it.isNotEmpty() }?.joinToString("\n") {
+            it.provider.title + ": " + (it.detail ?: "توقفت دون سبب مقروء.") }
+        shownError?.let { error ->
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
                 Column(Modifier.padding(16.dp)) {
                     Text(error, color = MaterialTheme.colorScheme.error)
