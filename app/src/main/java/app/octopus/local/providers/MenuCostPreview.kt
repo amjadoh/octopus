@@ -66,6 +66,8 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
         /** Fixed public labels of the Keeta cart-drawer savings section (cart over its delivery-discount threshold). */
         const val SAVINGS_TOTAL = "إجمالي التوفير"
         const val DELIVERY_DISCOUNT = "خصم التوصيل"
+        const val ITEM_DISCOUNT = "الخصم"
+        const val PROMOTED_ITEMS = "الأصناف الترويجية"
         const val FINAL_AMOUNT_NOTE = "يتم تأكيد المبلغ النهائي عند صفحة إتمام الدفع"
     }
     private var optionalPlainFrame: CatalogFrame? = null
@@ -111,7 +113,7 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
         if (profile.usesCurrentLayout && resourceId == "com.sankuai.sailor.afooddelivery:id/product_name" &&
             text.length in 1..300 && text.any(Char::isLetter)) return text
         if (text in KeetaOptionalPlainSession.publicLabels) return text
-        if (text in setOf(SAVINGS_TOTAL, DELIVERY_DISCOUNT, FINAL_AMOUNT_NOTE)) return text
+        if (text in setOf(SAVINGS_TOTAL, DELIVERY_DISCOUNT, ITEM_DISCOUNT, PROMOTED_ITEMS, FINAL_AMOUNT_NOTE)) return text
         if (KeetaRestaurantName.matches(restaurant, text)) return restaurant
         if (KeetaAvailability.closedText(text) || KeetaAvailability.unavailableText(text) ||
             text in setOf("موافق","لم يبلغ الطلب الحد الأدنى","إضافة أصناف أخرى")) return text
