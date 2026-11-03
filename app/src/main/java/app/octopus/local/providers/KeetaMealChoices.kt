@@ -3,7 +3,7 @@ package app.octopus.local.providers
 import app.octopus.local.domain.CanonicalCart
 import app.octopus.local.domain.CanonicalItem
 
-/** Required radio groups in the current product sheet. No coordinate or fuzzy matching. */
+/** Required radio groups in the current product sheet. No coordinate matching; names only through KeetaNameText. */
 class KeetaMealChoices(val cart: CanonicalCart, val item: CanonicalItem = cart.items.single()) {
     val values = item.options.map { it.value }.toSet()
     private val completed = mutableSetOf<String>()
@@ -99,7 +99,9 @@ class KeetaMealChoices(val cart: CanonicalCart, val item: CanonicalItem = cart.i
         val results = mutableListOf<Group>()
         val titleOnly = mutableSetOf<String>()
         val markers = frame.nodes.filter { it.label == "مطلوب" }
-        if (frame.nodes.any { it.label == "اختياري" }) return null
+        // Optional ("اختياري") groups are left untouched; they have no "مطلوب" marker, and the cart read after
+        // the add still rejects any extra row. Requested names may be written differently (KeetaNameText).
+        fun named(label: String): String? = clean(label).let { if (it in values) it else KeetaNameText.requestedChoice(it, values) }
         for (marker in markers) {
             var parent = marker
             var found: Group? = null
@@ -118,8 +120,8 @@ class KeetaMealChoices(val cart: CanonicalCart, val item: CanonicalItem = cart.i
                             if (status.size != 1) return null
                             val matches = rows.mapNotNull { row ->
                                 val body = frame.descendants(row.index)
-                                val named = body.filter { clean(it.label) in values }
-                                if (named.size == 1) row to clean(named.single().label) else null
+                                val hits = body.mapNotNull { named(it.label) }
+                                if (hits.size == 1) row to hits.single() else null
                             }
                             if (matches.size > 1) return null
                             val title = header.filter { it.className == "android.widget.TextView" && it.label.isNotBlank() &&
@@ -139,13 +141,13 @@ class KeetaMealChoices(val cart: CanonicalCart, val item: CanonicalItem = cart.i
                             // smallest clickable ancestor containing the exact requested label.
                             val namedHandler = frame.descendants(row.index).filter { n ->
                                 n.clickable && n.enabled && !n.editable &&
-                                    frame.descendants(n.index).any { clean(it.label) == value }
+                                    frame.descendants(n.index).any { named(it.label) == value }
                             }.minByOrNull { frame.descendants(it.index).size } ?: return null
                             // The label can open nested modifiers. The adjacent empty handler
                             // is the radio control; never dispatch the label handler in that layout.
                             val parts = children(namedHandler)
                             val target = if (namedHandler != row) {
-                                if (parts.size != 2 || frame.descendants(parts[0].index).none { clean(it.label) == value }) return null
+                                if (parts.size != 2 || frame.descendants(parts[0].index).none { named(it.label) == value }) return null
                                 parts[1].takeIf { it.clickable && it.enabled && !it.editable &&
                                     it.className == "android.view.ViewGroup" &&
                                     frame.descendants(it.index).all { child -> child.label.isBlank() && !child.omittedText } } ?: return null

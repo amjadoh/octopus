@@ -76,8 +76,7 @@ class HungerStationMenuQuantityCommand private constructor(
                 footerCounter.clickable || footerCounter.editable || quantity(footerCounter.label) != count) return null
             val lines = footer.label.replace(Regex("[\\u200e\\u200f\\u061c\\u202a-\\u202e\\u2066-\\u2069]"), "")
                 .lineSequence().map(String::trim).toList()
-            if (lines.size != 3 || lines[0] != "عرض السلة" || lines[2] != "§" ||
-                MoneyParser.parse(lines[1]) != unitPriceHalala * count) return null
+            if (HungerStationBasketControls.footerAmount(lines) != unitPriceHalala * count) return null
             return count
         }
 
