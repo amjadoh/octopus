@@ -407,9 +407,19 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     if (generation != token || reopenJob?.isCancelled == true) return@launch
                     reopened ?: error(graph.catalog.value.error ?: "لم تكتمل إعادة قراءة السلة.")
                 } else {
-                    val root = service.rootInActiveWindow ?: error("افتح سلة هنقرستيشن أولًا.")
-                    try { requireProviderWindow(root); capture(root) }
-                    finally { @Suppress("DEPRECATION") root.recycle() }
+                    // A Compare tap can land while the cart rows are still being drawn; re-read for a few seconds.
+                    var read: CatalogFrame
+                    val started = SystemClock.elapsedRealtime()
+                    while (true) {
+                        val root = service.rootInActiveWindow ?: error("افتح سلة هنقرستيشن أولًا.")
+                        read = try { requireProviderWindow(root); capture(root) }
+                            finally { @Suppress("DEPRECATION") root.recycle() }
+                        if (HungerStationCatalog.screen(read) != CatalogScreen.CART ||
+                            BasketEvidenceReader.hungerStation(read, false).lines.isNotEmpty() ||
+                            SystemClock.elapsedRealtime() - started > 5_000) break
+                        delay(400)
+                    }
+                    read
                 }
                 graph.refreshInstallations()
                 val sourceVersion = graph.installations.value.singleOrNull { it.provider == ProviderId.HUNGERSTATION }?.version
@@ -511,7 +521,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             frame = settled
             nativeCartImport.observe(frame, System.currentTimeMillis())
             act(frame, CatalogAction.OPEN_BASKET, { it == proof.command.node }, basketCommand = proof.command)
-            frame = await { HungerStationCatalog.screen(it) == CatalogScreen.CART }
+            frame = awaitHungerCart()
             check(proof.finish(frame, HungerStationCatalog.TESTED_VERSION, System.currentTimeMillis()) != null) {
                 "لم تثبت السلة كاملة بعد إعادة فتحها."
             }
@@ -526,6 +536,17 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         }
         check(current == original) { "تغيرت السلة منذ قراءتها؛ أعد البدء من هنقرستيشن." }
         return frame
+    }
+
+    /** HungerStation draws the cart's "المجموع" summary after its rows (seen on the S22 with a KFC meal);
+     * wait briefly for it so the one-shot cart proof is not spent on a half-drawn cart. */
+    private suspend fun awaitHungerCart(): CatalogFrame {
+        val first = await { HungerStationCatalog.screen(it) == CatalogScreen.CART }
+        if (BasketEvidenceReader.hungerStation(first, true).subtotal != null) return first
+        return try {
+            withTimeout(6_000) { await { HungerStationCatalog.screen(it) == CatalogScreen.CART &&
+                BasketEvidenceReader.hungerStation(it, true).subtotal != null } }
+        } catch (_: TimeoutCancellationException) { first }
     }
 
     /** HungerStation draws the menu cart bar after the menu settles; wait for its count before proving the cart. */
@@ -560,7 +581,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         menu = settled
         nativeCartImport.observe(menu, System.currentTimeMillis())
         act(menu, CatalogAction.OPEN_BASKET, { it == proof.command.node }, basketCommand = proof.command)
-        val cart = await { HungerStationCatalog.screen(it) == CatalogScreen.CART }
+        val cart = awaitHungerCart()
         val verified = proof.finish(cart, version, System.currentTimeMillis())
             ?: error("لم تتطابق السلة كاملة مع عداد قائمة المطعم؛ لم أبدأ نقلها.")
         check(verified.restaurant == original.restaurant && verified.lines == original.lines &&
@@ -1255,7 +1276,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         val (settled,proof)=awaitMenuCartProof(menu,desired.restaurant,version)
             ?: error("تعذر إثبات عداد السلة ومبلغها من القائمة؛ لم أعدلها.")
         act(settled,CatalogAction.OPEN_BASKET,{it==proof.command.node},basketCommand=proof.command)
-        val frame=await {HungerStationCatalog.screen(it)==CatalogScreen.CART}
+        val frame=awaitHungerCart()
         val evidence=proof.finish(frame,version,System.currentTimeMillis())
         if(evidence==null && BuildConfig.VERSION_NAME.endsWith("-device-tools")) {
             val read=BasketEvidenceReader.hungerStation(frame,false)
