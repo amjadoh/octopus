@@ -51,6 +51,7 @@ class AppGraph(private val app: Application, publicClient: PublicCatalogClient =
     val session = MutableStateFlow(SessionState())
     val serviceConnected = MutableStateFlow(false)
     val catalog = MutableStateFlow(LiveCatalogState())
+    val learnedNames = LearnedNames(app.filesDir.resolve("learned-names.json"))
     private val catalogDatabase = Room.databaseBuilder(app, CatalogLibraryDatabase::class.java, "octopus_catalog.db").build()
     private val catalogRepository = CatalogLibraryRepository(catalogDatabase.library())
     private val catalogLock = Mutex()

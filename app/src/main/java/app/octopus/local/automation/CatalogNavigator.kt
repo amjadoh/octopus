@@ -99,9 +99,28 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     }
 
     /** A Keeta name written differently from a requested item (dash, digits, hamza, emoji) reads as that item. */
-    private fun keetaLabel(raw: String, id: String = ""): String =
-        KeetaNameText.requested(raw.replace(Regex("[\\u200e\\u200f\\u061c\\u202a-\\u202e\\u2066-\\u2069\\ufeff]"), "").trim(), keetaBasketTitles)
-            ?: keetaMenu.functionalLabel(raw, id)
+    private fun keetaLabel(raw: String, id: String = ""): String {
+        val text = raw.replace(Regex("[\\u200e\\u200f\\u061c\\u202a-\\u202e\\u2066-\\u2069\\ufeff]"), "").trim()
+        return KeetaNameText.requested(text, keetaBasketTitles) ?: learnedKeetaTitle(text) ?: keetaMenu.functionalLabel(raw, id)
+    }
+
+    /** The requested meal whose Keeta name the user chose earlier for this restaurant (see MealQuestion). */
+    private fun learnedKeetaTitle(text: String): String? {
+        if (text.isBlank() || '\n' in text || text.length > 300) return null
+        val restaurant = keetaContext?.restaurant ?: return null
+        return keetaBasketTitles.filter { title -> graph.learnedNames.keetaMeal(restaurant, title)
+            ?.let { KeetaNameText.loose(it) == KeetaNameText.loose(text) } == true }.singleOrNull()
+    }
+
+    /** Keeta did not show the meal by name: offer the closest Keeta meals seen while scanning, then stop. */
+    private fun keetaMealNotShown(seen: Collection<String>): Nothing {
+        val menu = keetaMenu
+        val candidates = MealCandidates.closest(menu.title, seen)
+        if (candidates.isNotEmpty()) graph.catalog.value = graph.catalog.value.copy(
+            mealQuestion = MealQuestion(menu.restaurant, menu.title, candidates))
+        error(if (candidates.isEmpty()) "الوجبة المطابقة غير ظاهرة في قائمة كيتا."
+            else "ما لقيت «${menu.title}» في كيتا بنفس الاسم؛ اختر الوجبة المقابلة تحت.")
+    }
 
     private fun bindKeetaRequest(cart: CanonicalCart, line: CanonicalItem = cart.items.single(), meal: SingleChoiceMeal? = null) {
         val profile = checkNotNull(installedKeetaProfile()) { "إصدار كيتا غير مدعوم في مسار القراءة الحالي." }
@@ -606,7 +625,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
 
     private fun startImportedComparison(desired: CanonicalCart, evidence: BasketEvidence) {
         val epoch = ++comparisonEpoch
-        graph.catalog.value = graph.catalog.value.copy(comparisonRunning = true, finalTotals = emptyMap(),
+        graph.catalog.value = graph.catalog.value.copy(comparisonRunning = true, mealQuestion = null, finalTotals = emptyMap(),
             comparisonProgress = emptyMap(), previews = emptyList(), error = null)
         comparisonJob = graph.scope.launch(start = CoroutineStart.LAZY) {
             try {
@@ -661,7 +680,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private fun startConfiguredComparison(original: BasketEvidence, probe: CanonicalCart) {
         val epoch = ++comparisonEpoch
         val previousFingerprint = graph.draft.value?.fingerprint
-        graph.catalog.value = graph.catalog.value.copy(comparisonRunning = true, finalTotals = emptyMap(),
+        graph.catalog.value = graph.catalog.value.copy(comparisonRunning = true, mealQuestion = null, finalTotals = emptyMap(),
             comparisonProgress = emptyMap(), previews = emptyList(), error = null)
         comparisonJob = graph.scope.launch(start = CoroutineStart.LAZY) {
             var meal: SingleChoiceMeal? = null
@@ -913,7 +932,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             return false
         }
         val verifiesOwnedBaskets = installedKeetaProfile()?.allowsOwnedPlainPreparation == true
-        graph.catalog.value = graph.catalog.value.copy(comparisonRunning = true, comparisonProgress = emptyMap(), finalTotals = emptyMap(), previews = emptyList(), error = null)
+        graph.catalog.value = graph.catalog.value.copy(comparisonRunning = true, mealQuestion = null, comparisonProgress = emptyMap(), finalTotals = emptyMap(), previews = emptyList(), error = null)
         val comparisonAreaUrl = graph.settings.value.catalogArea?.url
         val epoch = ++comparisonEpoch
         comparisonJob = graph.scope.launch(start = CoroutineStart.LAZY) {
@@ -2503,6 +2522,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     private suspend fun openKeetaPreviewProduct(previous: CatalogFrame, open: Boolean = true): CatalogFrame {
         var frame = previous
         var previousBody: List<CatalogNode>? = null
+        val seenTitles = linkedSetOf<String>()
         // A menu left scrolled past the row (or below it) is scanned forward to the end, then once backward.
         var backward = false
         // Kudo's observed side dishes begin beyond the first 20 menu viewports.
@@ -2525,7 +2545,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 check(fresh.nodes.none { it.id == "com.sankuai.sailor.afooddelivery:id/product_name" && it.label == keetaMenu.title }) {
                     "الصنف المطابق ظاهر لكن عنصر فتحه غير مدعوم؛ لم أنقر عنصرًا آخر."
                 }
-                check(keetaMenu.menu(fresh) && fresh.nodes != previousBody) { "الوجبة المطابقة غير ظاهرة في قائمة كيتا." }
+                fresh.nodes.filter { it.id == "com.sankuai.sailor.afooddelivery:id/product_name" && it.label.isNotBlank() }
+                    .forEach { seenTitles += it.label }
+                if (!keetaMenu.menu(fresh) || fresh.nodes == previousBody) keetaMealNotShown(seenTitles)
                 previousBody = fresh.nodes
                 val list = fresh.nodes.single { it.scrollable && it.className == "androidx.recyclerview.widget.RecyclerView" }
                 rejectedScroll=!performKeetaReadAction(root, list,
@@ -2539,7 +2561,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 check(keetaMenu.menu(current)) {"تغيرت شاشة القائمة؛ لم أنفذ إيماءة."}
                 if (current == frame) {
                     // The list end rejects forward scrolling and the gesture cannot move it either: reverse once, never loop.
-                    check(!backward) { "الوجبة المطابقة غير ظاهرة في قائمة كيتا." }
+                    if (backward) keetaMealNotShown(seenTitles)
                     val moved = try { scrollKeetaMenuGesture(frame) }
                         catch (_: TimeoutCancellationException) { currentCoroutineContext().ensureActive(); checkSession(); false }
                     if (!moved) { backward = true; previousBody = null; return@repeat }
@@ -3127,14 +3149,15 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     continue
                 }
                 if (provider == ProviderId.HUNGERSTATION && (HungerStationLocationPrompt.shown(frame) ||
-                        hungerLocationPromptMarkers == HungerStationLocationPrompt.PHRASES)) {
+                        hungerLocationPromptMarkers == HungerStationLocationPrompt.PHRASES || HungerWindow.locationPrompt())) {
                     check(++dismissedLocationPrompts <= 2) {
                         "هنقرستيشن يسأل «${HungerStationLocationPrompt.TITLE}» لأن موقعك بعيد عن عنوان التوصيل؛ اختر من التنبيه ثم اضغط «قارن» مرة ثانية."
                     }
                     phase = "إغلاق تنبيه الموقع في هنقرستيشن"
                     check(service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)) { "تعذر إغلاق تنبيه الموقع في هنقرستيشن؛ توقفت." }
+                    HungerWindow.className = null
                     fingerprint = null
-                    delay(700)
+                    delay(900)
                     continue
                 }
                 if(provider==ProviderId.KEETA) stopAtKeetaMinimumOrder(frame)
