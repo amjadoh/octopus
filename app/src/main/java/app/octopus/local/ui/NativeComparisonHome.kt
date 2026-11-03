@@ -37,8 +37,14 @@ import java.math.BigDecimal
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val busy = state.busy || state.comparisonRunning
     val context = LocalContext.current
-    // Each app is left on its own review after the comparison; its launcher intent resumes that screen.
+    // Keeta is left on its review and its launcher intent resumes it; HungerStation's launcher
+    // reopens its home, so Octopus navigates back to the compared cart (read-only).
     fun continueIn(id: ProviderId) {
+        if (id == ProviderId.HUNGERSTATION) {
+            if (!LiveCatalogBridge.openComparedHungerCart() && graph.catalog.value.error == null)
+                graph.catalog.value = graph.catalog.value.copy(error = "تعذر فتح سلة هنقرستيشن؛ افتحها من التطبيق مباشرة.")
+            return
+        }
         val launch = context.packageManager.getLaunchIntentForPackage(id.packageName)
         if (launch == null) graph.catalog.value = graph.catalog.value.copy(error = "${id.title} غير مثبت.")
         else context.startActivity(launch)
