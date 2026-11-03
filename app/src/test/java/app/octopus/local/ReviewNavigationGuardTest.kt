@@ -107,4 +107,12 @@ class ReviewNavigationGuardTest {
         assertNull(ReviewNavigationGuard.target(ProviderId.HUNGERSTATION,frame().copy(complete=false),cart,HungerStationCatalog.TESTED_VERSION))
         assertNull(ReviewNavigationGuard.target(ProviderId.KEETA,frame(),cart,"3.13.203"))
     }
+
+    @Test fun hungerPlaceOrderButtonRecognizesTheReviewAfterItsHeadingScrollsAway() {
+        assertTrue(ReviewNavigationGuard.hungerPlaceOrderButton("تنفيذ الطلب\n47\n\u20c1", "android.widget.Button"))
+        assertTrue(ReviewNavigationGuard.hungerPlaceOrderButton("تنفيذ الطلب", "android.widget.Button"))
+        assertFalse(ReviewNavigationGuard.hungerPlaceOrderButton("تنفيذ الطلب\n47", "android.view.View"))
+        assertFalse(ReviewNavigationGuard.hungerPlaceOrderButton("اذهب للدفع", "android.widget.Button"))
+        assertFalse(ReviewNavigationGuard.hungerPlaceOrderButton(null, "android.widget.Button"))
+    }
 }

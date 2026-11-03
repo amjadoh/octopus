@@ -4,10 +4,12 @@ import app.octopus.local.domain.*
 import kotlin.math.abs
 
 class QuoteExtractor {
+    private val totals = setOf(PriceField.ORDER_TOTAL, PriceField.AMOUNT_DUE)
     fun extract(snapshot: SafeSnapshot): QuoteCandidate {
         if (snapshot.sensitiveScreen || snapshot.truncated || snapshot.accessRestriction != null) return QuoteCandidate(emptyMap(), true)
         val found = mutableMapOf<PriceField, MutableSet<Long>>()
         var ambiguous = false
+        val crossed = mutableSetOf<PriceField>()
         snapshot.tokens.filter { it.label != null }.forEach { label ->
             val amounts = if (label.amount != null) setOf(label.amount) else {
                 snapshot.tokens.filter { token ->
@@ -19,10 +21,12 @@ class QuoteExtractor {
                 }.mapNotNull { it.amount }.toSet()
             }
             if (amounts.size == 1) found.getOrPut(label.label!!) { mutableSetOf() }.add(amounts.first())
-            if (amounts.size > 1) ambiguous = true
+            // A struck-through old price beside a fee (e.g. free delivery "0.00 19.00") leaves only that
+            // fee unknown. The order total itself must still be a single amount.
+            if (amounts.size > 1) { if (label.label in totals) ambiguous = true else crossed += label.label!! }
         }
-        if (found.any { it.value.size > 1 }) ambiguous = true
-        val fields = found.filterValues { it.size == 1 }.mapValues { it.value.single() }
+        if (found.any { it.value.size > 1 && it.key in totals }) ambiguous = true
+        val fields = found.filterValues { it.size == 1 }.mapValues { it.value.single() } - crossed
         return QuoteCandidate(fields, ambiguous)
     }
 }

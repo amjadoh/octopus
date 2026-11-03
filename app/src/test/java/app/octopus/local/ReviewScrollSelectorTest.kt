@@ -18,6 +18,17 @@ class ReviewScrollSelectorTest {
         assertEquals(12, ReviewScrollSelector.target(recordedFrame().copy(nodes = recordedFrame().nodes.reversed()), true)?.index)
     }
 
+    @Test fun hungerTipSheetBesideTheReviewBodyIsNotASecondBody() {
+        // S22, HS 8.0.304: the driver-tip sheet is a sibling outer scroller of the review body.
+        val tip = CatalogNode(40, 7, "", "ادعم المندوب بمكافأة وسيذهب كل المبلغ لحسابه\nاستخدم نفس المبلغ للطلبات القادمة",
+            "android.view.View", false, false, true)
+        assertEquals(12, ReviewScrollSelector.target(recordedFrame().copy(nodes = recordedFrame().nodes + tip), true)?.index)
+        // The live review structure keeps only the fixed marker, never the sheet's text.
+        val marked = tip.copy(label = ReviewScrollSelector.HUNGER_TIP_SHEET)
+        assertEquals(12, ReviewScrollSelector.target(recordedFrame().copy(nodes = recordedFrame().nodes + marked), true)?.index)
+        assertNull(ReviewScrollSelector.target(recordedFrame().copy(nodes = recordedFrame().nodes + tip.copy(label = "")), true))
+    }
+
     @Test fun incompleteUnknownAndAmbiguousSiblingBodiesAreRejected() {
         assertNull(ReviewScrollSelector.target(recordedFrame(), false))
         assertNull(ReviewScrollSelector.target(recordedFrame().copy(complete = false), true))

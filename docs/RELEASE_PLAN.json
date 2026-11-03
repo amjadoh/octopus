@@ -1,13 +1,13 @@
 {
-  "version": "1.3.27",
-  "versionCode": 35,
-  "tag": "v1.3.27",
+  "version": "1.3.30",
+  "versionCode": 38,
+  "tag": "v1.3.30",
   "scope": "scoped_native_comparison_update",
   "userRequestedPublication": true,
   "realComparisonComplete": false,
   "prerelease": false,
-  "note": "User requested publication with smarter name matching and Terra restaurant-name help. Not yet run on the phone.",
-  "verificationReport": "verification/2026-11-02/release-1.3.27-status.json",
+  "note": "User requested publication after the comparison passed on the Samsung S22 (ALBAIK one and two meals, KFC Twister twice).",
+  "verificationReport": "verification/2026-11-03/release-1.3.30-status.json",
   "publicationMode": "user_trial",
   "userTrialAuthorized": true
 }

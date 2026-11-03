@@ -60,6 +60,7 @@ object LiveCatalogBridge {
     fun openProduct(restaurant: app.octopus.local.providers.LiveRestaurant, item: app.octopus.local.providers.LiveMenuItem, returnToOctopus: Boolean = true): Boolean = graph.get()?.showLocalProduct(restaurant, item) ?: false
     fun prepareRidan(details: ConfiguredProduct, selection: ProductSelection): Boolean = navigator.get()?.prepareRidan(details, selection) ?: false
     fun openPreparedRidanBasket(): Boolean = navigator.get()?.openPreparedRidanBasket() ?: false
+    fun openComparedHungerCart(): Boolean = navigator.get()?.openComparedHungerCart() ?: false
     fun stop() { navigator.get()?.stop() }
 }
 
