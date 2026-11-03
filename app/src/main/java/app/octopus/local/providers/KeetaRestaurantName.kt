@@ -9,6 +9,8 @@ object KeetaRestaurantName {
     // A suffix is dropped only when it reads as a promotion; a district or branch name stays for Terra to judge.
     private val promotion = Regex("عرض|عروض|خصم|كوبون|قسيم|توصيل|مجان|جديد|وفر|%|٪|offer|deal|free|new", RegexOption.IGNORE_CASE)
     private val emoji = Regex("[\\p{So}\\p{Sk}]")
+    private val pricedEnd = Regex("[0-9]+(?:\\.[0-9]+)?\\s*(?:ريال|﷼|ر\\.س)$")
+    private val price = Regex("[0-9]+(?:\\.[0-9]+)?\\s*(?:ريال|﷼|ر\\.س)")
     private val branchWords = Regex("فرع|branch|الفرع", RegexOption.IGNORE_CASE)
     private val approved = java.util.Collections.synchronizedSet(mutableSetOf<Pair<String, String>>())
 
@@ -24,10 +26,13 @@ object KeetaRestaurantName {
         val shown = KeetaNameText.loose(displayed)
         if (want.isEmpty() || shown.isEmpty()) return false
         if (want == shown || (want to shown) in approved) return true
-        val rest = separators.firstNotNullOfOrNull { sep -> shown.removePrefix(want).takeIf { shown.startsWith(want + sep) } }
+        val separated = separators.firstNotNullOfOrNull { sep -> shown.removePrefix(want).takeIf { shown.startsWith(want + sep) } }
+        // S22 / Keeta 3.13.301: "هارديز جولد ستار رابتور 13 ريال" — the chain, a space, then a priced campaign.
+        // With only a space, the rest must end in a campaign price; a district or branch name alone never matches.
+        val rest = separated ?: shown.removePrefix(want).takeIf { shown.startsWith("$want ") && pricedEnd.containsMatchIn(it) }
             ?: return false
         if ('(' in rest || rest.length > 60 || branchWords.containsMatchIn(rest)) return false
-        return promotion.containsMatchIn(rest) || emoji.containsMatchIn(displayed)
+        return promotion.containsMatchIn(rest) || price.containsMatchIn(rest) || emoji.containsMatchIn(displayed)
     }
 
     fun matches(expected: String, displayed: String): Boolean {

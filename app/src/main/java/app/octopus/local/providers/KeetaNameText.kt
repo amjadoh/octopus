@@ -30,7 +30,18 @@ object KeetaNameText {
         if (raw.isBlank() || raw.length > 300 || '\n' in raw) return null
         val key = loose(raw)
         if (key.isEmpty()) return null
-        return titles.filter { loose(it) == key }.singleOrNull()
+        titles.filter { loose(it) == key }.singleOrNull()?.let { return it }
+        // S22 Hardee's: HungerStation "كومبو بيج ديلوكس برجر - وسط" is Keeta "بيج ديلوكس برجر وجبة - وسط" —
+        // the same words in another order, with "كومبو" for "وجبة". Every word, the size included, must match.
+        val shown = mealWords(raw) ?: return null
+        return titles.filter { mealWords(it) == shown }.singleOrNull()
+    }
+
+    private fun mealWords(value: String): Map<String, Int>? {
+        val all = loose(value).replace("-", " ").replace(",", " ").split(' ').filter(String::isNotBlank)
+            .map { if (it == "كومبو") "وجبة" else it }
+        if (all.size < 3 || "وجبة" !in all) return null
+        return all.groupingBy { it }.eachCount()
     }
 
     private val sandwich = setOf("ساندويتش", "سندويتش", "ساندوتش", "سندوتش", "ساندويش", "سندويش")
