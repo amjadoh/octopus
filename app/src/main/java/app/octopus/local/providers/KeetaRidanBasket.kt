@@ -124,7 +124,7 @@ open class KeetaBasketReader(private val catalog: KeetaMenuReader, private val r
         if(sections.isEmpty())return null
         val cards=mutableListOf<CatalogNode>()
         for(section in sections) {
-            if (section == sections.last() && promotionalSummary(f, section) != null) continue
+            if (section == sections.last() && (promotionalSummary(f, section) != null || deliverySavings(f, section))) continue
             if(section.className!="android.view.ViewGroup" || section.clickable || section.editable ||
                 section.scrollable || section.label.isNotEmpty() || section.omittedText)return null
             val children=f.nodes.filter {it.parent==section.index}
@@ -161,6 +161,28 @@ open class KeetaBasketReader(private val catalog: KeetaMenuReader, private val r
         val total = amount("الإجمالي") ?: return null
         return total.takeIf { base >= 0 && discount <= 0 && total >= 0 &&
             runCatching { Math.addExact(base, discount) }.getOrNull() == total }
+    }
+
+    /** Observed on the S22 (3.13.301, cart over 30 ﷼): a closing savings section under the rows —
+     * "إجمالي التوفير" and its amount, one "خصم التوصيل" info row with a negative amount, and the
+     * final-amount note. It holds no item, so it is skipped only when it is exactly that. */
+    private fun deliverySavings(f: CatalogFrame, section: CatalogNode): Boolean {
+        if (catalog.VERSION != "3.13.301") return false
+        val body = f.descendants(section.index)
+        val labels = setOf(KeetaMenuReader.SAVINGS_TOTAL, KeetaMenuReader.DELIVERY_DISCOUNT, KeetaMenuReader.FINAL_AMOUNT_NOTE)
+        if (body.size > 30 || labels.any { label -> body.count { it.label == label } != 1 } ||
+            body.any { it.editable || it.scrollable || it.omittedText } ||
+            body.any { it.label.isNotBlank() && it.label !in labels && MoneyParser.parse(it.label) == null }) return false
+        val discountText = body.single { it.label == KeetaMenuReader.DELIVERY_DISCOUNT }
+        val discountLink = parent(f, discountText)?.takeIf { it.clickable && f.descendants(it.index).size == 2 }
+        if (body.any { it.clickable && it != discountLink }) return false
+        fun amount(text: CatalogNode): Long? {
+            val row = parent(f, parent(f, text) ?: return null) ?: return null
+            return f.descendants(row.index).filter { it.label.contains('﷼') }.singleOrNull()?.label?.let(MoneyParser::parse)
+        }
+        val saved = amount(body.single { it.label == KeetaMenuReader.SAVINGS_TOTAL }) ?: return false
+        val discount = amount(discountText) ?: return false
+        return saved > 0 && discount == -saved
     }
 
     private fun plainSkuLabel(f:CatalogFrame,node:CatalogNode,name:String=node.label):Boolean {

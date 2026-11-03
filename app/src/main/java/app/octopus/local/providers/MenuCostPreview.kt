@@ -62,6 +62,12 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
     val requestedChoices: Set<String> = emptySet(),
     /** Other meal names of the same configured request; a drawer row may prefix its choices with one. */
     val otherMealTitles: Set<String> = emptySet()) {
+    companion object {
+        /** Fixed public labels of the Keeta cart-drawer savings section (cart over its delivery-discount threshold). */
+        const val SAVINGS_TOTAL = "إجمالي التوفير"
+        const val DELIVERY_DISCOUNT = "خصم التوصيل"
+        const val FINAL_AMOUNT_NOTE = "يتم تأكيد المبلغ النهائي عند صفحة إتمام الدفع"
+    }
     private var optionalPlainFrame: CatalogFrame? = null
     private var optionalPlainAt = 0L
     fun acceptOptionalPlain(frame: CatalogFrame, proof: KeetaOptionalPlainSession, now: Long): Boolean {
@@ -105,6 +111,7 @@ open class KeetaMenuReader(val restaurant: String, val title: String, val VERSIO
         if (profile.usesCurrentLayout && resourceId == "com.sankuai.sailor.afooddelivery:id/product_name" &&
             text.length in 1..300 && text.any(Char::isLetter)) return text
         if (text in KeetaOptionalPlainSession.publicLabels) return text
+        if (text in setOf(SAVINGS_TOTAL, DELIVERY_DISCOUNT, FINAL_AMOUNT_NOTE)) return text
         if (KeetaRestaurantName.matches(restaurant, text)) return restaurant
         if (KeetaAvailability.closedText(text) || KeetaAvailability.unavailableText(text) ||
             text in setOf("موافق","لم يبلغ الطلب الحد الأدنى","إضافة أصناف أخرى")) return text
