@@ -60,13 +60,13 @@ class KeetaOptionalPlainSession private constructor(
             choices += choice.label
         }
         return groups == expectedGroups && choices == expectedChoices &&
-            content.count { it.label == "طلب خاص" } == 1 && content.count { it.label == "0/70" } == 1 &&
+            content.count { it.label == "طلب خاص" } == 1 && content.count { it.label in KeetaSingleSkuProduct.EMPTY_NOTE_COUNTERS } == 1 &&
             content.none { it.omittedText }
     }
 
     companion object {
         val publicLabels = setOf("مع الجبنة", "بدون مخلل", "بدون سلطة", "بدون صلصة", "جبنة شيدر 1 قطعة",
-            "جبنة شيدر مع الهالبينو", "بدون مخلل حار", "شائع", "0/70",
+            "جبنة شيدر مع الهالبينو", "بدون مخلل حار", "شائع", "0/70", "70/0",
             "سنشارك طلبك الخاص مع المتجر. لا يمكن إلغاء الطلب أو استرداد المبلغ إذا تعذّر تنفيذ طلبك الخاص.")
         fun start(frame: CatalogFrame, reader: KeetaMenuReader, now: Long): KeetaOptionalPlainSession? {
             if (reader.VERSION != "3.13.301" || reader.restaurant != "البيك" ||

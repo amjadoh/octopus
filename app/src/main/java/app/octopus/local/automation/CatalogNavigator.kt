@@ -34,6 +34,8 @@ import kotlin.coroutines.resume
 import org.json.JSONObject
 import org.json.JSONArray
 
+private const val MAX_REVIEW_SCROLLS = 10
+
 /** Evidenced HS catalog navigation plus an explicit, bounded Ridan basket preparation request. */
 class CatalogNavigator(private val service: AccessibilityService, private val graph: AppGraph) {
     private class ScreenChangedBeforeAction : IllegalArgumentException("تغيرت الشاشة؛ أوقفت الإجراء بدل النقر على عنصر قديم.")
@@ -350,10 +352,27 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         return true
     }
 
+    /** After a comparison: HungerStation's launcher reopens its home, so navigate (read-only) back to the
+     * compared cart and leave it on screen. Nothing is added, removed, confirmed or paid. */
+    fun openComparedHungerCart(): Boolean {
+        if (nativeCompareStarting || job?.isActive == true || comparisonJob?.isActive == true || graph.session.value.active) return false
+        val source = latestNativeCart ?: rememberedNativeCart() ?: return false
+        return begin(returnOnSuccess = false, operation = CatalogOperation.OPEN_PREPARED_CART) {
+            reopenNativeSourceBasket(source, acceptChanged = true)
+            graph.catalog.value = graph.catalog.value.copy(
+                message = "فُتحت سلتك في هنقرستيشن. التحكم الآن لك؛ راجع الإجمالي وأكمل الدفع بنفسك.")
+        }
+    }
+
     private val nativeCartFile get() = service.filesDir.resolve("last-native-cart.json")
 
     private fun rememberNativeCart(cart: BasketEvidence) {
         runCatching { nativeCartFile.writeText(com.google.gson.Gson().toJson(cart)) }
+    }
+
+    private fun forgetNativeCart() {
+        latestNativeCart = null
+        runCatching { nativeCartFile.delete() }
     }
 
     private fun rememberedNativeCart(): BasketEvidence? = runCatching {
@@ -388,9 +407,19 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     if (generation != token || reopenJob?.isCancelled == true) return@launch
                     reopened ?: error(graph.catalog.value.error ?: "لم تكتمل إعادة قراءة السلة.")
                 } else {
-                    val root = service.rootInActiveWindow ?: error("افتح سلة هنقرستيشن أولًا.")
-                    try { requireProviderWindow(root); capture(root) }
-                    finally { @Suppress("DEPRECATION") root.recycle() }
+                    // A Compare tap can land while the cart rows are still being drawn; re-read for a few seconds.
+                    var read: CatalogFrame
+                    val started = SystemClock.elapsedRealtime()
+                    while (true) {
+                        val root = service.rootInActiveWindow ?: error("افتح سلة هنقرستيشن أولًا.")
+                        read = try { requireProviderWindow(root); capture(root) }
+                            finally { @Suppress("DEPRECATION") root.recycle() }
+                        if (HungerStationCatalog.screen(read) != CatalogScreen.CART ||
+                            BasketEvidenceReader.hungerStation(read, false).lines.isNotEmpty() ||
+                            SystemClock.elapsedRealtime() - started > 5_000) break
+                        delay(400)
+                    }
+                    read
                 }
                 graph.refreshInstallations()
                 val sourceVersion = graph.installations.value.singleOrNull { it.provider == ProviderId.HUNGERSTATION }?.version
@@ -484,12 +513,15 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 navigateToRestaurant(LiveRestaurant(restaurant, null, restaurant))
                 frame = await { HungerStationCatalog.screen(it) == CatalogScreen.MENU }
             }
-            val (settled, proof) = awaitMenuCartProof(frame, restaurant, HungerStationCatalog.TESTED_VERSION)
-                ?: error("لم يتطابق عداد قائمة المطعم مع السلة؛ لم أنقلها.")
+            val (settled, proof) = awaitMenuCartProof(frame, restaurant, HungerStationCatalog.TESTED_VERSION) ?: run {
+                if (acceptChanged) forgetNativeCart()
+                error(if (acceptChanged) "ما لقيت سلتك في فرع «$restaurant» اللي فتحه هنقرستيشن (ممكن فتح فرع ثاني حسب موقعك). افتح سلتك في هنقرستيشن واضغط «قارن» العائم."
+                    else "لم يتطابق عداد قائمة المطعم مع السلة؛ لم أنقلها.")
+            }
             frame = settled
             nativeCartImport.observe(frame, System.currentTimeMillis())
             act(frame, CatalogAction.OPEN_BASKET, { it == proof.command.node }, basketCommand = proof.command)
-            frame = await { HungerStationCatalog.screen(it) == CatalogScreen.CART }
+            frame = awaitHungerCart()
             check(proof.finish(frame, HungerStationCatalog.TESTED_VERSION, System.currentTimeMillis()) != null) {
                 "لم تثبت السلة كاملة بعد إعادة فتحها."
             }
@@ -504,6 +536,17 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         }
         check(current == original) { "تغيرت السلة منذ قراءتها؛ أعد البدء من هنقرستيشن." }
         return frame
+    }
+
+    /** HungerStation draws the cart's "المجموع" summary after its rows (seen on the S22 with a KFC meal);
+     * wait briefly for it so the one-shot cart proof is not spent on a half-drawn cart. */
+    private suspend fun awaitHungerCart(): CatalogFrame {
+        val first = await { HungerStationCatalog.screen(it) == CatalogScreen.CART }
+        if (BasketEvidenceReader.hungerStation(first, true).subtotal != null) return first
+        return try {
+            withTimeout(6_000) { await { HungerStationCatalog.screen(it) == CatalogScreen.CART &&
+                BasketEvidenceReader.hungerStation(it, true).subtotal != null } }
+        } catch (_: TimeoutCancellationException) { first }
     }
 
     /** HungerStation draws the menu cart bar after the menu settles; wait for its count before proving the cart. */
@@ -538,7 +581,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         menu = settled
         nativeCartImport.observe(menu, System.currentTimeMillis())
         act(menu, CatalogAction.OPEN_BASKET, { it == proof.command.node }, basketCommand = proof.command)
-        val cart = await { HungerStationCatalog.screen(it) == CatalogScreen.CART }
+        val cart = awaitHungerCart()
         val verified = proof.finish(cart, version, System.currentTimeMillis())
             ?: error("لم تتطابق السلة كاملة مع عداد قائمة المطعم؛ لم أبدأ نقلها.")
         check(verified.restaurant == original.restaurant && verified.lines == original.lines &&
@@ -1121,7 +1164,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                         val unit = if (id == ProviderId.HUNGERSTATION) readHungerPlainLine(desired,line)
                             else readKeetaPlainLine(desired,line)
                         @Suppress("DEPRECATION")
-                        val observedVersion=service.packageManager.getPackageInfo(id.packageName,0).versionName.orEmpty()
+                        val observedVersion=ProviderCompatibility.effective(id, service.packageManager.getPackageInfo(id.packageName,0).versionName).orEmpty()
                         check(plan.record(graph.draft.value ?: error("اختفى الطلب."),line,unit,System.currentTimeMillis(),observedVersion)) {
                             "تغير الطلب أو قراءة الصنف؛ لم أحتسب مجموعًا ناقصًا."
                         }
@@ -1233,7 +1276,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         val (settled,proof)=awaitMenuCartProof(menu,desired.restaurant,version)
             ?: error("تعذر إثبات عداد السلة ومبلغها من القائمة؛ لم أعدلها.")
         act(settled,CatalogAction.OPEN_BASKET,{it==proof.command.node},basketCommand=proof.command)
-        val frame=await {HungerStationCatalog.screen(it)==CatalogScreen.CART}
+        val frame=awaitHungerCart()
         val evidence=proof.finish(frame,version,System.currentTimeMillis())
         if(evidence==null && BuildConfig.VERSION_NAME.endsWith("-device-tools")) {
             val read=BasketEvidenceReader.hungerStation(frame,false)
@@ -1324,7 +1367,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             val current=graph.draft.value ?: error("اختفى الطلب.")
             check(current.fingerprint==cart.fingerprint)
             @Suppress("DEPRECATION")
-            val version=service.packageManager.getPackageInfo(provider.packageName,0).versionName
+            val version=ProviderCompatibility.effective(provider, service.packageManager.getPackageInfo(provider.packageName,0).versionName)
             val target=session.target(action,fresh,current,version,now) ?: error("لم يتحدد عنصر بحث وجبة موثوق.")
             check(SafetyGuard().allowsHungerMenuSearch(action,session,fresh,target,current,
                 root.packageName?.toString(),version,graph.settings.value.catalogConsent,currentCoroutineContext().isActive,now))
@@ -2088,7 +2131,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     if (fresh != planned) throw ScreenChangedBeforeAction()
                     val target = keetaMenu.searchTarget(fresh, action) ?: error("تعذر التحقق من عنصر البحث في كيتا.")
                     @Suppress("DEPRECATION")
-                    val version = service.packageManager.getPackageInfo(provider.packageName, 0).versionName
+                    val version = ProviderCompatibility.effective(provider, service.packageManager.getPackageInfo(provider.packageName,0).versionName)
                     check(SafetyGuard().allowsKeetaSearch(action, keetaMenu, fresh, target, root.packageName?.toString(),
                         version, graph.settings.value.catalogConsent, currentCoroutineContext().isActive))
                     val node = locateKeetaNode(root, target) ?: error("اختفى عنصر البحث.")
@@ -2346,7 +2389,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     val desired = graph.draft.value ?: error("اختفى الطلب؛ لم أخرج من السلة.")
                     val evidence = keetaBasket.evidence(frame) ?: error("لم تثبت سلة كاملة للخروج منها.")
                     @Suppress("DEPRECATION")
-                    val version = service.packageManager.getPackageInfo(provider.packageName, 0).versionName
+                    val version = ProviderCompatibility.effective(provider, service.packageManager.getPackageInfo(provider.packageName,0).versionName)
                     val command = (if (meal != null) KeetaOwnedDrawerReturn.createConfigured(frame, evidence, meal, version, System.currentTimeMillis(), desired)
                         else KeetaOwnedDrawerReturn.create(frame, evidence, desired, version, System.currentTimeMillis()))
                         ?: error("تعذر تحديد إغلاق معاينة السلة.")
@@ -2374,7 +2417,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 requireProviderWindow(root)
                 if (capture(root) != frame) throw ScreenChangedBeforeAction()
                 @Suppress("DEPRECATION")
-                val version = service.packageManager.getPackageInfo(provider.packageName, 0).versionName
+                val version = ProviderCompatibility.effective(provider, service.packageManager.getPackageInfo(provider.packageName,0).versionName)
                 val target = command.searchTarget(frame, desired(), version, System.currentTimeMillis())
                     ?: error("لم تظهر نتيجة البحث المطابقة بعد الرجوع؛ لم أختر مطعمًا آخر.")
                 verifyActiveFrame(frame, root.windowId)
@@ -2385,7 +2428,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             frame = await { matchesMenu(it) }
         }
         @Suppress("DEPRECATION")
-        val version = service.packageManager.getPackageInfo(provider.packageName, 0).versionName
+        val version = ProviderCompatibility.effective(provider, service.packageManager.getPackageInfo(provider.packageName,0).versionName)
         currentCoroutineContext().ensureActive(); checkSession()
         check(command.finish(frame, desired(), version, System.currentTimeMillis())) {
             "تغير المطعم أو عدد السلة أثناء الرجوع؛ توقفت قبل أي إجراء آخر."
@@ -2582,6 +2625,11 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     }
 
     /** No actions on the review except scrolling. All order/payment confirmations remain unreachable. */
+    /** Device-tools builds only: why the review read scrolled or waited. No field values. */
+    private fun reviewTrace(message: String) {
+        if (BuildConfig.VERSION_NAME.endsWith("-device-tools")) android.util.Log.d("OctopusReview", message)
+    }
+
     private fun isRecognizedReview(root: AccessibilityNodeInfo): Boolean {
         val bounds = Rect().also(root::getBoundsInScreen)
         var recognized = false
@@ -2594,6 +2642,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             val id = node.viewIdResourceName.orEmpty()
             if (id in setOf("FlutterCart_title", "menuBackButton", "pdpCloseButton")) excluded = true
             val rect = Rect().also(node::getBoundsInScreen)
+            if (root.packageName?.toString() == ProviderId.HUNGERSTATION.packageName && ReviewNavigationGuard.hungerPlaceOrderButton(
+                    (node.text ?: node.contentDescription)?.toString(), node.className?.toString())) recognized = true
             if (rect.top < bounds.top + bounds.height()/4) {
                 val value = (node.text ?: node.contentDescription)?.toString()?.trim()
                 if (value in setOf("الدفع", "مراجعة الطلب", "تأكيد الطلب", "Checkout", "Order review") ||
@@ -2625,7 +2675,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 InspectionRedactor.privateSubtree(node.viewIdResourceName.orEmpty()) ||
                 (android.os.Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive)) return
             val index = nodes.size
-            nodes += CatalogNode(index, parent, node.viewIdResourceName.orEmpty(), "",
+            val marker = if (node.isScrollable && (node.text ?: node.contentDescription)?.toString().orEmpty()
+                    .startsWith(ReviewScrollSelector.HUNGER_TIP_SHEET)) ReviewScrollSelector.HUNGER_TIP_SHEET else ""
+            nodes += CatalogNode(index, parent, node.viewIdResourceName.orEmpty(), marker,
                 node.className?.toString().orEmpty(), node.isClickable, false, node.isScrollable, node.isEnabled)
             if (node.isScrollable) scrollNodes[index] = AccessibilityNodeInfo.obtain(node)
             if (node.childCount > 200) complete = false
@@ -2643,7 +2695,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         val saved = graph.catalog.value.preparedBaskets.forRequest(desired, provider) ?: error("لم تُتحقق السلة قبل قراءة الإجمالي.")
         val version = graph.installations.value.single { it.provider == provider }.version ?: error("إصدار المنصة غير معروف.")
         @Suppress("DEPRECATION")
-        val observedVersion=service.packageManager.getPackageInfo(provider.packageName,0).versionName
+        val observedVersion=ProviderCompatibility.effective(provider, service.packageManager.getPackageInfo(provider.packageName,0).versionName)
         check(observedVersion==version) {"تغير إصدار المنصة؛ لم أفتح مراجعة السلة."}
         val directDrawer=provider==ProviderId.KEETA && (desired.items.size==1 || configured != null) &&
             KeetaVersionProfile.resolve(version)?.allowsDirectDrawerReview==true
@@ -2688,7 +2740,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         var scrolls = 0
         var lastReviewDiagnostic: String? = null
         var recommendationsSkipped = false
-        while (SystemClock.elapsedRealtime() - start < 20_000) {
+        // The S22's longer HS review (payment, HPay, rewards, banner) puts the summary ~6 scrolls down.
+        while (SystemClock.elapsedRealtime() - start < 32_000) {
             currentCoroutineContext().ensureActive(); checkSession()
             val review = service.rootInActiveWindow
             if (review != null) try {
@@ -2742,6 +2795,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                             .writeText(diagnostic.toString(),Charsets.UTF_8)}
                     }
                 }
+                reviewTrace("total=${quote.total != null} truncated=${snapshot.truncated} recognized=$recognized")
                 if (quote.total != null && !snapshot.truncated && recognized) {
                     if (stable?.fingerprint != quote.fingerprint) { stable = quote; stableSince = SystemClock.elapsedRealtime() }
                     else if (SystemClock.elapsedRealtime() - stableSince >= 1_000) {
@@ -2752,10 +2806,11 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     }
                 } else {
                     stable = null
-                    if (recognized && scrolls < 5 && SystemClock.elapsedRealtime() - lastScroll >= 2_000) {
+                    if (recognized && scrolls < MAX_REVIEW_SCROLLS && SystemClock.elapsedRealtime() - lastScroll >= 2_000) {
                         val structure = reviewStructure(review)
                         try {
                             val selected = ReviewScrollSelector.target(structure.frame, recognized)
+                            reviewTrace("target=${selected?.index} complete=${structure.frame.complete} scrolls=$scrolls")
                             if (selected != null) {
                                 checkSession()
                                 val current = service.rootInActiveWindow
@@ -2774,18 +2829,20 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                                                 !node.isPassword && !node.isEditable &&
                                                 (android.os.Build.VERSION.SDK_INT < 34 || !node.isAccessibilityDataSensitive)) {
                                                 checkSession()
-                                                if (node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) scrolls++
-                                                else scrolls = 5
+                                                val moved = node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+                                                reviewTrace("scroll moved=$moved")
+                                                if (moved) scrolls++ else scrolls = MAX_REVIEW_SCROLLS
                                             }
                                         } finally { fresh.recycle() }
                                     }
                                 } finally { @Suppress("DEPRECATION") current.recycle() }
-                            } else scrolls = 5
+                            } else scrolls = MAX_REVIEW_SCROLLS
                         } finally { structure.recycle() }
                         lastScroll = SystemClock.elapsedRealtime()
                     }
                 }
             } catch (_: ScreenChangedBeforeAction) {
+                reviewTrace("screen changed before action")
                 // The guard rejected an undispatched navigation/scroll action.
                 // Re-read within the same bounded review deadline, never reuse its node.
                 stable = null
@@ -3009,6 +3066,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         var fingerprint: String? = null
         var since = 0L
         var dismissedPromos = 0
+        var dismissedLocationPrompts = 0
         val waitingSince = SystemClock.elapsedRealtime()
         var terraChecked = false
         while (true) {
@@ -3036,6 +3094,27 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                         return@let
                     }
                     if(HungerStationSpinPromo.closeTarget(frame)!=null) continue
+                }
+                val keetaAdvertClose = if (provider == ProviderId.KEETA) KeetaFullScreenAdvert.closeTarget(frame) else null
+                if (keetaAdvertClose != null) {
+                    val close = keetaAdvertClose
+                    check(++dismissedPromos <= 3) { "تكرر ظهور إعلانات كيتا؛ توقفت دون تغيير الطلب." }
+                    phase = "إغلاق إعلان كيتا"
+                    check(performKeetaReadAction(root, close, AccessibilityNodeInfo.ACTION_CLICK)) { "تعذر إغلاق إعلان كيتا؛ توقفت." }
+                    lastStats.put("keetaAdvertClosed", dismissedPromos)
+                    fingerprint = null
+                    delay(400)
+                    continue
+                }
+                if (provider == ProviderId.HUNGERSTATION && HungerStationLocationPrompt.shown(frame)) {
+                    check(++dismissedLocationPrompts <= 2) {
+                        "هنقرستيشن يسأل «${HungerStationLocationPrompt.TITLE}» لأن موقعك بعيد عن عنوان التوصيل؛ اختر من التنبيه ثم اضغط «قارن» مرة ثانية."
+                    }
+                    phase = "إغلاق تنبيه الموقع في هنقرستيشن"
+                    check(service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)) { "تعذر إغلاق تنبيه الموقع في هنقرستيشن؛ توقفت." }
+                    fingerprint = null
+                    delay(700)
+                    continue
                 }
                 if(provider==ProviderId.KEETA) stopAtKeetaMinimumOrder(frame)
                 if(provider==ProviderId.KEETA && (KeetaAvailability.closedNotice(frame) || KeetaAvailability.closedMenu(frame)))
