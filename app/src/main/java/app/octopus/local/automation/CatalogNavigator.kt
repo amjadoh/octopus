@@ -1121,7 +1121,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                         val unit = if (id == ProviderId.HUNGERSTATION) readHungerPlainLine(desired,line)
                             else readKeetaPlainLine(desired,line)
                         @Suppress("DEPRECATION")
-                        val observedVersion=service.packageManager.getPackageInfo(id.packageName,0).versionName.orEmpty()
+                        val observedVersion=ProviderCompatibility.effective(id, service.packageManager.getPackageInfo(id.packageName,0).versionName).orEmpty()
                         check(plan.record(graph.draft.value ?: error("اختفى الطلب."),line,unit,System.currentTimeMillis(),observedVersion)) {
                             "تغير الطلب أو قراءة الصنف؛ لم أحتسب مجموعًا ناقصًا."
                         }
@@ -1324,7 +1324,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             val current=graph.draft.value ?: error("اختفى الطلب.")
             check(current.fingerprint==cart.fingerprint)
             @Suppress("DEPRECATION")
-            val version=service.packageManager.getPackageInfo(provider.packageName,0).versionName
+            val version=ProviderCompatibility.effective(provider, service.packageManager.getPackageInfo(provider.packageName,0).versionName)
             val target=session.target(action,fresh,current,version,now) ?: error("لم يتحدد عنصر بحث وجبة موثوق.")
             check(SafetyGuard().allowsHungerMenuSearch(action,session,fresh,target,current,
                 root.packageName?.toString(),version,graph.settings.value.catalogConsent,currentCoroutineContext().isActive,now))
@@ -2088,7 +2088,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     if (fresh != planned) throw ScreenChangedBeforeAction()
                     val target = keetaMenu.searchTarget(fresh, action) ?: error("تعذر التحقق من عنصر البحث في كيتا.")
                     @Suppress("DEPRECATION")
-                    val version = service.packageManager.getPackageInfo(provider.packageName, 0).versionName
+                    val version = ProviderCompatibility.effective(provider, service.packageManager.getPackageInfo(provider.packageName,0).versionName)
                     check(SafetyGuard().allowsKeetaSearch(action, keetaMenu, fresh, target, root.packageName?.toString(),
                         version, graph.settings.value.catalogConsent, currentCoroutineContext().isActive))
                     val node = locateKeetaNode(root, target) ?: error("اختفى عنصر البحث.")
@@ -2346,7 +2346,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     val desired = graph.draft.value ?: error("اختفى الطلب؛ لم أخرج من السلة.")
                     val evidence = keetaBasket.evidence(frame) ?: error("لم تثبت سلة كاملة للخروج منها.")
                     @Suppress("DEPRECATION")
-                    val version = service.packageManager.getPackageInfo(provider.packageName, 0).versionName
+                    val version = ProviderCompatibility.effective(provider, service.packageManager.getPackageInfo(provider.packageName,0).versionName)
                     val command = (if (meal != null) KeetaOwnedDrawerReturn.createConfigured(frame, evidence, meal, version, System.currentTimeMillis(), desired)
                         else KeetaOwnedDrawerReturn.create(frame, evidence, desired, version, System.currentTimeMillis()))
                         ?: error("تعذر تحديد إغلاق معاينة السلة.")
@@ -2374,7 +2374,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 requireProviderWindow(root)
                 if (capture(root) != frame) throw ScreenChangedBeforeAction()
                 @Suppress("DEPRECATION")
-                val version = service.packageManager.getPackageInfo(provider.packageName, 0).versionName
+                val version = ProviderCompatibility.effective(provider, service.packageManager.getPackageInfo(provider.packageName,0).versionName)
                 val target = command.searchTarget(frame, desired(), version, System.currentTimeMillis())
                     ?: error("لم تظهر نتيجة البحث المطابقة بعد الرجوع؛ لم أختر مطعمًا آخر.")
                 verifyActiveFrame(frame, root.windowId)
@@ -2385,7 +2385,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             frame = await { matchesMenu(it) }
         }
         @Suppress("DEPRECATION")
-        val version = service.packageManager.getPackageInfo(provider.packageName, 0).versionName
+        val version = ProviderCompatibility.effective(provider, service.packageManager.getPackageInfo(provider.packageName,0).versionName)
         currentCoroutineContext().ensureActive(); checkSession()
         check(command.finish(frame, desired(), version, System.currentTimeMillis())) {
             "تغير المطعم أو عدد السلة أثناء الرجوع؛ توقفت قبل أي إجراء آخر."
@@ -2643,7 +2643,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         val saved = graph.catalog.value.preparedBaskets.forRequest(desired, provider) ?: error("لم تُتحقق السلة قبل قراءة الإجمالي.")
         val version = graph.installations.value.single { it.provider == provider }.version ?: error("إصدار المنصة غير معروف.")
         @Suppress("DEPRECATION")
-        val observedVersion=service.packageManager.getPackageInfo(provider.packageName,0).versionName
+        val observedVersion=ProviderCompatibility.effective(provider, service.packageManager.getPackageInfo(provider.packageName,0).versionName)
         check(observedVersion==version) {"تغير إصدار المنصة؛ لم أفتح مراجعة السلة."}
         val directDrawer=provider==ProviderId.KEETA && (desired.items.size==1 || configured != null) &&
             KeetaVersionProfile.resolve(version)?.allowsDirectDrawerReview==true

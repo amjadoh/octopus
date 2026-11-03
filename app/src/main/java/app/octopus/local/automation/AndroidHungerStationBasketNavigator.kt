@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
 import app.octopus.local.domain.ProviderId
+import app.octopus.local.domain.ProviderCompatibility
 import app.octopus.local.providers.*
 import app.octopus.local.safety.ProviderAccessRestrictions
 import app.octopus.local.safety.SafetyGuard
@@ -130,6 +131,6 @@ class AndroidHungerStationBasketNavigator(
     }
 
     private fun installedVersion(): String? = runCatching {
-        @Suppress("DEPRECATION") service.packageManager.getPackageInfo(ProviderId.HUNGERSTATION.packageName, 0).versionName
+        @Suppress("DEPRECATION") ProviderCompatibility.effective(ProviderId.HUNGERSTATION, service.packageManager.getPackageInfo(ProviderId.HUNGERSTATION.packageName, 0).versionName)
     }.getOrNull()
 }
