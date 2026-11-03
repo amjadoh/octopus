@@ -5,7 +5,9 @@ enum class ProviderId(val title: String, val packageName: String) {
     HUNGERSTATION("هنقرستيشن", "com.hungerstation.android.web")
 }
 
-data class ProviderInstallation(val provider: ProviderId, val installed: Boolean, val version: String? = null)
+/** [version] is the verified profile the app runs on; [actualVersion] is what is installed (shown to the user). */
+data class ProviderInstallation(val provider: ProviderId, val installed: Boolean, val version: String? = null,
+    val actualVersion: String? = version)
 enum class SessionPhase { IDLE, WAITING_FOR_SCREEN, READING, COMPLETED, STOPPED, FAILED }
 data class SessionState(
     val phase: SessionPhase = SessionPhase.IDLE,

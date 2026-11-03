@@ -316,7 +316,7 @@ class AppGraph(private val app: Application, publicClient: PublicCatalogClient =
                 if (Build.VERSION.SDK_INT >= 33) app.packageManager.getPackageInfo(provider.packageName, PackageManager.PackageInfoFlags.of(0))
                 else @Suppress("DEPRECATION") app.packageManager.getPackageInfo(provider.packageName, 0)
             }.getOrNull()
-            ProviderInstallation(provider, info != null, info?.versionName)
+            ProviderInstallation(provider, info != null, ProviderCompatibility.effective(provider, info?.versionName), info?.versionName)
         }
     }
 }

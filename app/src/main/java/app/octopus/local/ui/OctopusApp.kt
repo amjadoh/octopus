@@ -304,7 +304,7 @@ fun OctopusApp(graph: AppGraph, openAccessibilitySettings: () -> Unit, openUpdat
             Panel {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     ProviderMark(provider)
-                    Column(Modifier.weight(1f)) { Text(provider.title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold); Text(if (installed?.installed == true) "الإصدار ${installed.version ?: "غير متاح"}" else "غير مثبت على هذا الجهاز", fontSize = 12.sp, color = Muted) }
+                    Column(Modifier.weight(1f)) { Text(provider.title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold); Text(if (installed?.installed == true) "الإصدار ${installed.actualVersion ?: "غير متاح"}" else "غير مثبت على هذا الجهاز", fontSize = 12.sp, color = Muted) }
                     Switch(checked = provider in settings.allowed && policy.permitsDiagnosticRead, enabled = policy.permitsDiagnosticRead,
                         onCheckedChange = { onAllowed(provider, it) })
                 }
