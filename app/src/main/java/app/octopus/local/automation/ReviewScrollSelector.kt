@@ -24,9 +24,10 @@ object ReviewScrollSelector {
         }
         fun safe(node: CatalogNode) = !node.editable && !node.enteredText && node.enabled &&
             !InspectionRedactor.privateSubtree(node.id)
+        // HS 8.0.304 can lay its driver-tip sheet beside the review body as a second outer scroller.
         val candidates = frame.nodes.filter { node ->
             node.scrollable && node.className in setOf("android.view.View", "android.widget.ScrollView") &&
-                safe(node) && ancestry(node)?.all(::safe) == true
+                !node.label.startsWith(HUNGER_TIP_SHEET) && safe(node) && ancestry(node)?.all(::safe) == true
         }
         val candidateIndices = candidates.mapTo(mutableSetOf()) { it.index }
         // Observed HS review has an outer vertical body and a nested carousel. Only
@@ -35,4 +36,6 @@ object ReviewScrollSelector {
             ancestry(node)?.none { it.index in candidateIndices } == true
         }
     }
+    /** Review structures carry no text; only this fixed public marker is kept on the tip sheet's scroller. */
+    const val HUNGER_TIP_SHEET = "ادعم المندوب بمكافأة"
 }

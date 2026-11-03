@@ -34,6 +34,8 @@ import kotlin.coroutines.resume
 import org.json.JSONObject
 import org.json.JSONArray
 
+private const val MAX_REVIEW_SCROLLS = 10
+
 /** Evidenced HS catalog navigation plus an explicit, bounded Ridan basket preparation request. */
 class CatalogNavigator(private val service: AccessibilityService, private val graph: AppGraph) {
     private class ScreenChangedBeforeAction : IllegalArgumentException("تغيرت الشاشة؛ أوقفت الإجراء بدل النقر على عنصر قديم.")
@@ -2590,6 +2592,11 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
     }
 
     /** No actions on the review except scrolling. All order/payment confirmations remain unreachable. */
+    /** Device-tools builds only: why the review read scrolled or waited. No field values. */
+    private fun reviewTrace(message: String) {
+        if (BuildConfig.VERSION_NAME.endsWith("-device-tools")) android.util.Log.d("OctopusReview", message)
+    }
+
     private fun isRecognizedReview(root: AccessibilityNodeInfo): Boolean {
         val bounds = Rect().also(root::getBoundsInScreen)
         var recognized = false
@@ -2602,6 +2609,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             val id = node.viewIdResourceName.orEmpty()
             if (id in setOf("FlutterCart_title", "menuBackButton", "pdpCloseButton")) excluded = true
             val rect = Rect().also(node::getBoundsInScreen)
+            if (root.packageName?.toString() == ProviderId.HUNGERSTATION.packageName && ReviewNavigationGuard.hungerPlaceOrderButton(
+                    (node.text ?: node.contentDescription)?.toString(), node.className?.toString())) recognized = true
             if (rect.top < bounds.top + bounds.height()/4) {
                 val value = (node.text ?: node.contentDescription)?.toString()?.trim()
                 if (value in setOf("الدفع", "مراجعة الطلب", "تأكيد الطلب", "Checkout", "Order review") ||
@@ -2633,7 +2642,9 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                 InspectionRedactor.privateSubtree(node.viewIdResourceName.orEmpty()) ||
                 (android.os.Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive)) return
             val index = nodes.size
-            nodes += CatalogNode(index, parent, node.viewIdResourceName.orEmpty(), "",
+            val marker = if (node.isScrollable && (node.text ?: node.contentDescription)?.toString().orEmpty()
+                    .startsWith(ReviewScrollSelector.HUNGER_TIP_SHEET)) ReviewScrollSelector.HUNGER_TIP_SHEET else ""
+            nodes += CatalogNode(index, parent, node.viewIdResourceName.orEmpty(), marker,
                 node.className?.toString().orEmpty(), node.isClickable, false, node.isScrollable, node.isEnabled)
             if (node.isScrollable) scrollNodes[index] = AccessibilityNodeInfo.obtain(node)
             if (node.childCount > 200) complete = false
@@ -2696,7 +2707,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         var scrolls = 0
         var lastReviewDiagnostic: String? = null
         var recommendationsSkipped = false
-        while (SystemClock.elapsedRealtime() - start < 20_000) {
+        // The S22's longer HS review (payment, HPay, rewards, banner) puts the summary ~6 scrolls down.
+        while (SystemClock.elapsedRealtime() - start < 32_000) {
             currentCoroutineContext().ensureActive(); checkSession()
             val review = service.rootInActiveWindow
             if (review != null) try {
@@ -2750,6 +2762,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                             .writeText(diagnostic.toString(),Charsets.UTF_8)}
                     }
                 }
+                reviewTrace("total=${quote.total != null} truncated=${snapshot.truncated} recognized=$recognized")
                 if (quote.total != null && !snapshot.truncated && recognized) {
                     if (stable?.fingerprint != quote.fingerprint) { stable = quote; stableSince = SystemClock.elapsedRealtime() }
                     else if (SystemClock.elapsedRealtime() - stableSince >= 1_000) {
@@ -2760,10 +2773,11 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     }
                 } else {
                     stable = null
-                    if (recognized && scrolls < 5 && SystemClock.elapsedRealtime() - lastScroll >= 2_000) {
+                    if (recognized && scrolls < MAX_REVIEW_SCROLLS && SystemClock.elapsedRealtime() - lastScroll >= 2_000) {
                         val structure = reviewStructure(review)
                         try {
                             val selected = ReviewScrollSelector.target(structure.frame, recognized)
+                            reviewTrace("target=${selected?.index} complete=${structure.frame.complete} scrolls=$scrolls")
                             if (selected != null) {
                                 checkSession()
                                 val current = service.rootInActiveWindow
@@ -2782,18 +2796,20 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                                                 !node.isPassword && !node.isEditable &&
                                                 (android.os.Build.VERSION.SDK_INT < 34 || !node.isAccessibilityDataSensitive)) {
                                                 checkSession()
-                                                if (node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) scrolls++
-                                                else scrolls = 5
+                                                val moved = node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+                                                reviewTrace("scroll moved=$moved")
+                                                if (moved) scrolls++ else scrolls = MAX_REVIEW_SCROLLS
                                             }
                                         } finally { fresh.recycle() }
                                     }
                                 } finally { @Suppress("DEPRECATION") current.recycle() }
-                            } else scrolls = 5
+                            } else scrolls = MAX_REVIEW_SCROLLS
                         } finally { structure.recycle() }
                         lastScroll = SystemClock.elapsedRealtime()
                     }
                 }
             } catch (_: ScreenChangedBeforeAction) {
+                reviewTrace("screen changed before action")
                 // The guard rejected an undispatched navigation/scroll action.
                 // Re-read within the same bounded review deadline, never reuse its node.
                 stable = null

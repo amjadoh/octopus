@@ -23,6 +23,8 @@ object KeetaSingleSkuProduct {
         return null
     }
     const val NOTES_HINT = "سنشارك طلبك الخاص مع المتجر. لا يمكن إلغاء الطلب أو استرداد المبلغ إذا تعذّر تنفيذ طلبك الخاص."
+    /** The empty-note counter: "0/70" on the Honor, "70/0" on the Samsung S22 (same counter, other text direction). */
+    val EMPTY_NOTE_COUNTERS = setOf("0/70", "70/0")
 
     /** The 3.13.301 special-request section: its heading, one empty note field and the 0/70 counter. */
     private fun emptyNotes(f:CatalogFrame,section:CatalogNode):Boolean {
@@ -32,8 +34,8 @@ object KeetaSingleSkuProduct {
         return body.size<=12 && editors.size==1 && editors[0].className=="android.widget.EditText" &&
             !editors[0].enteredText && editors[0].label in setOf("",NOTES_HINT) &&
             body.none {it.omittedText || it.scrollable || (it.clickable && !it.editable)} &&
-            labelled.count {it.label=="طلب خاص"}==1 && labelled.count {it.label=="0/70"}==1 &&
-            labelled.all {it.label=="طلب خاص" || it.label=="0/70" || it.editable}
+            labelled.count {it.label=="طلب خاص"}==1 && labelled.count {it.label in EMPTY_NOTE_COUNTERS}==1 &&
+            labelled.all {it.label=="طلب خاص" || it.label in EMPTY_NOTE_COUNTERS || it.editable}
     }
 
     fun body(f:CatalogFrame,restaurant:String,title:String):CatalogNode? {
