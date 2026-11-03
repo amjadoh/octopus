@@ -3126,7 +3126,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     delay(400)
                     continue
                 }
-                if (provider == ProviderId.HUNGERSTATION && HungerStationLocationPrompt.shown(frame)) {
+                if (provider == ProviderId.HUNGERSTATION && (HungerStationLocationPrompt.shown(frame) ||
+                        hungerLocationPromptMarkers == HungerStationLocationPrompt.PHRASES)) {
                     check(++dismissedLocationPrompts <= 2) {
                         "هنقرستيشن يسأل «${HungerStationLocationPrompt.TITLE}» لأن موقعك بعيد عن عنوان التوصيل؛ اختر من التنبيه ثم اضغط «قارن» مرة ثانية."
                     }
@@ -3200,6 +3201,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         var complete = true
         var firstDisabledFinancialControl: CatalogStopEvidence? = null
         sensitiveSkipped = 0
+        hungerLocationPromptMarkers.clear()
         fun walk(node: AccessibilityNodeInfo, parent: Int, depth: Int) {
             if (nodes.size >= 1800 || depth > 40) { complete = false; return }
             if (!node.isVisibleToUser) return
@@ -3213,6 +3215,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             if (disabledFinancial && firstDisabledFinancialControl == null)
                 firstDisabledFinancialControl = stopEvidence(node, CatalogStopReason.FINANCIAL_CONTROL_ON_UNKNOWN_SCREEN)
             val private = privateId(id)
+            // The prompt's own ids name a location, so its labels are redacted below; only its three fixed
+            // public phrases are compared here, and nothing of the address is kept.
+            if (provider == ProviderId.HUNGERSTATION) (node.text ?: node.contentDescription)?.toString()?.trim()
+                ?.takeIf { it in HungerStationLocationPrompt.PHRASES }?.let(hungerLocationPromptMarkers::add)
             if (node.isPassword) throw UserInterrupted("ظهرت شاشة كلمة مرور؛ توقفت المقارنة.")
             if (android.os.Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive && !private) { sensitiveSkipped++; complete = false; return }
             val index = nodes.size
@@ -3527,6 +3533,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         return (0 until node.childCount.coerceAtMost(300)).mapNotNull { node.getChild(it) }
     }
 
+    /** Fixed phrases of HungerStation's different-location prompt seen in the last capture (see capture). */
+    private val hungerLocationPromptMarkers = mutableSetOf<String>()
     private fun privateId(id: String) = id.contains(Regex("address|location|welcome|wallet|phone|email|password|otp|verification|recipient|contact", RegexOption.IGNORE_CASE))
     private fun showManualControls(): Boolean = try {
         fun dp(value: Int) = (value * service.resources.displayMetrics.density).toInt()

@@ -144,8 +144,12 @@ class HungerStationProductReader(private val restaurant: LiveRestaurant, private
     fun finish(atMillis: Long): ConfiguredProduct {
         require(titleSeen) { "اسم الوجبة داخل خياراتها لم يطابق اختيارك." }
         // Completeness follows the observed option grammar and end marker, never a restaurant name.
-        val complete = bottomSeen && !unsupported && clippedRequired.isEmpty() && groups.values.all { it.choices.size >= it.maximum }
-        val options = groups.values.filter { it.choices.size >= it.maximum }.map { MenuChoiceGroup(it.id, it.title, it.minimum, it.maximum, it.choices.values.toList()) }
+        // An optional limit can exceed its rows (S22 Hardee's: "ما يصل إلى 15 خيار" over 7 additions); the
+        // observed end of the options proves those rows. A required group still needs all its selections.
+        fun read(g: Group) = if (g.minimum == 0) g.choices.isNotEmpty() else g.choices.size >= g.maximum
+        val complete = bottomSeen && !unsupported && clippedRequired.isEmpty() && groups.values.all(::read)
+        val options = groups.values.filter(::read).map { MenuChoiceGroup(it.id, it.title, it.minimum,
+            if (it.minimum == 0) minOf(it.maximum, it.choices.size) else it.maximum, it.choices.values.toList()) }
         val fingerprint = MessageDigest.getInstance("SHA-256").digest(bodies.joinToString().toByteArray()).joinToString("") { "%02x".format(it) }
         return ConfiguredProduct(restaurant.name, MenuProduct(item.selector, item.name, null, enabled, item.listedPrice, options),
             CatalogProvenance(ProviderId.HUNGERSTATION, HungerStationCatalog.TESTED_VERSION, atMillis, fingerprint), complete,

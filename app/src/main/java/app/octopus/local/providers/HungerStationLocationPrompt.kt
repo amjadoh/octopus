@@ -7,6 +7,8 @@ object HungerStationLocationPrompt {
     const val TITLE = "هل تقوم بالطلب لموقع مختلف؟"
     private const val CHANGE = "تغيير الموقع"
     private const val KEEP = "تأكيد الطلب للموقع الحالي"
+    /** The prompt's ids carry "location", so capture redacts these labels; it counts them before redaction. */
+    val PHRASES = setOf(TITLE, CHANGE, KEEP)
 
     fun shown(frame: CatalogFrame): Boolean {
         val labels = frame.nodes.map { it.label.trim() }

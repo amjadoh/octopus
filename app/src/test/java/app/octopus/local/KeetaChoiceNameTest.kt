@@ -22,4 +22,12 @@ class KeetaChoiceNameTest {
         assertNull(KeetaNameText.requestedChoice("ديلوكس", popeyes))
         assertNull(KeetaNameText.requestedChoice("ساندويتش ديلوكس كبير", popeyes))
     }
+
+    @Test fun aComboWrittenAsAMealWithTheSameWordsIsTheSameTitle() {
+        val hs = setOf("كومبو بيج ديلوكس برجر - وسط")
+        assertEquals("كومبو بيج ديلوكس برجر - وسط", KeetaNameText.requested("بيج ديلوكس برجر وجبة - وسط", hs))
+        assertNull(KeetaNameText.requested("بيج ديلوكس برجر وجبة - كبير", hs))
+        assertNull(KeetaNameText.requested("بيج ديلوكس برجر", hs))
+        assertNull(KeetaNameText.requested("سوبر ستار برجر وجبة - وسط", hs))
+    }
 }
