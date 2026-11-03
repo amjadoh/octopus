@@ -1,0 +1,59 @@
+{
+  "date": "2026-11-03",
+  "scope": "live_native_comparison_more_restaurants",
+  "local": {
+    "unitTestsPassed": 631,
+    "unitTestFailures": 0,
+    "androidUiTestFailures": 0,
+    "androidUiTestsRunInCi": true,
+    "diagnosticApkBuildPassed": true,
+    "lintErrors": 0,
+    "privateCapturesKeptOutsideRepository": true
+  },
+  "changes": [
+    "HungerStation cart lines and the menu cart bar with a struck-through old price read the current price.",
+    "An optional HungerStation group whose limit exceeds its rows completes after the observed end of options.",
+    "A Keeta cart drawer left open on another restaurant (also after leaving an earlier review) is closed with Back.",
+    "Keeta 'اختياري' groups are left untouched; choice names differing only in sandwich spelling or the filler words تشيكن/دجاج match one requested choice.",
+    "A Keeta restaurant name followed by a space and a priced campaign ('… 13 ريال') matches the chain; districts and branches do not.",
+    "A combo title with the same words in another order (كومبو ↔ وجبة) matches the Keeta meal.",
+    "The HungerStation different-location prompt is detected from its fixed phrases before redaction and closed with Back.",
+    "HungerStation review on the S22: the tip sheet's scroller is skipped and the place-order button keeps the review recognized; up to 10 review scrolls.",
+    "HungerStation cart: wait for the drawn summary before proving it; the Compare tap re-reads a half-drawn cart.",
+    "HungerStation 'ordering for a different location?' prompt is closed with system Back only (no button on it is tapped).",
+    "Keeta cart closing with a savings section (delivery discount, or promoted-items discount) is read; the '70/0' note counter is accepted.",
+    "After the comparison, the cheaper app's prepared cart opens from 'أكمل الطلب في …'.",
+    "The stop reason is always shown in red.",
+    "Order total read past struck-through fees; Keeta launch advert closed; far-branch cart explained.",
+    "A later patch of a verified HungerStation or Keeta release runs on that release's profile.",
+    "Keeta names written differently match the requested item or restaurant; Terra can confirm a restaurant alias.",
+    "Configured meals: a stale or partial Keeta cart shows the clear-cart control; longer time windows for the meal proof.",
+    "A Compare tap reads the edited HungerStation cart, and a previous Keeta cart of matching rows is completed.",
+    "The 'I emptied the Keeta cart' confirmation shows again when the Keeta reason follows the HungerStation result.",
+    "Keeta 3.13.301 single-SKU sheets with an empty special-request section are accepted as plain products; a typed note, a second SKU or a price mismatch is still rejected.",
+    "The Add guard expects that one empty note field on such a sheet.",
+    "Everything from 1.3.22 is kept: the HungerStation total is shown even when Keeta stops."
+  ],
+  "physical": {
+    "device": "Samsung S22 Ultra (SM-S908E), HungerStation 8.0.304, Keeta 3.13.301, over adb",
+    "build": "local device-tools build of the release commit's code",
+    "albaikOneMeal": "passed 3 times: HungerStation 47.00, Keeta 38.66; Keeta checkout opened",
+    "albaikTwoMeals": "passed twice: HungerStation 51.10, Keeta 59.32; HungerStation cart opened",
+    "kfcTwister": "passed twice: HungerStation 36.40, Keeta 44.26; HungerStation cart opened; Keeta quantity stayed one",
+    "noOrderOrPayment": true,
+    "ciReleaseApkVerifiedOnPhone": false,
+    "popeyesDeluxe": "passed twice: HungerStation 35.49, Keeta 46.00; Keeta quantity stayed one",
+    "kfcTwisterAfterChanges": "passed again after these changes (36.40 / 44.26), including with another restaurant's Keeta cart drawer left open",
+    "hardees": "HungerStation total read (40.60); Keeta names the meal 'بيج ديلوكس وجبة' with the size as an option, so it stops before any add",
+    "locationPromptAfterFix": "not yet observed on the phone after the redaction-safe detection"
+  },
+  "limitations": [
+    "Keeta products with real option groups are still added only for the verified cases; others stop before any add.",
+    "Multiple configured meals are still not run on a phone.",
+    "Not supported: a plain item in the same cart as a meal with options, two meals with the same name, quantity above one, a Keeta cart that already holds only some of the meals, and optional additions.",
+    "If the Keeta cart drawer scrolls with three or four meals, the comparison stops with a message; this has not been tried.",
+    "Verified on ALBAIK, KFC and Popeyes; meals with two same-named choice groups and meals whose Keeta name drops words are not supported."
+  ],
+  "releaseReady": false,
+  "privacy": "No account data, addresses, tokens, private captures or signing material included."
+}
