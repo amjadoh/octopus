@@ -2049,33 +2049,53 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         KeetaPromotionEvidence.emptySheet(frame) || keetaMenu.searchCandidate(frame) != null
 
     /** Uses observed home/search controls and the exact review-header back arrow. */
+    private suspend fun awaitKeetaEntry(version: String, ready: (CatalogFrame) -> Boolean): CatalogFrame =
+        try {await(ready)} catch(timeout:TimeoutCancellationException) {
+            currentCoroutineContext().ensureActive();checkSession()
+            var root=service.rootInActiveWindow ?: throw timeout
+            var recovered:CatalogFrame?=null
+            try {
+                requireProviderWindow(root)
+                var foreign=capture(root)
+                if (KeetaForeignMenuRecovery.drawerOverForeignMenu(foreign,version)) {
+                    // S22: Keeta reopened on another restaurant with its cart drawer open. Back closes it; the
+                    // screen under it (that menu, or Keeta's earlier search results) is then read as usual.
+                    phase="إغلاق سلة كيتا المفتوحة على مطعم آخر"
+                    check(service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)) {"تعذر إغلاق سلة كيتا المفتوحة؛ توقفت."}
+                    recovered=try {await(ready)} catch(_:TimeoutCancellationException) {null}
+                    if (recovered==null) {
+                        @Suppress("DEPRECATION") root.recycle()
+                        root=service.rootInActiveWindow ?: throw timeout
+                        requireProviderWindow(root)
+                        foreign=capture(root)
+                    }
+                }
+                if (recovered==null) {
+                    check(KeetaForeignMenuRecovery.permits(foreign,version)) {"شاشة كيتا الحالية ليست قائمة طعام معروفة للعودة الآمنة؛ توقفت."}
+                    val entry=android.content.ComponentName(provider.packageName,"com.sankuai.sailor.shell.SplashActivity")
+                    @Suppress("DEPRECATION")
+                    val activity=service.packageManager.getActivityInfo(entry,0)
+                    check(activity.enabled && activity.exported)
+                    verifyActiveFrame(foreign,root.windowId);checkSession()
+                    // Observed installed entry, not a guessed deep link. One launcher recovery only;
+                    // it changes no basket and never presses an unknown screen control.
+                    targetSeen=false
+                    service.startActivity(Intent().setComponent(entry).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+            } finally {@Suppress("DEPRECATION") root.recycle()}
+            recovered ?: await(ready)
+        }
+
     private suspend fun openKeetaRequest(): CatalogFrame {
         val version = graph.installations.value.single { it.provider == ProviderId.KEETA }.version.orEmpty()
         val ready:(CatalogFrame)->Boolean = {keetaReadable(it) || unsupportedKeetaNotes(it) || keetaMenu.homeSearch(it)!=null ||
             keetaMenu.searchInput(it)!=null || keetaMenu.editSearchQuery(it)!=null ||
             ReviewNavigationGuard.keetaReviewBackTarget(it,version)!=null}
-        var frame = try {await(ready)} catch(timeout:TimeoutCancellationException) {
-            currentCoroutineContext().ensureActive();checkSession()
-            val root=service.rootInActiveWindow ?: throw timeout
-            try {
-                requireProviderWindow(root)
-                val foreign=capture(root)
-                check(KeetaForeignMenuRecovery.permits(foreign,version)) {"شاشة كيتا الحالية ليست قائمة طعام معروفة للعودة الآمنة؛ توقفت."}
-                val entry=android.content.ComponentName(provider.packageName,"com.sankuai.sailor.shell.SplashActivity")
-                @Suppress("DEPRECATION")
-                val activity=service.packageManager.getActivityInfo(entry,0)
-                check(activity.enabled && activity.exported)
-                verifyActiveFrame(foreign,root.windowId);checkSession()
-                // Observed installed entry, not a guessed deep link. One launcher recovery only;
-                // it changes no basket and never presses an unknown screen control.
-                targetSeen=false
-                service.startActivity(Intent().setComponent(entry).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            } finally {@Suppress("DEPRECATION") root.recycle()}
-            await(ready)
-        }
+        var frame = awaitKeetaEntry(version, ready)
         if (ReviewNavigationGuard.keetaReviewBackTarget(frame, version) != null) {
             leaveKeetaPreviousReview(frame, version)
-            frame = await { keetaReadable(it) || unsupportedKeetaNotes(it) || keetaMenu.homeSearch(it) != null ||
+            // Leaving an earlier review can land on that restaurant's menu with its cart drawer open (S22).
+            frame = awaitKeetaEntry(version) { keetaReadable(it) || unsupportedKeetaNotes(it) || keetaMenu.homeSearch(it) != null ||
                 keetaMenu.searchInput(it) != null || keetaMenu.editSearchQuery(it) != null }
         }
         requireSupportedKeetaNotes(frame)
@@ -3106,7 +3126,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
                     delay(400)
                     continue
                 }
-                if (provider == ProviderId.HUNGERSTATION && HungerStationLocationPrompt.shown(frame)) {
+                if (provider == ProviderId.HUNGERSTATION && (HungerStationLocationPrompt.shown(frame) ||
+                        hungerLocationPromptMarkers == HungerStationLocationPrompt.PHRASES)) {
                     check(++dismissedLocationPrompts <= 2) {
                         "هنقرستيشن يسأل «${HungerStationLocationPrompt.TITLE}» لأن موقعك بعيد عن عنوان التوصيل؛ اختر من التنبيه ثم اضغط «قارن» مرة ثانية."
                     }
@@ -3180,6 +3201,7 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         var complete = true
         var firstDisabledFinancialControl: CatalogStopEvidence? = null
         sensitiveSkipped = 0
+        hungerLocationPromptMarkers.clear()
         fun walk(node: AccessibilityNodeInfo, parent: Int, depth: Int) {
             if (nodes.size >= 1800 || depth > 40) { complete = false; return }
             if (!node.isVisibleToUser) return
@@ -3193,6 +3215,10 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
             if (disabledFinancial && firstDisabledFinancialControl == null)
                 firstDisabledFinancialControl = stopEvidence(node, CatalogStopReason.FINANCIAL_CONTROL_ON_UNKNOWN_SCREEN)
             val private = privateId(id)
+            // The prompt's own ids name a location, so its labels are redacted below; only its three fixed
+            // public phrases are compared here, and nothing of the address is kept.
+            if (provider == ProviderId.HUNGERSTATION) (node.text ?: node.contentDescription)?.toString()?.trim()
+                ?.takeIf { it in HungerStationLocationPrompt.PHRASES }?.let(hungerLocationPromptMarkers::add)
             if (node.isPassword) throw UserInterrupted("ظهرت شاشة كلمة مرور؛ توقفت المقارنة.")
             if (android.os.Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive && !private) { sensitiveSkipped++; complete = false; return }
             val index = nodes.size
@@ -3507,6 +3533,8 @@ class CatalogNavigator(private val service: AccessibilityService, private val gr
         return (0 until node.childCount.coerceAtMost(300)).mapNotNull { node.getChild(it) }
     }
 
+    /** Fixed phrases of HungerStation's different-location prompt seen in the last capture (see capture). */
+    private val hungerLocationPromptMarkers = mutableSetOf<String>()
     private fun privateId(id: String) = id.contains(Regex("address|location|welcome|wallet|phone|email|password|otp|verification|recipient|contact", RegexOption.IGNORE_CASE))
     private fun showManualControls(): Boolean = try {
         fun dp(value: Int) = (value * service.resources.displayMetrics.density).toInt()
