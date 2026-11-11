@@ -16,6 +16,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # سر التوقيع في بيئة preview-signing بس (main وفرعي النشر والتجربة)، مو على مستوى المستودع
+    environment: preview-signing
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
