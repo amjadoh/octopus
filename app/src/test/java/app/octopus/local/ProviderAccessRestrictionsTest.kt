@@ -10,6 +10,17 @@ class ProviderAccessRestrictionsTest {
         assertNull(ProviderAccessRestrictions.detect(""))
     }
 
+    @Test fun blankAndUnrelatedInputReturnNull() {
+        listOf(" \t\r\n ", "Orders", "Please try again", "maximum number of attempts").forEach { label ->
+            assertNull(ProviderAccessRestrictions.detect(label))
+        }
+    }
+
+    @Test fun acceptsNonStringCharSequences() {
+        assertEquals(ProviderAccessRestriction.ACCESS_ERROR,
+            ProviderAccessRestrictions.detect(StringBuilder("Access error")))
+    }
+
     @Test fun lengthLimitIsCheckedBeforeNormalization() {
         val tooLong = "Access error".padEnd(513, ' ')
         assertEquals(513, tooLong.length)
@@ -44,6 +55,31 @@ class ProviderAccessRestrictionsTest {
         assertEquals(ProviderAccessRestriction.ACCESS_ERROR, ProviderAccessRestrictions.detect("${lri}Access${rlo} error${pdi}"))
         assertEquals(ProviderAccessRestriction.UNUSUAL_ACTIVITY, ProviderAccessRestrictions.detect(
             "${rlo}${lri}Unusual activity detected. Sign-up is restricted.${pdi}"))
+    }
+
+    @Test fun allSupportedDirectionMarksAreRemoved() {
+        val marks = listOf('\u200e', '\u200f', '\u061c') +
+            ('\u202a'..'\u202e').toList() + ('\u2066'..'\u2069').toList()
+        marks.forEach { mark ->
+            assertEquals(ProviderAccessRestriction.ACCESS_ERROR,
+                ProviderAccessRestrictions.detect("${mark}Acc${mark}ess error${mark}"))
+        }
+    }
+
+    @Test fun unusualActivityRequiresRestrictionPhrase() {
+        assertNull(ProviderAccessRestrictions.detect("Unusual activity detected."))
+        assertNull(ProviderAccessRestrictions.detect("Unusual activity detected. Log-in restricted"))
+        assertEquals(ProviderAccessRestriction.UNUSUAL_ACTIVITY, ProviderAccessRestrictions.detect(
+            " \tUnusual activity\ndetected. Log-in\tis restricted. Contact support. "))
+    }
+
+    @Test fun matchingUsesPrefixesAndContainsWithoutExtraWordBoundaries() {
+        assertEquals(ProviderAccessRestriction.UNUSUAL_ACTIVITY, ProviderAccessRestrictions.detect(
+            "Unusual activity detected.this is restrictedness"))
+        assertEquals(ProviderAccessRestriction.TOO_MANY_ATTEMPTS, ProviderAccessRestrictions.detect(
+            "You've reached our maximum number of attempts.Access error"))
+        assertEquals(ProviderAccessRestriction.UNUSUAL_ACTIVITY, ProviderAccessRestrictions.detect(
+            "Unusual activity detected. You've reached our maximum number of attempts. Access is restricted"))
     }
 
     @Test fun unusualActivityIsCaseInsensitive() {
